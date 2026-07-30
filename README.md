@@ -1,0 +1,120 @@
+# AQBBA — Queen Breeders Collaboration Platform
+
+A members-only platform for the Australian Queen Bee Breeders Association: a varroa
+sensitive hygiene (VSH) research dashboard, a topic-driven forum, a structured
+information repository, and a member marketplace.
+
+This is a **high-fidelity prototype**. Every screen, interaction and state transition is
+real; the data behind them is mock data, and the two external integrations (Wild Apricot
+authentication, notification email) are stubbed at their boundaries so they can be
+swapped for live services without reworking the interface.
+
+## Running it
+
+No build step and no dependencies — not even Node. Serve the directory over HTTP, since ES
+modules will not load from `file://`:
+
+```bash
+python3 serve.py
+```
+
+Then open <http://localhost:4173>. Any email and password signs you in.
+
+`serve.py` is a plain static server that adds `Cache-Control: no-store`. Use it rather
+than `python3 -m http.server`, which sends no cache headers at all and lets the browser
+serve stale JS and CSS after an edit.
+
+## What's built
+
+**Sign-in gate** — the only surface outside the member wall, per the members-only access
+model. Offers Wild Apricot SSO (simulated handoff) or direct credentials.
+
+**Research dashboard** (`#/`) — program-wide figures, then a card per research apiary
+showing location, coordinates, program stage (initialising / assessment / maintenance),
+manager, hive count, mean VSH, hives in treatment and hives treatment-free for three or
+more seasons. Below that: the honeycomb hive grid, a colony status breakdown, upcoming
+and recently completed inspections, and the contributing breeders with their queen lines.
+
+**Apiary records** (`#/apiaries`) — a comparison table across sites, then per-apiary: the
+full hive grid, queen lines present with site performance measured against each line's
+program mean, the complete inspection schedule, and site detail.
+
+**Forum** (`#/forum`) — six seeded topics with realistic multi-post discussions. Members
+create topics, subscribe to topics or whole categories, and set email delivery frequency
+(each post / daily digest / weekly digest). Publishing a topic or reply reports how many
+subscribers were notified.
+
+**Repository** (`#/repository`) — the three tracks from the brief (Foundation → Queen
+Production → Queen Breeding), sixteen sub-topics, each independently subscribable and
+publishable. One sub-topic carries a full representative article to show the reading
+experience.
+
+**Marketplace** (`#/marketplace`) — queens, nucs, semen and equipment, filterable by
+category, with a listing composer and a seller enquiry flow.
+
+**Notifications** (`#/notifications`) — every notification the subscription machinery
+would have emailed, with unread state, plus a summary of everything the member follows.
+
+## The honeycomb grid
+
+The dashboard renders all ~100 hives in an apiary as one interlocking honeycomb field.
+Each hexagon is a real hive record; click it to read that hive's five assessment data
+points (VSH score, mite load, brood frames, temperament, last inspection) plus its queen
+line, contributing breeder, and queen marking.
+
+Cell colours quote the **international queen-marking colour code** — the one colour
+system every queen breeder already reads fluently — rather than an arbitrary palette.
+
+## Design
+
+- **Palette** — comb wax ground (`#F7F4ED`), propolis ink (`#241C12`), raw honey as the
+  single action colour (`#C77F0A`). Status colours come from the queen-marking code.
+- **Type** — Spectral for display and long-form prose (a scientific-journal serif),
+  Instrument Sans for interface, IBM Plex Mono for hive IDs, scores and dates, so field
+  data reads as data.
+- **Ordinals** — the repository's I / II / III are used because the tracks are a genuine
+  progression a member works through in order. They appear nowhere else.
+
+Responsive to 375px, keyboard focus visible throughout, `prefers-reduced-motion`
+respected.
+
+## File layout
+
+```
+index.html
+css/main.css          Design tokens and all component styles
+js/
+  app.js              Shell, hash router, delegated global behaviour
+  data.js             Mock data. Seeded generator — hive records are stable across reloads
+  store.js            Session state: subscriptions, read state, member-authored content
+  ui.js               Render helpers, icon set, toasts, modals
+  views/
+    gate.js           Sign-in
+    dashboard.js      Research dashboard
+    comb.js           The honeycomb grid and hive readout
+    apiaries.js       Apiary index and per-apiary record
+    forum.js          Topic list, thread view, composer
+    repository.js     Tracks, sub-topics, article view
+    marketplace.js    Listings, filters, composer, enquiry
+    notifications.js  Activity feed and subscription summary
+```
+
+## Wiring up the real integrations
+
+**Wild Apricot** — replace `signIn()` in `js/store.js` with the OAuth flow. Wild Apricot
+exposes a standard authorization-code flow; on return, exchange the code for a token,
+call `/accounts/{id}/contacts/me`, and map the contact's membership level to the roles in
+`js/data.js`. The interface reads the signed-in member from a single exported
+`currentUser`, so nothing else needs to change.
+
+**Notification email** — every point that would send mail currently calls `toast()` with
+the message and recipient count. Those call sites are the integration points: forum
+topic publish, forum reply, repository contribution. Subscriptions are already stored as
+stable keys (`thread:<id>`, `repo:<id>`, `cat:<id>`) ready to become subscription rows.
+
+**Persistence** — `js/store.js` writes to `localStorage` behind a small interface
+(`commit`, `toggleSub`, `addThread`, `addPost`, `addListing`). Swapping it for API calls
+is contained to that module.
+
+**Data** — `js/data.js` exports plain arrays and lookup helpers. Replace the module with
+fetches returning the same shapes.
