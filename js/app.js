@@ -3,11 +3,12 @@
    ========================================================================== */
 
 import { currentUser } from './data.js';
-import { state, signOut, unreadCount, onChange, toggleSub } from './store.js';
+import { state, signOut, unreadCount, recruitingCount, onChange, toggleSub } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderApiaries, renderApiary } from './views/apiaries.js';
+import { renderProjects, renderProject } from './views/projects.js';
 import { renderForum, renderThread } from './views/forum.js';
 import { renderRepository, renderSubTopic } from './views/repository.js';
 import { renderMarketplace } from './views/marketplace.js';
@@ -19,6 +20,7 @@ const NAV = [
   { group: 'Research' },
   { path: '#/',            label: 'Dashboard',    icon: 'chart' },
   { path: '#/apiaries',    label: 'Apiaries',     icon: 'apiary' },
+  { path: '#/projects',    label: 'Projects',     icon: 'beaker', badge: recruitingCount },
   { group: 'Collaboration' },
   { path: '#/forum',       label: 'Forum',        icon: 'forum' },
   { path: '#/repository',  label: 'Repository',   icon: 'book' },
@@ -31,6 +33,8 @@ const ROUTES = [
   { test: /^#\/?$/,                    view: renderDashboard },
   { test: /^#\/apiaries\/?$/,          view: renderApiaries },
   { test: /^#\/apiaries\/(.+)$/,       view: renderApiary },
+  { test: /^#\/projects\/?$/,          view: renderProjects },
+  { test: /^#\/projects\/(.+)$/,       view: renderProject },
   { test: /^#\/forum\/?$/,             view: renderForum },
   { test: /^#\/forum\/(.+)$/,          view: renderThread },
   { test: /^#\/repository\/?$/,        view: renderRepository },

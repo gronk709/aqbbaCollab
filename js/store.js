@@ -3,7 +3,7 @@
    Persisted to localStorage so a page reload keeps what the member chose.
    ========================================================================== */
 
-import { threads, allSubs, notifications, currentUser } from './data.js';
+import { threads, allSubs, notifications, currentUser, projects } from './data.js';
 
 const KEY = 'aqbba.session.v1';
 
@@ -21,6 +21,9 @@ const defaults = () => ({
   newThreads: [],
   newPosts: {},
   newListings: [],
+  newProjects: [],
+  projectJoins: [],
+  projectParticipants: {},
   digest: 'instant',
 });
 
@@ -113,6 +116,45 @@ export function addListing(listing) {
 }
 
 export const memberThreads = () => state.newThreads;
+
+/* --- projects -------------------------------------------------------------
+   A project is joined, not subscribed to: joining records what the member
+   is contributing, not just that they want to hear about it. */
+
+export const isJoined = (projectId) => state.projectJoins.includes(projectId);
+
+export function joinProject(projectId, contribution) {
+  if (!state.projectJoins.includes(projectId)) state.projectJoins.push(projectId);
+  if (!state.projectParticipants[projectId]) state.projectParticipants[projectId] = [];
+  state.projectParticipants[projectId].push({
+    member: currentUser.id, contribution: contribution || 'Joined without a stated contribution.', joined: 0,
+  });
+  commit();
+}
+
+export const sessionParticipantsFor = (projectId) => state.projectParticipants[projectId] || [];
+
+export function addProject({ title, summary, background, aims, questions, methods, addons, sites, openSites }) {
+  const p = {
+    id: `up-${Date.now()}`, code: `PRJ-${String(projects.length + state.newProjects.length + 1).padStart(2, '0')}`,
+    status: 'recruiting', title, summary,
+    background: [background], aims, questions, sites, openSites,
+    participation: { summary: methods, methods: [methods], addons },
+    timeline: 'Timeline to be confirmed once the project has its first participants.',
+    coordinators: [currentUser.id], created: 0, participants: [],
+  };
+  state.newProjects.unshift(p);
+  commit();
+  return p;
+}
+
+export const memberProjects = () => state.newProjects;
+
+export function recruitingCount() {
+  const seeded = projects.filter((p) => p.status === 'recruiting').length;
+  const mine = state.newProjects.filter((p) => p.status === 'recruiting').length;
+  return seeded + mine;
+}
 
 /* --- session ------------------------------------------------------------- */
 

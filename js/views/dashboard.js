@@ -6,7 +6,7 @@
 
 import {
   apiaries, stageLabels, statusLabels, memberById, queenLines,
-  recentInspections, upcomingInspections, apiaryById,
+  recentInspections, upcomingInspections, apiaryById, projects,
   tally, vshAverage, relDays, fmtDate, fmtDateLong,
 } from '../data.js';
 import { esc, icons, avatar, tag } from '../ui.js';
@@ -218,6 +218,11 @@ export function renderDashboard() {
           <dt>Next inspection</dt>
           <dd style="font-size:1.125rem;letter-spacing:0">${fmtDate(next.date)}</dd>
           <div class="tile-trend">${esc(apiaryById(next.apiary).name)} · ${esc(next.kind)}</div>
+        </div>
+        <div class="tile">
+          <dt>Research projects</dt>
+          <dd>${projects.length}</dd>
+          <div class="tile-trend">${projects.filter((p) => p.status === 'recruiting').length} recruiting — <a href="#/projects" style="color:var(--amber-deep);font-weight:600">view all</a></div>
         </div>
       </dl>
 

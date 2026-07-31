@@ -5,7 +5,7 @@
 
 import {
   threads, threadById, forumCategories, categoryName,
-  memberById, currentUser, members, relDays, relHours,
+  memberById, currentUser, members, relDays, relHours, projectForThread,
 } from '../data.js';
 import {
   isSubscribed, addThread, addPost, postsFor, memberThreads, state,
@@ -27,6 +27,7 @@ function threadCard(t) {
   const key = `thread:${t.id}`;
   const on = isSubscribed(key);
   const replyCount = t.replies + postsFor(t.id).length;
+  const project = projectForThread(t.id);
 
   return `
     <a class="thread ${t.pinned ? 'thread-pinned' : ''}" href="#/forum/${t.id}">
@@ -34,6 +35,7 @@ function threadCard(t) {
         <span class="tag tag-outline">${esc(categoryName(t.category) || t.categoryName || 'General')}</span>
         ${t.pinned ? `<span class="tag tag-amber">${icons.pin} Pinned</span>` : ''}
         ${on ? `<span class="tag tag-green">${icons.bellOn} Subscribed</span>` : ''}
+        ${project ? `<span class="tag tag-blue">${icons.beaker} Became ${project.code}</span>` : ''}
       </div>
       <h3>${esc(t.title)}</h3>
       <p class="thread-excerpt">${esc(t.excerpt)}</p>
@@ -213,6 +215,7 @@ export function renderThread(id) {
   }).join('');
 
   const watchers = members.slice(0, Math.min(6, t.watchers));
+  const project = projectForThread(t.id);
 
   const html = `
     <div class="topbar">
@@ -272,6 +275,23 @@ export function renderThread(id) {
               </div>
             </div>
           </div>
+
+          ${project ? `
+            <div class="panel">
+              <div class="panel-head"><h2>Became a project</h2></div>
+              <div class="panel-body">
+                <p class="caption" style="margin-bottom:var(--s3)">
+                  This discussion turned into a coordinated research project.
+                </p>
+                <a class="thread" style="border:1px solid var(--comb-shade);border-radius:3px;padding:var(--s3)" href="#/projects/${project.id}">
+                  <div class="row" style="gap:6px;margin-bottom:4px">
+                    <span class="tag tag-outline">${project.code}</span>
+                  </div>
+                  <h3 style="font-size:13.5px">${esc(project.title)}</h3>
+                  <p class="caption" style="margin-top:4px">View the project ${icons.chevron}</p>
+                </a>
+              </div>
+            </div>` : ''}
 
           <div class="panel">
             <div class="panel-head"><h2>Members watching</h2></div>

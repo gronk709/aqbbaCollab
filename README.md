@@ -37,7 +37,19 @@ and recently completed inspections, and the contributing breeders with their que
 
 **Apiary records** (`#/apiaries`) — a comparison table across sites, then per-apiary: the
 full hive grid, queen lines present with site performance measured against each line's
-program mean, the complete inspection schedule, and site detail.
+program mean, the complete inspection schedule, site detail, and which research projects
+are currently running there.
+
+**Projects** (`#/projects`) — coordinated research initiatives, distinct from apiaries: a
+project is a question with a method attached, and can span apiaries, run at one, or wait
+for a member to volunteer a site. Each has Background, Aims, Research questions,
+Participation & methods, a Timeline, named coordinators and a participant list. Members
+propose new projects and join existing ones with a stated contribution; joining and
+proposing are separate flows from forum subscription, since a project is something you
+do, not just something you follow. Every seeded project traces back to a real forum
+thread, and both directions link to each other, so the life cycle a member actually sees
+is: a problem raised in the forum → a project proposed to answer it → members joining
+with what they can contribute.
 
 **Forum** (`#/forum`) — six seeded topics with realistic multi-post discussions. Members
 create topics, subscribe to topics or whole categories, and set email delivery frequency
@@ -93,6 +105,7 @@ js/
     dashboard.js      Research dashboard
     comb.js           The honeycomb grid and hive readout
     apiaries.js       Apiary index and per-apiary record
+    projects.js       Research initiatives: index, detail, propose, join
     forum.js          Topic list, thread view, composer
     repository.js     Tracks, sub-topics, article view
     marketplace.js    Listings, filters, composer, enquiry

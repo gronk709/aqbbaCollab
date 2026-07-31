@@ -5,9 +5,16 @@
 import {
   apiaries, apiaryById, stageLabels, statusLabels, memberById,
   lineByCode, inspections, tally, vshAverage, relDays, fmtDateLong,
+  projects, projectStatusLabels,
 } from '../data.js';
+import { memberProjects } from '../store.js';
 import { esc, icons, avatar } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
+
+/* Member-proposed projects sit alongside the seeded ones, same as everywhere
+   else member-authored content is combined with the seed data. */
+const projectsForApiary = (apiaryId) =>
+  [...memberProjects(), ...projects].filter((p) => p.sites.includes(apiaryId));
 
 const stageVariant = { initialising: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green' };
 
@@ -86,6 +93,8 @@ export function renderApiary(id) {
   const t = tally(hives);
   const mgr = memberById(ap.manager);
   const insp = inspections.filter((i) => i.apiary === ap.id).sort((a, b) => a.date - b.date);
+  const siteProjects = projectsForApiary(ap.id);
+  const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 
   /* Which lines are here, and how each is performing on this site. */
   const lineCodes = [...new Set(hives.map((h) => h.line))];
@@ -211,6 +220,25 @@ export function renderApiary(id) {
               </div>
             </div>
           </div>
+
+          ${siteProjects.length ? `
+            <div class="panel">
+              <div class="panel-head">
+                <h2>Running here</h2>
+                <span class="spacer"></span>
+                <span class="caption mono">${siteProjects.length}</span>
+              </div>
+              <div class="panel-body panel-body-flush">
+                ${siteProjects.map((p) => `
+                  <a class="sub" href="#/projects/${p.id}">
+                    <div class="sub-title">
+                      <strong>${esc(p.title)}</strong>
+                      <span>${p.code}</span>
+                    </div>
+                    <span class="tag ${projStatusVariant[p.status]}">${projectStatusLabels[p.status]}</span>
+                  </a>`).join('')}
+              </div>
+            </div>` : ''}
 
           <div class="panel">
             <div class="panel-head"><h2>Counts</h2></div>

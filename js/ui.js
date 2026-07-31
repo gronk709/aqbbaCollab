@@ -42,6 +42,8 @@ export const icons = {
   mail:     svg('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>'),
   pen:      svg('<path d="M17 3l4 4L8 20H4v-4z"/>'),
   search:   svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
+  beaker:   svg('<path d="M9 3h6M10 3v6.2l-5.2 9A1.8 1.8 0 006.4 21h11.2a1.8 1.8 0 001.6-2.8l-5.2-9V3"/><path d="M7.5 15h9"/>'),
+  flag:     svg('<path d="M5 3v18"/><path d="M5 4h11l-2.5 4L16 12H5"/>'),
 };
 
 /* The association mark: a hex with a queen cell inside it. */

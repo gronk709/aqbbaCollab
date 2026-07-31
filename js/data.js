@@ -209,6 +209,175 @@ export const recentInspections   = inspections.filter((i) => i.done).sort((a, b)
 export const upcomingInspections = inspections.filter((i) => !i.done).sort((a, b) => a.date - b.date);
 
 /* --------------------------------------------------------------------------
+   Projects. Coordinated research initiatives that can span apiaries, or run
+   openly across whatever member sites choose to take part. A project is not
+   the same thing as an apiary: an apiary is a place, a project is a question
+   with a method attached to it, and several can be running at one site at
+   once.
+
+   Every seeded project traces back to a real forum discussion — that's the
+   actual life cycle: a problem surfaces in the forum, a member proposes a
+   project to answer it, other members join with what they can contribute.
+   -------------------------------------------------------------------------- */
+
+export const projectStatusLabels = {
+  recruiting: 'Recruiting',
+  active: 'Active',
+  concluding: 'Concluding',
+};
+
+export const projects = [
+  {
+    id: 'p1', code: 'PRJ-01', status: 'active',
+    title: 'Standardising the freeze-killed brood protocol',
+    summary: 'Locking down exposure time, count window and partial-removal scoring so the assay means the same thing at every member apiary.',
+    linkedThread: 't1',
+    coordinators: ['m9'],
+    sites: ['ap-tambo', 'ap-barrow', 'ap-oradale'],
+    openSites: true,
+    created: -17,
+    background: [
+      'A single cohort assayed by three different members within four days returned removal rates of 71%, 84% and 86% — a spread larger than the difference between the program\'s best and worst queen lines. As run, the assay cannot support a selection decision.',
+      'The variation traced to three unfixed choices: how long brood sits under liquid nitrogen, how long after freezing the colony is given before the count, and whether a partially uncapped cell is scored as removed.',
+    ],
+    aims: [
+      'Fix exposure time, count window and partial-cell scoring to a single protocol usable at any member apiary.',
+      'Establish an inter-operator agreement figure the program can cite when using assay results for selection.',
+      'Keep the protocol simple enough that a member with no lab background can run it correctly from the written instructions alone.',
+    ],
+    questions: [
+      'Does locking the three variables bring inter-operator agreement inside five percentage points?',
+      'Should partial removals be reported separately, or does that ask too much of a first-time operator?',
+    ],
+    participation: {
+      summary: 'Run the standard protocol on your next freeze-killed brood assay and submit full, partial and untouched counts separately.',
+      methods: [
+        'Ten-second exposure under liquid nitrogen on a 55mm section of sealed brood.',
+        'Count at 24 hours exactly — not "the next day."',
+        'Record three numbers: fully removed, uncapped but not removed, and untouched. Report the headline figure as full removals over total cells.',
+      ],
+      addons: 'Members with prior-season data run under a different protocol are welcome to submit it alongside, tagged as pre-standardisation, so the program can see whether the fix actually closes the gap.',
+    },
+    timeline: 'Protocol drafted and circulated July 2026. Site validation runs through the current assessment season. A recommendation on national rollout goes to committee once all three research apiaries have reported.',
+    participants: [
+      { member: 'm9', contribution: 'Drafted the protocol; coordinating validation.', joined: -17 },
+      { member: 'm5', contribution: 'Running validation counts at Tambo Crossing.', joined: -14 },
+      { member: 'm3', contribution: 'Running validation counts at Barrowfield.', joined: -12 },
+      { member: 'm2', contribution: 'Independent check against her own Barrowfield cohort.', joined: -9 },
+    ],
+  },
+  {
+    id: 'p2', code: 'PRJ-02', status: 'recruiting',
+    title: 'Outcross recovery trial: Coalvale × Wandagee',
+    summary: 'Testing whether one outcross generation can recover brood viability in a narrowing closed population without losing its VSH expression.',
+    linkedThread: 't2',
+    coordinators: ['m6', 'm7'],
+    sites: [],
+    openSites: true,
+    created: -8,
+    background: [
+      'Coalvale 17 (CVE-17) is at generation eight of closed-population selection by instrumental insemination. VSH expression is the best it has been in the line\'s history — 85% mean — but brood viability has fallen from roughly 94% to 87% over the last three generations, consistent with inbreeding depression.',
+      'Wandagee 11 (WDG-11), maintained independently in Western Australia, is unrelated to any eastern-program line and carries respectable VSH expression of its own, making it a candidate outcross that does not simply dilute the trait back to the population mean.',
+    ],
+    aims: [
+      'Determine whether a single Wandagee outcross restores Coalvale brood viability toward historical levels.',
+      'Measure how much VSH expression is lost in the F1 cross, and how much recovers by F2 under continued selection.',
+    ],
+    questions: [
+      'Is the viability decline attributable to inbreeding depression rather than an unrelated site or seasonal effect?',
+      'How many backcross generations are needed to recover pre-outcross VSH levels, if any are lost at all?',
+    ],
+    participation: {
+      summary: 'The trial needs a host apiary willing to run F1 colonies for two full generations and record brood viability alongside the standard VSH assay.',
+      methods: [
+        'Host receives F1 queens bred from Wandagee semen over Coalvale stock.',
+        'Standard VSH assay and a brood viability count each generation, submitted to the trial record.',
+        'Two generations minimum; a third if F2 results are ambiguous.',
+      ],
+      addons: 'A second, unrelated host running the same cross in parallel would let the trial separate genetic recovery from site effects — currently unfilled.',
+    },
+    timeline: 'Outcross planned for the spring 2026 requeening round. F1 results expected autumn 2027; F2 by the following spring.',
+    participants: [
+      { member: 'm6', contribution: 'Providing Coalvale queens and maintaining the II program.', joined: -8 },
+      { member: 'm7', contribution: 'Providing Wandagee semen.', joined: -7 },
+    ],
+  },
+  {
+    id: 'p3', code: 'PRJ-03', status: 'recruiting',
+    title: 'Sampling error calibration for the alcohol wash',
+    summary: 'Quantifying how much of the spread between colony mite counts is real, and how much is sample-size noise at low mite loads.',
+    linkedThread: 't6',
+    coordinators: ['m8', 'm9'],
+    sites: [],
+    openSites: true,
+    created: -2,
+    background: [
+      'At a true load of one mite per hundred bees, a standard 300-bee wash expects three mites — a count with a confidence interval wide enough that readings of one and six are both consistent with the same colony. The 300-bee sample size was set to catch colonies needing treatment, a different job from ranking colonies for selection, which is how the program currently uses it.',
+    ],
+    aims: [
+      'Measure the actual spread between a 300-bee and a 600-bee wash taken from the same colony, across a range of mite loads.',
+      'Recommend whether the program should raise the standard sample size for selection-relevant counts, or weight the wash less heavily against the brood assay.',
+    ],
+    questions: [
+      'At what mite load does the 300-bee sample stop being reliable for ranking colonies against each other?',
+      'Does doubling the sample size change which colonies would have been selected this season?',
+    ],
+    participation: {
+      summary: 'At your next scheduled alcohol wash, take a paired 300-bee and 600-bee sample from the same colony and submit both counts.',
+      methods: [
+        'Two samples, same colony, same visit — one at the standard 300 bees, one at 600.',
+        'Submit both raw counts, not just the resulting percentage.',
+      ],
+      addons: 'Members who can run three or more paired samples in a single visit are especially useful to this trial — get in touch with either coordinator before you go.',
+    },
+    timeline: 'Running for the current wash season. A recommendation is due before the alcohol wash is next scheduled program-wide.',
+    participants: [
+      { member: 'm8', contribution: 'Raised the question; coordinating data collection.', joined: -2 },
+      { member: 'm9', contribution: 'Statistical design of the paired sampling.', joined: -1 },
+    ],
+  },
+  {
+    id: 'p4', code: 'PRJ-04', status: 'active',
+    title: 'Supersedure event tracking across research apiaries',
+    summary: 'Recording supersedure at the point of inspection to test whether treatment-free colonies replace their queens more readily.',
+    linkedThread: 't3',
+    coordinators: ['m1'],
+    sites: ['ap-tambo', 'ap-barrow', 'ap-oradale'],
+    openSites: true,
+    created: -4,
+    background: [
+      'Four colonies at Barrowfield superseded within a fortnight, all treatment-free for three or more seasons, all with mite loads and brood patterns within normal range. Supersedure was not previously recorded as a discrete event anywhere in the inspection data, which meant the pattern could be discussed but not tested.',
+    ],
+    aims: [
+      'Build a season-length dataset of supersedure events against colony treatment history, so the pattern can be tested rather than debated anecdotally.',
+      'Establish whether supersedure correlates with treatment-free duration, queen age, or neither.',
+    ],
+    questions: [
+      'Do treatment-free colonies supersede at a materially different rate than colonies under treatment?',
+      'Is the effect, if real, a sign of a problem or a sign that strong hygienic colonies are simply quicker to replace an underperforming queen?',
+    ],
+    participation: {
+      summary: 'No separate protocol — a supersedure field was added to the standard inspection form for the 2026/27 season. Recording it is now part of a normal inspection at all three research apiaries.',
+      methods: [
+        'Mark the supersedure field whenever cells are found being raised from an existing queen rather than following a deliberate requeening.',
+        'Note whether the colony was treatment-free at the time, taken from its standing record.',
+      ],
+      addons: 'Member apiaries outside the three research sites are welcome to record the same field and submit season data even without running the full VSH assessment program.',
+    },
+    timeline: 'Field added to the inspection form for the 2026/27 season. First full-season dataset expected autumn 2027.',
+    participants: [
+      { member: 'm1', contribution: 'Added the field to the inspection form; coordinating the dataset.', joined: -4 },
+      { member: 'm5', contribution: 'Recording at Tambo Crossing.', joined: -3 },
+      { member: 'm3', contribution: 'Recording at Barrowfield.', joined: -3 },
+      { member: 'm4', contribution: 'Recording at Oradale.', joined: -2 },
+    ],
+  },
+];
+
+export const projectById = (id) => projects.find((p) => p.id === id);
+export const projectForThread = (threadId) => projects.find((p) => p.linkedThread === threadId);
+
+/* --------------------------------------------------------------------------
    Forum. Member-created topics with subscribe + notify.
    -------------------------------------------------------------------------- */
 
