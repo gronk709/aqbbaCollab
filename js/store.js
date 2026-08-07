@@ -30,6 +30,9 @@ const defaults = () => ({
   newHives: [],
   newInspections: [],
   contactDetails: {},
+  roleOverrides: {},
+  apiaryManagerOverrides: {},
+  previewAs: null,
   digest: 'instant',
 });
 
@@ -171,7 +174,7 @@ export function recruitingCount() {
 function withMemberHives(ap) {
   const extra = state.newHives.filter((h) => h.apiary === ap.id);
   const hiveRecords = [...(ap.hiveRecords || []), ...extra];
-  return { ...ap, hiveRecords, hives: hiveRecords.length };
+  return { ...ap, hiveRecords, hives: hiveRecords.length, managers: managersFor(ap.id) };
 }
 
 export function allApiaries() {
@@ -191,7 +194,7 @@ export function addApiary({ name, region, coords, flora, brief, manager, establi
     region, coords: coords || '—',
     stage: stage || 'initialising', manager,
     established: established || new Date().getFullYear(),
-    hives: 0, flora: flora || '—', brief, hiveRecords: [],
+    hives: 0, flora: flora || '—', brief, hiveRecords: [], managers: [manager],
   };
   state.newApiaries.unshift(ap);
   commit();
@@ -259,6 +262,66 @@ export const hasContact = (memberId) => {
 export function setContact(memberId, { phone, email, address }) {
   state.contactDetails[memberId] = { phone, email, address: address || '' };
   commit();
+}
+
+/* --- roles & apiary access --------------------------------------------------
+   A member can hold several roles at once. "Apiary Manager" is a title, not
+   itself a grant — the actual permission to add hives or log inspections at
+   a given site comes from that apiary's own managers list, set separately
+   below. Holding the role without being on any site's list means exactly
+   that: the title, but nothing to act on yet. */
+
+export function rolesFor(memberId) {
+  const base = memberById(memberId);
+  return state.roleOverrides[memberId] ?? base.roles ?? [];
+}
+
+export const roleLabel = (memberId) => rolesFor(memberId).join(' & ') || '—';
+
+export function setRoles(memberId, roles) {
+  state.roleOverrides[memberId] = roles;
+  commit();
+}
+
+/* Reads the raw seed + member-added apiary lists directly (never
+   allApiaries()) so this can't recurse through withMemberHives, which calls
+   this function to build each apiary's live .managers field. */
+export function managersFor(apiaryId) {
+  if (state.apiaryManagerOverrides[apiaryId]) return state.apiaryManagerOverrides[apiaryId];
+  const ap = [...state.newApiaries, ...apiaries].find((a) => a.id === apiaryId);
+  return ap?.managers || (ap?.manager ? [ap.manager] : []);
+}
+
+export function setManagedApiaries(memberId, apiaryIds) {
+  [...state.newApiaries, ...apiaries].forEach((ap) => {
+    const current = managersFor(ap.id);
+    const has = current.includes(memberId);
+    const want = apiaryIds.includes(ap.id);
+    if (want && !has) state.apiaryManagerOverrides[ap.id] = [...current, memberId];
+    if (!want && has) state.apiaryManagerOverrides[ap.id] = current.filter((id) => id !== memberId);
+  });
+  commit();
+}
+
+/* --- permission preview -----------------------------------------------------
+   This app has exactly one real signed-in identity — everyone who opens it
+   is the Research Coordinator, who can act on every site. To make per-site
+   restrictions demonstrable at all, this lets a tester preview the apiary
+   pages as if signed in as someone else. It only affects the two gated
+   actions below (adding a hive, logging an inspection, and creating a new
+   apiary); authorship of forum posts, listings, and project joins always
+   stays the real signed-in member. There is no real multi-user session here
+   — production would derive this from the actual authenticated member. */
+
+export function setPreviewAs(memberId) { state.previewAs = memberId || null; commit(); }
+export const previewUser = () => memberById(state.previewAs || currentUser.id);
+
+export const isCoordinator = (memberId = previewUser().id) => rolesFor(memberId).includes('Research Coordinator');
+
+export function canEditApiary(apiaryId) {
+  const uid = previewUser().id;
+  if (isCoordinator(uid)) return true;
+  return managersFor(apiaryId).includes(uid);
 }
 
 /* --- session ------------------------------------------------------------- */

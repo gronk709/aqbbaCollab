@@ -8,7 +8,7 @@ import {
   memberById, currentUser, members, relDays, relHours, projectForThread,
 } from '../data.js';
 import {
-  isSubscribed, addThread, addPost, postsFor, memberThreads, state,
+  isSubscribed, addThread, addPost, postsFor, memberThreads, state, roleLabel,
 } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
@@ -205,7 +205,7 @@ export function renderThread(id) {
         <div>
           <div class="post-who">
             <strong>${esc(who.name)}</strong>
-            <span class="caption">${esc(who.role)}</span>
+            <span class="caption">${esc(roleLabel(who.id))}</span>
             <span class="spacer"></span>
             <span class="caption mono">${p.at === 0 ? 'just now' : relDays(p.at)}</span>
           </div>

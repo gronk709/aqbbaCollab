@@ -13,7 +13,7 @@ import {
 } from '../data.js';
 import {
   allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
-  addApiary, addHive, addInspection,
+  addApiary, addHive, addInspection, roleLabel, isCoordinator, canEditApiary,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -55,7 +55,7 @@ export function renderApiaries() {
         <h1>Research apiaries</h1>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-primary btn-sm" id="new-apiary">${icons.plus} Add apiary</button>
+        ${isCoordinator() ? `<button class="btn btn-primary btn-sm" id="new-apiary">${icons.plus} Add apiary</button>` : ''}
       </div>
     </div>
 
@@ -187,6 +187,7 @@ export function renderApiary(id) {
   const mgr = memberById(ap.manager);
   const insp = allInspections().filter((i) => i.apiary === ap.id).sort((a, b) => a.date - b.date);
   const siteProjects = projectsForApiary(ap.id);
+  const canEdit = canEditApiary(ap.id);
   const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 
   /* Which lines are here, and how each is performing on this site. */
@@ -256,14 +257,18 @@ export function renderApiary(id) {
             <div class="panel-head">
               <h2>Hive status — all ${hives.length}</h2>
               <span class="spacer"></span>
-              <button class="btn btn-ghost btn-sm" id="new-hive">${icons.plus} Add hive</button>
+              ${canEdit ? `<button class="btn btn-ghost btn-sm" id="new-hive">${icons.plus} Add hive</button>` : ''}
             </div>
             <div class="panel-body">
               ${hives.length ? renderComb(hives, { id: 'ap-comb' }) : `
                 <div class="empty" style="padding:var(--s6) 0">
                   <h3>No hives registered yet</h3>
-                  <p>Add the first hive at this site once nucs or colonies are in place.</p>
-                  <button class="btn btn-primary" id="empty-hive">Add hive</button>
+                  ${canEdit ? `
+                    <p>Add the first hive at this site once nucs or colonies are in place.</p>
+                    <button class="btn btn-primary" id="empty-hive">Add hive</button>
+                  ` : `
+                    <p>Only ${esc(ap.name)}'s assigned managers, or the research coordinator, can add hives here.</p>
+                  `}
                 </div>`}
             </div>
             ${hives.length ? renderReadout(null) : ''}
@@ -286,12 +291,12 @@ export function renderApiary(id) {
             <div class="panel-head">
               <h2>Inspection schedule</h2>
               <span class="spacer"></span>
-              <button class="btn btn-ghost btn-sm" id="new-inspection">${icons.plus} Log inspection</button>
+              ${canEdit ? `<button class="btn btn-ghost btn-sm" id="new-inspection">${icons.plus} Log inspection</button>` : ''}
             </div>
             ${insp.length ? `<ul class="list">${inspRows}</ul>` : `
               <div class="empty">
                 <h3>No inspections logged</h3>
-                <p>Log one once an assessment has run at this site.</p>
+                <p>${canEdit ? 'Log one once an assessment has run at this site.' : `Only ${esc(ap.name)}'s assigned managers, or the research coordinator, can log inspections here.`}</p>
               </div>`}
           </div>
         </div>
@@ -319,7 +324,7 @@ export function renderApiary(id) {
                   ${avatar(mgr)}
                   <div style="flex:1;min-width:0">
                     <div style="font-size:13.5px;font-weight:600">${esc(mgr.name)}</div>
-                    <div class="caption">${esc(mgr.role)} · ${mgr.state}</div>
+                    <div class="caption">${esc(roleLabel(mgr.id))} · ${mgr.state}</div>
                   </div>
                   ${hasContact(mgr.id) ? '' : `<span class="tag tag-amber" style="flex:none">No contact on file</span>`}
                 </a>

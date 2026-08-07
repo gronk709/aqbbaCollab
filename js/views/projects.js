@@ -14,7 +14,7 @@ import {
 } from '../data.js';
 import {
   joinProject, memberProjects, sessionParticipantsFor, addProject,
-  allApiaries, allApiaryById,
+  allApiaries, allApiaryById, roleLabel,
 } from '../store.js';
 import { currentUser } from '../data.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
@@ -282,7 +282,7 @@ export function renderProject(id) {
                   ${avatar(m)}
                   <div>
                     <strong style="font-size:13.5px;font-weight:600;display:block">${esc(m.name)}</strong>
-                    <span class="caption">${esc(m.role)} · ${m.state}</span>
+                    <span class="caption">${esc(roleLabel(m.id))} · ${m.state}</span>
                   </div>
                 </div>`).join('')}
             </div>

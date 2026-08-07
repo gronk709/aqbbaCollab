@@ -58,6 +58,24 @@ manages. This is keyed by member id, not by the literal "Apiary Manager" role �
 seed data, Ani Rahmawati (a Breeder) manages Oradale, and the page works the same either
 way, since who runs a given site is whoever `apiary.manager` names, not a fixed job title.
 
+**Roles & apiary access** — also on the manager details page. A member can hold several
+roles at once (e.g. a Breeder who is also an Apiary Manager), edited from a fixed list
+(`roleOptions` in `js/data.js`, which includes "Operator" alongside the original roles).
+Holding the "Apiary Manager" title is not itself a permission — actual edit access to a
+site (adding a hive, logging an inspection, and creating new apiaries) is a separate
+grant, checked per apiary. A member with that grant for Barrowfield cannot touch
+Oradale's data unless separately granted there too; the Research Coordinator can always
+edit every site. Editing roles and grants is itself restricted to the Coordinator.
+
+This app has exactly one real signed-in identity, so the restriction above would never
+actually trigger in testing — everyone who opens it is the Coordinator. To make it
+demonstrable, the rail has a **"Preview apiary access as"** selector, clearly marked
+`(prototype)`. It only affects the three gated actions (add hive, log inspection, add
+apiary) — authorship of forum posts, listings and project joins always stays the real
+signed-in member. This selector has no production equivalent; a real deployment derives
+permissions from the actual authenticated Wild Apricot member, and this whole mechanism
+(`previewUser`/`setPreviewAs` in `js/store.js`) should be deleted once that's wired up.
+
 **Projects** (`#/projects`) — coordinated research initiatives, distinct from apiaries: a
 project is a question with a method attached, and can span apiaries, run at one, or wait
 for a member to volunteer a site. Each has Background, Aims, Research questions,

@@ -2,8 +2,11 @@
    Application shell + hash router.
    ========================================================================== */
 
-import { currentUser } from './data.js';
-import { state, signOut, unreadCount, recruitingCount, onChange, toggleSub } from './store.js';
+import { currentUser, members } from './data.js';
+import {
+  state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
+  roleLabel, previewUser, setPreviewAs,
+} from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
 import { renderDashboard } from './views/dashboard.js';
@@ -76,10 +79,17 @@ function shellHTML(inner) {
             ${avatar(currentUser)}
             <div>
               <strong>${esc(currentUser.name)}</strong>
-              <span>${esc(currentUser.role)}</span>
+              <span>${esc(roleLabel(currentUser.id))}</span>
             </div>
           </div>
           <button class="rail-out" data-signout>Sign out</button>
+
+          <div class="rail-preview">
+            <label for="preview-as">Preview apiary access as <span title="Testing only — doesn't change who posts, joins or lists things as you.">(prototype)</span></label>
+            <select id="preview-as">
+              ${members.map((m) => `<option value="${m.id}" ${previewUser().id === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
+            </select>
+          </div>
         </div>
       </aside>
       <main class="main" id="main">${inner}</main>
@@ -126,6 +136,13 @@ function bindGlobal() {
 
   const out = app.querySelector('[data-signout]');
   if (out) out.addEventListener('click', () => { signOut(); location.hash = '#/'; render(); });
+
+  const preview = app.querySelector('#preview-as');
+  if (preview) preview.addEventListener('change', (e) => {
+    setPreviewAs(e.target.value);
+    toast(`Previewing apiary access as ${previewUser().name}.`);
+    render();
+  });
 
   /* Subscribe buttons work identically wherever they appear. A page may show
      more than one control for the same subscription, so update them all. */

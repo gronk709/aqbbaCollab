@@ -1,15 +1,24 @@
 /* ==========================================================================
    Manager details. Contact information for whoever is listed as an apiary's
-   manager — phone and email are mandatory once saved, address is optional.
+   manager — phone and email are mandatory once saved, address is optional —
+   plus their roles and which apiaries they're permitted to add hives to and
+   log inspections for.
 
    This is keyed by member id, not by role: the "manager" of an apiary is
    whichever member is assigned to it (see apiaries.js's manager select),
-   which in the seed data includes people whose member role is "Breeder".
-   The page works the same regardless of role.
+   which in the seed data includes people whose only role is "Breeder". The
+   page works the same regardless of role.
+
+   Holding the "Apiary Manager" role is a title, not itself a grant — actual
+   edit access to a given site comes from that apiary's own managers list,
+   set here independently. A member can hold several roles at once.
    ========================================================================== */
 
-import { memberById } from '../data.js';
-import { allApiaries, contactFor, hasContact, setContact } from '../store.js';
+import { memberById, currentUser, roleOptions } from '../data.js';
+import {
+  allApiaries, contactFor, hasContact, setContact,
+  roleLabel, rolesFor, setRoles, isCoordinator, managersFor, setManagedApiaries,
+} from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
 export function renderManager(id) {
@@ -18,13 +27,15 @@ export function renderManager(id) {
 
   const contact = contactFor(id);
   const complete = hasContact(id);
-  const manages = allApiaries().filter((a) => a.manager === id);
+  const manages = allApiaries().filter((a) => a.managers.includes(id));
+  const roles = rolesFor(id);
+  const canManageRoles = isCoordinator(currentUser.id);
 
   const html = `
     <div class="topbar">
       <div style="width:100%">
         <div class="crumb"><a href="#/apiaries">Apiaries</a> ${icons.chevron} <span>Manager</span></div>
-        <div class="eyebrow">${esc(m.role)} · ${m.state}</div>
+        <div class="eyebrow">${esc(roleLabel(id))} · ${m.state}</div>
         <h1>${esc(m.name)}</h1>
       </div>
       <div class="topbar-actions">
@@ -63,6 +74,27 @@ export function renderManager(id) {
               `}
             </div>
           </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Roles &amp; apiary access</h2>
+              <span class="spacer"></span>
+              ${canManageRoles ? `<button class="btn btn-ghost btn-sm" id="edit-roles">${icons.pen} Edit</button>` : ''}
+            </div>
+            <div class="panel-body">
+              <div class="eyebrow" style="margin-bottom:var(--s2)">Roles</div>
+              <div class="row row-wrap" style="gap:6px;margin-bottom:var(--s5)">
+                ${roles.length ? roles.map((r) => `<span class="tag tag-outline">${esc(r)}</span>`).join('')
+                  : '<span class="caption">No roles set.</span>'}
+              </div>
+              <div class="eyebrow" style="margin-bottom:var(--s2)">Can add hives / log inspections at</div>
+              <div class="row row-wrap" style="gap:6px">
+                ${manages.length ? manages.map((a) => `<a class="tag tag-amber" href="#/apiaries/${a.id}">${a.code} · ${esc(a.name)}</a>`).join('')
+                  : '<span class="caption">No sites granted.</span>'}
+              </div>
+              ${!canManageRoles ? `<p class="caption" style="margin-top:var(--s4)">Only the research coordinator can change roles and site access.</p>` : ''}
+            </div>
+          </div>
         </div>
 
         <div class="stack">
@@ -73,7 +105,7 @@ export function renderManager(id) {
                 ${avatar(m)}
                 <div>
                   <div style="font-size:13.5px;font-weight:600">${esc(m.name)}</div>
-                  <div class="caption">${esc(m.role)} · member since ${m.since}</div>
+                  <div class="caption">${esc(roleLabel(id))} · member since ${m.since}</div>
                 </div>
               </div>
               <div class="row" style="justify-content:space-between;margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
@@ -114,6 +146,8 @@ export function renderManager(id) {
       const btn = document.getElementById(elId);
       if (btn) btn.addEventListener('click', () => openContactForm(m, contact));
     });
+    const rolesBtn = document.getElementById('edit-roles');
+    if (rolesBtn) rolesBtn.addEventListener('click', () => openRolesForm(m));
   }, 0);
 
   return html;
@@ -160,6 +194,54 @@ function openContactForm(m, contact) {
     setContact(m.id, { phone, email, address });
     closeModal();
     toast('Contact details saved.');
+    window.__aqbba_render();
+  });
+}
+
+function openRolesForm(m) {
+  const currentRoles = rolesFor(m.id);
+  const apiaries = allApiaries();
+
+  const roleChecks = roleOptions.map((r) => `
+    <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:6px">
+      <input type="checkbox" value="${esc(r)}" class="r-role" ${currentRoles.includes(r) ? 'checked' : ''}>
+      ${esc(r)}
+    </label>`).join('');
+
+  const siteChecks = apiaries.map((a) => `
+    <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:6px">
+      <input type="checkbox" value="${a.id}" class="r-site" ${managersFor(a.id).includes(m.id) ? 'checked' : ''}>
+      ${esc(a.name)} <span class="caption">(${a.code})</span>
+    </label>`).join('');
+
+  const body = `
+    <p class="caption" style="margin-bottom:var(--s5)">
+      Site access is separate from the role tag — holding "Apiary Manager" doesn't by
+      itself grant edit access anywhere. Check the specific sites below.
+    </p>
+    <div class="field">
+      <label>Roles</label>
+      ${roleChecks}
+    </div>
+    <div class="field">
+      <label>Can add hives / log inspections at</label>
+      ${siteChecks || '<p class="caption">No apiaries exist yet.</p>'}
+    </div>`;
+
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-roles">Save</button>`;
+
+  const scrim = modal({ title: `Roles & access — ${m.name}`, body, actions });
+
+  scrim.querySelector('#save-roles').addEventListener('click', () => {
+    const roles = [...scrim.querySelectorAll('.r-role:checked')].map((c) => c.value);
+    const sites = [...scrim.querySelectorAll('.r-site:checked')].map((c) => c.value);
+
+    setRoles(m.id, roles);
+    setManagedApiaries(m.id, sites);
+    closeModal();
+    toast(`Roles and site access updated for ${m.name}.`);
     window.__aqbba_render();
   });
 }

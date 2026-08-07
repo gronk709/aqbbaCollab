@@ -9,7 +9,7 @@
 import {
   repository, allSubs, subById, memberById, sampleArticle, relDays, currentUser,
 } from '../data.js';
-import { isSubscribed, state } from '../store.js';
+import { isSubscribed, state, roleLabel } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
 function subRow(s) {
@@ -200,7 +200,7 @@ export function renderSubTopic(id) {
                 ${avatar(author)}
                 <div>
                   <div style="font-size:13.5px;font-weight:600">${esc(author.name)}</div>
-                  <div class="caption">${esc(author.role)} · published today</div>
+                  <div class="caption">${esc(roleLabel(author.id))} · published today</div>
                 </div>
               </div>
               <div class="prose" style="margin-top:var(--s5)">

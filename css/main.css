@@ -179,7 +179,11 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .gate-form > .gate-form-inner > p.caption { margin-bottom: var(--s6); }
 
 .field { margin-bottom: var(--s4); }
-.field label {
+/* :first-child scopes this to the field's own caption, not a checkbox-row
+   <label> that follows it in the same .field — those opt into .row's flex
+   layout instead, and a bare `.field label` would beat that on specificity
+   (a class + type selector outranks a class alone) and stack them. */
+.field > label:first-child {
   display: block;
   font-family: var(--mono); font-size: 10.5px; font-weight: 500;
   letter-spacing: 0.12em; text-transform: uppercase;
@@ -193,6 +197,12 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   border-radius: 3px;
   font-size: 14.5px;
   transition: border-color 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+/* A checkbox/radio inside a .field is a row item next to its own label text,
+   not a full-width control — the rule above is meant for text/date/select
+   inputs and would otherwise stretch a checkbox to fill the row. */
+.field input[type="checkbox"], .field input[type="radio"] {
+  width: auto; padding: 0; flex: none;
 }
 .field input:focus, .field select:focus, .field textarea:focus {
   outline: none;
@@ -327,6 +337,26 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   transition: color 0.16s var(--ease);
 }
 .rail-out:hover { color: var(--amber); }
+
+/* Prototype-only device for demonstrating per-site permission checks without
+   real multi-user auth. Deliberately styled as a test tool, not a feature:
+   dashed border, muted, visually distinct from the rest of the rail. */
+.rail-preview {
+  margin-top: var(--s4); padding-top: var(--s4);
+  border-top: 1px dashed rgba(247,244,237,0.16);
+}
+.rail-preview label {
+  display: block; font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: rgba(247,244,237,0.38); margin-bottom: 6px;
+}
+.rail-preview label span { text-transform: none; letter-spacing: 0; cursor: help; }
+.rail-preview select {
+  width: 100%; padding: 6px 8px;
+  background: rgba(247,244,237,0.06); border: 1px dashed rgba(247,244,237,0.24);
+  border-radius: 3px; color: rgba(247,244,237,0.75); font-size: 12px;
+}
+.rail-preview select:focus { outline: 2px solid var(--amber); outline-offset: 1px; }
 
 /* Mobile rail */
 .rail-toggle {
