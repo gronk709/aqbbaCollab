@@ -110,8 +110,11 @@ export const statusNote = {
   dormant:   'Queenless or requeening. No data collected this cycle.',
 };
 
-const queenColours = ['white', 'yellow', 'red', 'green', 'blue'];
+export const queenColours = ['white', 'yellow', 'red', 'green', 'blue'];
+/* Weighted pool for seed generation — Calm appears twice on purpose so it's
+   drawn more often. For a form dropdown, use temperamentOptions instead. */
 const tempers = ['Calm', 'Calm', 'Steady', 'Steady', 'Runny', 'Defensive'];
+export const temperamentOptions = ['Calm', 'Steady', 'Runny', 'Defensive'];
 
 /* Each hive carries the five data points the assessment protocol requires:
    VSH score, mite load, brood frames, temperament, and last inspection. */
@@ -169,7 +172,7 @@ export function vshAverage(hives) {
    Inspections. Dates are relative to today so the dashboard never goes stale.
    -------------------------------------------------------------------------- */
 
-const inspectionKinds = [
+export const inspectionKinds = [
   'Freeze-killed brood assay',
   'Alcohol wash — mite count',
   'Brood pattern assessment',

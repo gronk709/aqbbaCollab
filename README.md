@@ -38,7 +38,15 @@ and recently completed inspections, and the contributing breeders with their que
 **Apiary records** (`#/apiaries`) — a comparison table across sites, then per-apiary: the
 full hive grid, queen lines present with site performance measured against each line's
 program mean, the complete inspection schedule, site detail, and which research projects
-are currently running there.
+are currently running there. This is also where the program's own data gets maintained:
+**Add apiary** registers a new research site, **Add hive** registers a new hive at a site
+(the hive ID is assigned automatically), and **Log inspection** records a completed or
+scheduled inspection. These three are meaningfully different from the member-facing
+composers elsewhere (forum, marketplace, repository) — they alter the program's research
+data rather than adding social content, so in a production build they'd want to be
+restricted to apiary managers and the research coordinator rather than open to any member.
+The prototype doesn't enforce that distinction since there's only one signed-in user to
+test with, but it's a real access-control decision for later, not an oversight.
 
 **Projects** (`#/projects`) — coordinated research initiatives, distinct from apiaries: a
 project is a question with a method attached, and can span apiaries, run at one, or wait

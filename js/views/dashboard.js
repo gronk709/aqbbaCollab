@@ -5,14 +5,18 @@
    ========================================================================== */
 
 import {
-  apiaries, stageLabels, statusLabels, memberById, queenLines,
-  recentInspections, upcomingInspections, apiaryById, projects,
+  stageLabels, statusLabels, memberById, queenLines, projects,
   tally, vshAverage, relDays, fmtDate, fmtDateLong,
 } from '../data.js';
+import {
+  allApiaries, allApiaryById, allRecentInspections, allUpcomingInspections,
+} from '../store.js';
 import { esc, icons, avatar, tag } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
 
-const allHives = apiaries.flatMap((a) => a.hiveRecords);
+/* Recomputed on every call rather than cached at module load, since member-
+   added apiaries and hives can change between renders. */
+const getAllHives = () => allApiaries().flatMap((a) => a.hiveRecords);
 
 function stageTag(stage) {
   const v = { initialising: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green' }[stage];
@@ -67,7 +71,7 @@ function apiaryCard(ap) {
 }
 
 function inspectionLine(insp, { showDate = 'day' } = {}) {
-  const ap = apiaryById(insp.apiary);
+  const ap = allApiaryById(insp.apiary);
   const by = memberById(insp.by);
   const d = insp.date;
   return `
@@ -90,6 +94,7 @@ function inspectionLine(insp, { showDate = 'day' } = {}) {
 }
 
 function colonyStatusPanel() {
+  const allHives = getAllHives();
   const t = tally(allHives);
   const total = allHives.length;
   const treatmentFree = allHives.filter((h) => h.treatmentFree > 0).length;
@@ -141,6 +146,7 @@ function colonyStatusPanel() {
 }
 
 function breedersPanel() {
+  const allHives = getAllHives();
   const rows = queenLines.map((line) => {
     const b = memberById(line.breeder);
     const inProgram = allHives.filter((h) => h.line === line.code).length;
@@ -176,6 +182,10 @@ function breedersPanel() {
 }
 
 export function renderDashboard() {
+  const apiaries = allApiaries();
+  const allHives = getAllHives();
+  const upcomingInspections = allUpcomingInspections();
+  const recentInspections = allRecentInspections();
   const t = tally(allHives);
   const focus = apiaries.find((a) => a.stage === 'assessment') || apiaries[0];
   const attention = allHives.filter((h) => h.status === 'critical').length;
@@ -217,7 +227,7 @@ export function renderDashboard() {
         <div class="tile">
           <dt>Next inspection</dt>
           <dd style="font-size:1.125rem;letter-spacing:0">${fmtDate(next.date)}</dd>
-          <div class="tile-trend">${esc(apiaryById(next.apiary).name)} · ${esc(next.kind)}</div>
+          <div class="tile-trend">${esc(allApiaryById(next.apiary).name)} · ${esc(next.kind)}</div>
         </div>
         <div class="tile">
           <dt>Research projects</dt>

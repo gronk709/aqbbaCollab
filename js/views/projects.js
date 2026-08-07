@@ -10,10 +10,11 @@
    ========================================================================== */
 
 import {
-  projects, projectStatusLabels, memberById, apiaryById, threadById, relDays,
+  projects, projectStatusLabels, memberById, threadById, relDays,
 } from '../data.js';
 import {
   joinProject, memberProjects, sessionParticipantsFor, addProject,
+  allApiaries, allApiaryById,
 } from '../store.js';
 import { currentUser } from '../data.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
@@ -35,7 +36,7 @@ function isMineAlready(p) {
 }
 
 function sitesLine(p) {
-  const named = p.sites.map((id) => apiaryById(id)).filter(Boolean);
+  const named = p.sites.map((id) => allApiaryById(id)).filter(Boolean);
   if (!named.length) return 'No site confirmed yet — recruiting a host apiary.';
   const names = named.map((a) => a.code).join(', ');
   return p.openSites ? `Running at ${names}, open to other member apiaries.` : `Running at ${names}.`;
@@ -125,14 +126,11 @@ function bindProjects() {
 }
 
 function openProposeForm() {
-  const apiaryChecks = ['ap-tambo', 'ap-barrow', 'ap-oradale'].map((id) => {
-    const a = apiaryById(id);
-    return `
+  const apiaryChecks = allApiaries().map((a) => `
       <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:6px">
-        <input type="checkbox" value="${id}" class="p-site">
+        <input type="checkbox" value="${a.id}" class="p-site">
         ${esc(a.name)} <span class="caption">(${a.code})</span>
-      </label>`;
-  }).join('');
+      </label>`).join('');
 
   const body = `
     <p class="caption" style="margin-bottom:var(--s5)">
@@ -296,7 +294,7 @@ export function renderProject(id) {
               ${p.sites.length ? `
                 <div class="row row-wrap" style="gap:6px;margin-bottom:var(--s3)">
                   ${p.sites.map((id) => {
-                    const a = apiaryById(id);
+                    const a = allApiaryById(id);
                     return a ? `<a class="tag tag-outline" href="#/apiaries/${a.id}">${a.code} · ${esc(a.name)}</a>` : '';
                   }).join('')}
                 </div>` : ''}

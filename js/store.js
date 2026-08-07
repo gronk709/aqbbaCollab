@@ -3,7 +3,7 @@
    Persisted to localStorage so a page reload keeps what the member chose.
    ========================================================================== */
 
-import { threads, allSubs, notifications, currentUser, projects } from './data.js';
+import { threads, allSubs, notifications, currentUser, projects, apiaries, inspections } from './data.js';
 
 const KEY = 'aqbba.session.v1';
 
@@ -24,6 +24,9 @@ const defaults = () => ({
   newProjects: [],
   projectJoins: [],
   projectParticipants: {},
+  newApiaries: [],
+  newHives: [],
+  newInspections: [],
   digest: 'instant',
 });
 
@@ -155,6 +158,80 @@ export function recruitingCount() {
   const mine = state.newProjects.filter((p) => p.status === 'recruiting').length;
   return seeded + mine;
 }
+
+/* --- apiaries, hives & inspections ----------------------------------------
+   These are the program's own research data, not member social content, so
+   they're kept separate from the forum/marketplace/project patterns above
+   even though the shape of "seeded + member-added, merged for rendering" is
+   the same idea throughout. */
+
+function withMemberHives(ap) {
+  const extra = state.newHives.filter((h) => h.apiary === ap.id);
+  const hiveRecords = [...(ap.hiveRecords || []), ...extra];
+  return { ...ap, hiveRecords, hives: hiveRecords.length };
+}
+
+export function allApiaries() {
+  return [...state.newApiaries, ...apiaries].map(withMemberHives);
+}
+
+export const allApiaryById = (id) => allApiaries().find((a) => a.id === id);
+
+export function addApiary({ name, region, coords, flora, brief, manager, established, stage }) {
+  const initials = name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 4) || 'NEW';
+  const taken = new Set(allApiaries().map((a) => a.code));
+  let code = initials;
+  for (let n = 2; taken.has(code); n++) code = `${initials}${n}`;
+
+  const ap = {
+    id: `ap-${Date.now()}`, name, code,
+    region, coords: coords || '—',
+    stage: stage || 'initialising', manager,
+    established: established || new Date().getFullYear(),
+    hives: 0, flora: flora || '—', brief, hiveRecords: [],
+  };
+  state.newApiaries.unshift(ap);
+  commit();
+  return ap;
+}
+
+export function addHive(apiaryId, hive) {
+  const ap = allApiaryById(apiaryId);
+  const n = ap.hiveRecords.length + 1;
+  const record = {
+    id: `${ap.code}-${String(n).padStart(3, '0')}`,
+    apiary: apiaryId, lastSeen: 0,
+    ...hive,
+  };
+  state.newHives.push(record);
+  commit();
+  return record;
+}
+
+function daysFromToday(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((d - today) / 86400000);
+}
+
+function hydrateInspection(i) {
+  return { ...i, date: new Date(`${i.dateStr}T00:00:00`), offset: daysFromToday(i.dateStr) };
+}
+
+export function addInspection({ apiary, kind, by, hivesCount, note, dateStr, done }) {
+  const insp = {
+    id: `ui-${Date.now()}`, apiary, kind, by: by || currentUser.id,
+    hives: hivesCount, done: !!done, note: note || '', dateStr,
+  };
+  state.newInspections.push(insp);
+  commit();
+  return insp;
+}
+
+export const allInspections = () => [...state.newInspections.map(hydrateInspection), ...inspections];
+export const allRecentInspections = () => allInspections().filter((i) => i.done).sort((a, b) => b.date - a.date);
+export const allUpcomingInspections = () => allInspections().filter((i) => !i.done).sort((a, b) => a.date - b.date);
 
 /* --- session ------------------------------------------------------------- */
 
