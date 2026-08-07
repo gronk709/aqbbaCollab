@@ -1,0 +1,197 @@
+{
+ "rs-assess": {
+  "articles": [
+   {
+    "slug": "scoring-partial-removals-fkb",
+    "file": "content/repository/rs-assess/scoring-partial-removals-fkb.md",
+    "title": "Scoring partial removals in the freeze-killed brood assay",
+    "author": "m9",
+    "date": "2026-08-07",
+    "summary": "Why an uncapped-but-not-removed cell is its own category, and the three-column scoring the program uses."
+   }
+  ],
+  "attachments": []
+ },
+ "rs-graft": {
+  "articles": [
+   {
+    "slug": "where-to-start-with-queen-rearing",
+    "file": "content/repository/rs-graft/where-to-start-with-queen-rearing.md",
+    "title": "Where to start with this collection",
+    "author": "m1",
+    "date": "2026-08-05",
+    "summary": "How the queen rearing documents in this sub-topic fit together, and the order to read them in."
+   }
+  ],
+  "attachments": [
+   {
+    "file": "content/repository/rs-graft/cell-run-process.png",
+    "name": "Cell run process diagram",
+    "kind": "Image",
+    "size": "459.4 KB"
+   },
+   {
+    "file": "content/repository/rs-graft/colony-prep-for-cell-raising.docx",
+    "name": "Colony preparation for cell raising",
+    "kind": "Word",
+    "size": "17 KB"
+   },
+   {
+    "file": "content/repository/rs-graft/miller-method-steps.xlsx",
+    "name": "Miller method — steps",
+    "kind": "Excel",
+    "size": "10.1 KB"
+   },
+   {
+    "file": "content/repository/rs-graft/odd-acres-queen-rearing-procedures.pdf",
+    "name": "Odd Acres Apiary queen rearing procedures",
+    "kind": "PDF",
+    "size": "98.9 KB"
+   },
+   {
+    "file": "content/repository/rs-graft/standard-methods-rearing-selection-queens-coloss.pdf",
+    "name": "Standard methods for rearing and selection of A. mellifera queens (COLOSS)",
+    "kind": "PDF",
+    "size": "3.5 MB"
+   }
+  ]
+ },
+ "rs-ii": {
+  "articles": [
+   {
+    "slug": "ii-standard-methods",
+    "file": "content/repository/rs-ii/ii-standard-methods.md",
+    "title": "Instrumental insemination — the standard methods reference",
+    "author": "m1",
+    "date": "2026-08-05",
+    "summary": "The reference text for II technique, equipment and semen handling."
+   }
+  ],
+  "attachments": [
+   {
+    "file": "content/repository/rs-ii/instrumental-insemination-standard-methods.pdf",
+    "name": "Instrumental insemination of A. mellifera queens — standard methods",
+    "kind": "PDF",
+    "size": "2.2 MB"
+   }
+  ]
+ },
+ "rs-labour": {
+  "articles": [
+   {
+    "slug": "using-the-queen-rearing-calendar",
+    "file": "content/repository/rs-labour/using-the-queen-rearing-calendar.md",
+    "title": "Using the queen rearing calendar",
+    "author": "m1",
+    "date": "2026-08-05",
+    "summary": "The planning spreadsheet that works a season backwards from delivery dates to graft dates."
+   }
+  ],
+  "attachments": [
+   {
+    "file": "content/repository/rs-labour/queen-rearing-calendar.xlsx",
+    "name": "Queen rearing calendar (season planner)",
+    "kind": "Excel",
+    "size": "65.5 KB"
+   }
+  ]
+ },
+ "rs-lines": {
+  "articles": [
+   {
+    "slug": "plan-bee-and-program-design",
+    "file": "content/repository/rs-lines/plan-bee-and-program-design.md",
+    "title": "Plan Bee and designing a line-breeding program",
+    "author": "m1",
+    "date": "2026-08-05",
+    "summary": "The national genetic improvement manual and the COLOSS implementation guide, and how AQBBA's program sits relative to both."
+   }
+  ],
+  "attachments": [
+   {
+    "file": "content/repository/rs-lines/initiation-implementation-breeding-programs-coloss.pdf",
+    "name": "Initiation and implementation of breeding programs (COLOSS)",
+    "kind": "PDF",
+    "size": "1.4 MB"
+   },
+   {
+    "file": "content/repository/rs-lines/plan-bee-breeding-manual-ed2.pdf",
+    "name": "Plan Bee breeding manual, 2nd edition",
+    "kind": "PDF",
+    "size": "12 MB"
+   }
+  ]
+ },
+ "rs-select": {
+  "articles": [
+   {
+    "slug": "breeding-program-theory",
+    "file": "content/repository/rs-select/breeding-program-theory.md",
+    "title": "The theory behind a breeding program",
+    "author": "m1",
+    "date": "2026-08-05",
+    "summary": "The foundational papers on how breeding programs work — objectives, performance testing, and fertility as a selectable trait."
+   }
+  ],
+  "attachments": [
+   {
+    "file": "content/repository/rs-select/basic-concept-of-breeding-programs-coloss.pdf",
+    "name": "The basic concept of honey bee breeding programs (COLOSS)",
+    "kind": "PDF",
+    "size": "1.1 MB"
+   },
+   {
+    "file": "content/repository/rs-select/frost-breeding-for-improved-fertility.pdf",
+    "name": "Breeding for improved fertility of honey bees (Frost et al.)",
+    "kind": "PDF",
+    "size": "249.8 KB"
+   }
+  ]
+ },
+ "rs-vsh": {
+  "articles": [
+   {
+    "slug": "vsh-assessment-process",
+    "file": "content/repository/rs-vsh/vsh-assessment-process.md",
+    "title": "The VSH assessment process at small scale",
+    "author": "m1",
+    "date": "2026-08-05",
+    "summary": "The working process document for running VSH assessment without research-station infrastructure."
+   }
+  ],
+  "attachments": [
+   {
+    "file": "content/repository/rs-vsh/vsh-process-small-scale.docx",
+    "name": "VSH assessment process at small scale (working document)",
+    "kind": "Word",
+    "size": "316.9 KB"
+   }
+  ]
+ },
+ "rs-yard": {
+  "articles": [
+   {
+    "slug": "mating-control-reading",
+    "file": "content/repository/rs-yard/mating-control-reading.md",
+    "title": "Mating control — the why and the how",
+    "author": "m1",
+    "date": "2026-08-05",
+    "summary": "Why controlled mating is what makes selection actually work, and the practical options at member scale."
+   }
+  ],
+  "attachments": [
+   {
+    "file": "content/repository/rs-yard/drone-mother-colonies-number-position.pdf",
+    "name": "Drone mother colonies — number and position",
+    "kind": "PDF",
+    "size": "30 KB"
+   },
+   {
+    "file": "content/repository/rs-yard/relevance-of-mating-control-coloss.pdf",
+    "name": "The relevance of mating control for breeding programs (COLOSS)",
+    "kind": "PDF",
+    "size": "1.2 MB"
+   }
+  ]
+ }
+}

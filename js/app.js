@@ -14,9 +14,10 @@ import { renderApiaries, renderApiary } from './views/apiaries.js';
 import { renderManager } from './views/managers.js';
 import { renderProjects, renderProject } from './views/projects.js';
 import { renderForum, renderThread } from './views/forum.js';
-import { renderRepository, renderSubTopic } from './views/repository.js';
+import { renderRepository, renderSubTopic, renderArticle } from './views/repository.js';
 import { renderMarketplace } from './views/marketplace.js';
 import { renderNotifications } from './views/notifications.js';
+import { loadContent } from './content.js';
 
 const app = document.getElementById('app');
 
@@ -49,6 +50,9 @@ const ROUTES = [
   { test: /^#\/forum\/?$/,             view: renderForum },
   { test: /^#\/forum\/(.+)$/,          view: renderThread },
   { test: /^#\/repository\/?$/,        view: renderRepository },
+  /* Article reader before the sub-topic route, which would otherwise swallow
+     "rs-graft/some-article" whole as a sub-topic id. */
+  { test: /^#\/repository\/([^/]+)\/(.+)$/, view: renderArticle },
   { test: /^#\/repository\/(.+)$/,     view: renderSubTopic },
   { test: /^#\/marketplace\/?$/,       view: renderMarketplace },
   { test: /^#\/notifications\/?$/,     view: renderNotifications },
@@ -111,7 +115,7 @@ function render() {
   let inner = '';
   for (const r of ROUTES) {
     const m = hash.match(r.test);
-    if (m) { inner = r.view(m[1]); break; }
+    if (m) { inner = r.view(m[1], m[2]); break; }
   }
   if (!inner) {
     inner = `
@@ -191,5 +195,10 @@ onChange(refreshBadge);
 
 /* Views ask for a re-render after mutating state. */
 window.__aqbba_render = render;
+
+/* The repository content manifest loads before first paint (top-level await
+   in an ES module). If it's missing, loadContent leaves an empty index and
+   the repository falls back to seeded placeholders. */
+await loadContent();
 
 render();

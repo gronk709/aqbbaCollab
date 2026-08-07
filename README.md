@@ -105,8 +105,11 @@ subscribers were notified.
 
 **Repository** (`#/repository`) — the three tracks from the brief (Foundation → Queen
 Production → Queen Breeding), sixteen sub-topics, each independently subscribable and
-publishable. One sub-topic carries a full representative article to show the reading
-experience.
+publishable. Sub-topics carry **real association content**: Markdown articles (with an
+article reader at `#/repository/<sub>/<slug>`) and document attachments (PDF, Word,
+Excel, images) served as download links with type and size. Sub-topics with no real
+content yet fall back to a seeded placeholder article, labelled as such. See "Authoring
+repository content" below for how to add material.
 
 **Marketplace** (`#/marketplace`) — queens, nucs, semen and equipment, filterable by
 category, with a listing composer and a seller enquiry flow.
@@ -165,10 +168,51 @@ js/
     managers.js       Manager contact details: view, edit, validate
     projects.js       Research initiatives: index, detail, propose, join
     forum.js          Topic list, thread view, composer
-    repository.js     Tracks, sub-topics, article view
+    repository.js     Tracks, sub-topics, article reader
     marketplace.js    Listings, filters, composer, enquiry
     notifications.js  Activity feed and subscription summary
+  content.js          Repository content loader + minimal Markdown renderer
+content/repository/   Real repository content: articles, documents, manifest
+tools/rebuild_manifest.py   Regenerates the content manifest from disk
 ```
+
+## Authoring repository content
+
+Repository content is plain files in the repo — no CMS, no build step. To add or change
+material:
+
+1. Put files in `content/repository/<sub-topic-id>/` (the ids are in `js/data.js`:
+   `rs-graft`, `rs-nutri`, `rs-vsh`, and so on).
+   - **Articles** are Markdown files with a front-matter header:
+
+     ```markdown
+     ---
+     title: Scoring partial removals in the freeze-killed brood assay
+     author: m9            # a member id from js/data.js, or a plain name
+     date: 2026-08-07      # ISO date; newest article is featured on the page
+     summary: One line shown in the article list.
+     ---
+
+     Body in Markdown: ## headings, **bold**, *italic*, lists, > quotes, links.
+     ```
+
+   - **Documents** (PDF, Word, Excel, images) go in the same folder and appear as
+     download links with type and size. An optional `_names.json` in the folder maps
+     filenames to proper display titles.
+
+2. Run `python3 tools/rebuild_manifest.py` — it regenerates
+   `content/repository/manifest.json` from what's on disk.
+3. Commit and push. The app reads only the manifest at boot and fetches article bodies
+   on demand.
+
+The in-app "Contribute" form remains a simulation until the backend exists — anything a
+browser "saves" locally is invisible to other members, so real content goes through the
+files-and-push path above. When the backend lands, a folder of front-mattered Markdown
+imports straight into a database.
+
+**Copyright note:** this repo is public. Only commit documents you have the right to
+redistribute — your own material and openly-licensed references (e.g. the COLOSS
+standard-methods series). Publisher PDFs should stay out unless the repo goes private.
 
 ## Wiring up the real integrations
 
