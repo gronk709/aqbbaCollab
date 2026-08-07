@@ -3,7 +3,9 @@
    Persisted to localStorage so a page reload keeps what the member chose.
    ========================================================================== */
 
-import { threads, allSubs, notifications, currentUser, projects, apiaries, inspections } from './data.js';
+import {
+  threads, allSubs, notifications, currentUser, projects, apiaries, inspections, memberById,
+} from './data.js';
 
 const KEY = 'aqbba.session.v1';
 
@@ -27,6 +29,7 @@ const defaults = () => ({
   newApiaries: [],
   newHives: [],
   newInspections: [],
+  contactDetails: {},
   digest: 'instant',
 });
 
@@ -232,6 +235,31 @@ export function addInspection({ apiary, kind, by, hivesCount, note, dateStr, don
 export const allInspections = () => [...state.newInspections.map(hydrateInspection), ...inspections];
 export const allRecentInspections = () => allInspections().filter((i) => i.done).sort((a, b) => b.date - a.date);
 export const allUpcomingInspections = () => allInspections().filter((i) => !i.done).sort((a, b) => a.date - b.date);
+
+/* --- contact details --------------------------------------------------------
+   Phone and email are mandatory once a member's contact record is saved, so
+   the only valid states are "nothing saved yet" and "phone + email present"
+   — never a half-filled record sitting in storage. */
+
+export function contactFor(memberId) {
+  const base = memberById(memberId);
+  const saved = state.contactDetails[memberId];
+  return {
+    phone: saved?.phone ?? base.phone ?? '',
+    email: saved?.email ?? base.email ?? '',
+    address: saved?.address ?? base.address ?? '',
+  };
+}
+
+export const hasContact = (memberId) => {
+  const c = contactFor(memberId);
+  return Boolean(c.phone && c.email);
+};
+
+export function setContact(memberId, { phone, email, address }) {
+  state.contactDetails[memberId] = { phone, email, address: address || '' };
+  commit();
+}
 
 /* --- session ------------------------------------------------------------- */
 

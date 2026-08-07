@@ -8,6 +8,7 @@ import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderApiaries, renderApiary } from './views/apiaries.js';
+import { renderManager } from './views/managers.js';
 import { renderProjects, renderProject } from './views/projects.js';
 import { renderForum, renderThread } from './views/forum.js';
 import { renderRepository, renderSubTopic } from './views/repository.js';
@@ -33,6 +34,7 @@ const ROUTES = [
   { test: /^#\/?$/,                    view: renderDashboard },
   { test: /^#\/apiaries\/?$/,          view: renderApiaries },
   { test: /^#\/apiaries\/(.+)$/,       view: renderApiary },
+  { test: /^#\/managers\/(.+)$/,       view: renderManager },
   { test: /^#\/projects\/?$/,          view: renderProjects },
   { test: /^#\/projects\/(.+)$/,       view: renderProject },
   { test: /^#\/forum\/?$/,             view: renderForum },

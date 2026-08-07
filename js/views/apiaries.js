@@ -12,7 +12,7 @@ import {
   projects, projectStatusLabels, inspectionKinds, queenColours, temperamentOptions,
 } from '../data.js';
 import {
-  allApiaries, allApiaryById, allInspections, memberProjects,
+  allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
   addApiary, addHive, addInspection,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
@@ -39,7 +39,7 @@ export function renderApiaries() {
         </td>
         <td>${esc(ap.region)}</td>
         <td><span class="tag ${stageVariant[ap.stage]}">${stageLabels[ap.stage]}</span></td>
-        <td>${esc(mgr.name)}</td>
+        <td><a href="#/managers/${mgr.id}">${esc(mgr.name)}</a></td>
         <td class="mono">${ap.hives}</td>
         <td class="mono">${vshAverage(ap.hiveRecords)}%</td>
         <td class="mono">${t.treatment || 0}</td>
@@ -315,13 +315,14 @@ export function renderApiary(id) {
 
               <div style="margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
                 <div class="eyebrow" style="margin-bottom:var(--s3)">Manager</div>
-                <div class="row" style="gap:var(--s3)">
+                <a class="row" style="gap:var(--s3)" href="#/managers/${mgr.id}">
                   ${avatar(mgr)}
-                  <div>
+                  <div style="flex:1;min-width:0">
                     <div style="font-size:13.5px;font-weight:600">${esc(mgr.name)}</div>
                     <div class="caption">${esc(mgr.role)} · ${mgr.state}</div>
                   </div>
-                </div>
+                  ${hasContact(mgr.id) ? '' : `<span class="tag tag-amber" style="flex:none">No contact on file</span>`}
+                </a>
               </div>
             </div>
           </div>

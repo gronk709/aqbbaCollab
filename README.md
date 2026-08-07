@@ -48,6 +48,16 @@ restricted to apiary managers and the research coordinator rather than open to a
 The prototype doesn't enforce that distinction since there's only one signed-in user to
 test with, but it's a real access-control decision for later, not an oversight.
 
+**Manager details** (`#/managers/:id`) — phone, email and postal address for whoever is
+listed as an apiary's manager. Phone and email are mandatory once a record is saved
+(validated on submit — an email that doesn't look like an email is rejected, and the
+record is never left half-filled); address is optional. Reached from the manager's name
+on the apiaries table and on each apiary's detail page, where an unfilled manager also
+gets a small "No contact on file" flag. The page also lists every site that member
+manages. This is keyed by member id, not by the literal "Apiary Manager" role — in the
+seed data, Ani Rahmawati (a Breeder) manages Oradale, and the page works the same either
+way, since who runs a given site is whoever `apiary.manager` names, not a fixed job title.
+
 **Projects** (`#/projects`) — coordinated research initiatives, distinct from apiaries: a
 project is a question with a method attached, and can span apiaries, run at one, or wait
 for a member to volunteer a site. Each has Background, Aims, Research questions,
@@ -113,6 +123,7 @@ js/
     dashboard.js      Research dashboard
     comb.js           The honeycomb grid and hive readout
     apiaries.js       Apiary index and per-apiary record
+    managers.js       Manager contact details: view, edit, validate
     projects.js       Research initiatives: index, detail, propose, join
     forum.js          Topic list, thread view, composer
     repository.js     Tracks, sub-topics, article view
