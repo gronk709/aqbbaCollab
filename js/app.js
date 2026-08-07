@@ -70,7 +70,7 @@ function shellHTML(inner) {
     <div class="shell">
       <aside class="rail">
         <a class="rail-mark" href="#/">
-          ${brandMark(22)}
+          ${brandMark(36)}
           <b>AQBBA</b>
         </a>
         <nav>${nav}</nav>

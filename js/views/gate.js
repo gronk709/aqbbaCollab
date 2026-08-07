@@ -38,12 +38,12 @@ export function renderGate() {
         ${combBackdrop()}
 
         <a class="gate-mark" href="#/">
-          ${brandMark(26)}
+          ${brandMark(44)}
           <span>AQBBA</span>
         </a>
 
         <div class="gate-headline">
-          <h1 class="display">Selecting for the <em>trait</em>, not against the mite.</h1>
+          <h1 class="display">Science-driven <em>and</em> industry-focused.</h1>
           <p>
             The Australian Queen Bee Breeders Association runs a shared varroa sensitive
             hygiene program across three research apiaries. Members contribute queen lines,

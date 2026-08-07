@@ -46,14 +46,12 @@ export const icons = {
   flag:     svg('<path d="M5 3v18"/><path d="M5 4h11l-2.5 4L16 12H5"/>'),
 };
 
-/* The association mark: a hex with a queen cell inside it. */
+/* The association's own crest (assets/logo.png), background removed so it
+   sits cleanly on both the dark rail and the cream page ground. Natural
+   aspect ratio is ~871:997. */
 export const brandMark = (w = 26) => `
-<svg viewBox="0 0 44 50" width="${w}" height="${w * 50 / 44}" aria-hidden="true">
-  <polygon points="22 1.5, 41.5 12.8, 41.5 37.2, 22 48.5, 2.5 37.2, 2.5 12.8"
-           fill="none" stroke="var(--amber)" stroke-width="2.6"/>
-  <path d="M22 14c4.4 0 7.4 3.2 7.4 7.6 0 5.6-3.4 9.2-7.4 13.4-4-4.2-7.4-7.8-7.4-13.4C14.6 17.2 17.6 14 22 14z"
-        fill="var(--amber)" opacity="0.9"/>
-</svg>`;
+<img src="assets/logo.png" alt="AQBBA" width="${w}" height="${Math.round(w * 997 / 871)}"
+     style="display:block;object-fit:contain" />`;
 
 /* --- toasts -------------------------------------------------------------- */
 

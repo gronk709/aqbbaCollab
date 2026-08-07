@@ -115,8 +115,18 @@ system every queen breeder already reads fluently — rather than an arbitrary p
 
 ## Design
 
-- **Palette** — comb wax ground (`#F7F4ED`), propolis ink (`#241C12`), raw honey as the
-  single action colour (`#C77F0A`). Status colours come from the queen-marking code.
+- **Crest** — `assets/logo.png` is the association's own crest, background removed so it
+  sits cleanly on both the dark rail and the cream page ground (`assets/logo-original.png`
+  is the untouched upload, kept as a backup). It's used at real size (36–44px) rather than
+  icon scale, since the fine detail — the circular wordmark, the bee anatomy — is
+  illegible any smaller.
+- **Palette** — comb wax ground (`#F7F4ED`), propolis ink (`#241C12`), and an action
+  colour (`#8D491C`) sampled directly from the crest rather than chosen freehand. A second
+  accent, `--amber-bright` (`#CD631D`), exists specifically for text/icons/focus rings
+  against the dark propolis ground — the base action colour is a fairly dark rust, and
+  reads at a poor contrast ratio (2.5:1) directly on near-black, so anywhere the accent
+  sits on the dark rail or the gate hero uses the brighter variant instead. Status colours
+  are unrelated to brand and still come from the queen-marking code.
 - **Type** — Spectral for display and long-form prose (a scientific-journal serif),
   Instrument Sans for interface, IBM Plex Mono for hive IDs, scores and dates, so field
   data reads as data.
