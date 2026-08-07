@@ -245,6 +245,64 @@ export const projectStatusLabels = {
 
 export const projects = [
   {
+    id: 'p0', code: 'PRJ-00', status: 'active',
+    title: 'Varroa Sensitive Hygiene Breeding Program',
+    summary: 'The association\'s flagship program: breeding and assessing queen lines for varroa sensitive hygiene across three research apiaries, against a common protocol.',
+    linkedThread: null,
+    coordinators: ['m1'],
+    sites: ['ap-tambo', 'ap-barrow', 'ap-oradale'],
+    openSites: true,
+    created: -2500,
+    background: [
+      'Varroa sensitive hygiene — the heritable behaviour by which workers detect and remove mite-infested brood — is the most promising path to keeping bees without standing miticide treatment. Overseas programs have shown the trait can be concentrated by selection; whether that holds under Australian conditions, with Australian stock and forage, is the question this program exists to answer.',
+      'The program runs across three research apiaries at different stages of the selection cycle: Tambo Crossing, the closed-population reference site; Barrowfield, where candidate lines are assessed against the Tambo benchmark; and Oradale, commissioned in 2026 to extend the program into subtropical conditions. Members contribute queen lines, host colonies, and record assessments against a common protocol, and every member sees every other member\'s results alongside their own.',
+    ],
+    aims: [
+      'Establish and maintain Australian queen lines with reliable, heritable VSH expression.',
+      'Measure every colony in the program against one shared assessment protocol, so results are comparable across sites, seasons and operators.',
+      'Grow the number of colonies running treatment-free without collapsing survival or productivity.',
+      'Publish an annual line performance table members can select and breed from with confidence.',
+    ],
+    questions: [
+      'Which lines hold their VSH expression across different climates and forage conditions?',
+      'How many generations of selection does a line need before treatment-free management is defensible?',
+      'Can VSH be concentrated without the inbreeding penalties seen in narrow closed populations?',
+    ],
+    participation: {
+      summary: 'The program is open to any member. Contribute a queen line for assessment, host program colonies at your own apiary, or take part in the structured assessments run at the three research sites.',
+      methods: [
+        'Queen lines enter through a contributing breeder and are assessed for at least two full seasons before appearing in the line performance table.',
+        'All assessment uses the program\'s standard protocols — freeze-killed brood assay, alcohol wash, brood pattern and recapping counts — recorded at the point of inspection.',
+        'Colonies under miticide treatment stay in the program but are excluded from selection data for the cycle.',
+      ],
+      addons: 'Members outside the three research sites can still contribute: run the standard assessments on your own stock and submit season data, or volunteer your apiary as a future satellite site.',
+    },
+    timeline: 'Running since 2019. Tambo Crossing is nine generations in; Barrowfield is mid-assessment against the Tambo benchmark; Oradale was commissioned March 2026. The annual line performance table is published each autumn.',
+    participants: [
+      { member: 'm5', contribution: 'Manages Tambo Crossing, the program\'s reference site. Contributed the Tambo 22 line.', joined: -2500 },
+      { member: 'm3', contribution: 'Manages Barrowfield and its mid-cycle line assessment.', joined: -1800 },
+      { member: 'm4', contribution: 'Manages Oradale, the program\'s newest site. Contributed the Oradale 8 line.', joined: -160 },
+      { member: 'm2', contribution: 'Contributed the Barrowfield 14 line — highest recapping rate in the program.', joined: -2400 },
+      { member: 'm9', contribution: 'Runs the assay laboratory and drafted the standard assessment protocols.', joined: -2100 },
+      { member: 'm6', contribution: 'Maintains the Coalvale 17 closed population by instrumental insemination.', joined: -2300 },
+      { member: 'm7', contribution: 'Contributed the Kellyanne 3 and Wandagee 11 lines from Western Australia.', joined: -2200 },
+      { member: 'm10', contribution: 'Contributed the Merrindale 5 line.', joined: -1400 },
+    ],
+    /* Topic areas: the program's working surfaces. Other projects are a single
+       question with a method; this one is an umbrella, so its summary page
+       links out to the places the work actually happens. */
+    topics: [
+      { name: 'Research dashboard', href: '#/projects/p0/dashboard',
+        desc: 'Live status of every hive across the three research apiaries — colony status, VSH scores, mite loads, inspections and contributing lines.' },
+      { name: 'Research apiaries', href: '#/apiaries',
+        desc: 'Site records for Tambo Crossing, Barrowfield and Oradale: hive grids, queen lines on site, and inspection schedules.' },
+      { name: 'Assessment methods', href: '#/repository/rs-assess',
+        desc: 'The standard protocols every program assessment uses, and what each measure is actually good for.' },
+      { name: 'VSH: the trait and its measurement', href: '#/repository/rs-vsh',
+        desc: 'What varroa sensitive hygiene is, how it is inherited, and how to measure it defensibly.' },
+    ],
+  },
+  {
     id: 'p1', code: 'PRJ-01', status: 'active',
     title: 'Standardising the freeze-killed brood protocol',
     summary: 'Locking down exposure time, count window and partial-removal scoring so the assay means the same thing at every member apiary.',
@@ -632,7 +690,9 @@ export function relDays(offset) {
     if (n < 7) return `${n} days ago`;
     if (n < 14) return 'last week';
     if (n < 60) return `${Math.round(n / 7)} weeks ago`;
-    return `${Math.round(n / 30)} months ago`;
+    if (n < 365) return `${Math.round(n / 30)} months ago`;
+    const y = Math.round(n / 365);
+    return y === 1 ? 'a year ago' : `${y} years ago`;
   }
   if (n === 1) return 'tomorrow';
   if (n < 7) return `in ${n} days`;

@@ -20,11 +20,13 @@ import { renderNotifications } from './views/notifications.js';
 
 const app = document.getElementById('app');
 
+/* Projects is the organizing concept — the VSH program itself is PRJ-00,
+   and the old top-level Dashboard now lives under it as a topic area — so
+   Projects is also the landing page ('#/'). */
 const NAV = [
   { group: 'Research' },
-  { path: '#/',            label: 'Dashboard',    icon: 'chart' },
+  { path: '#/projects',    label: 'Projects',     icon: 'beaker', badge: recruitingCount, home: true },
   { path: '#/apiaries',    label: 'Apiaries',     icon: 'apiary' },
-  { path: '#/projects',    label: 'Projects',     icon: 'beaker', badge: recruitingCount },
   { group: 'Collaboration' },
   { path: '#/forum',       label: 'Forum',        icon: 'forum' },
   { path: '#/repository',  label: 'Repository',   icon: 'book' },
@@ -34,11 +36,15 @@ const NAV = [
 ];
 
 const ROUTES = [
-  { test: /^#\/?$/,                    view: renderDashboard },
+  { test: /^#\/?$/,                    view: renderProjects },
   { test: /^#\/apiaries\/?$/,          view: renderApiaries },
   { test: /^#\/apiaries\/(.+)$/,       view: renderApiary },
   { test: /^#\/managers\/(.+)$/,       view: renderManager },
   { test: /^#\/projects\/?$/,          view: renderProjects },
+  /* The dashboard is a topic area of the VSH program (PRJ-00), not a page in
+     its own right — hence the project-scoped route. Must precede the generic
+     project route, which would otherwise swallow "p0/dashboard" as an id. */
+  { test: /^#\/projects\/p0\/dashboard\/?$/, view: renderDashboard },
   { test: /^#\/projects\/(.+)$/,       view: renderProject },
   { test: /^#\/forum\/?$/,             view: renderForum },
   { test: /^#\/forum\/(.+)$/,          view: renderThread },
@@ -52,9 +58,7 @@ function shellHTML(inner) {
   const hash = location.hash || '#/';
   const nav = NAV.map((item) => {
     if (item.group) return `<div class="rail-group"><span>${item.group}</span></div>`;
-    const active = item.path === '#/'
-      ? /^#\/?$/.test(hash)
-      : hash.startsWith(item.path);
+    const active = hash.startsWith(item.path) || (item.home && /^#\/?$/.test(hash));
     const n = item.badge ? item.badge() : 0;
     return `
       <a class="nav-item ${active ? 'is-on' : ''}" href="${item.path}">
@@ -114,8 +118,8 @@ function render() {
       <div class="wrap">
         <div class="empty">
           <h3>That page isn't here</h3>
-          <p>The link may be out of date. The dashboard is a good place to pick up from.</p>
-          <a class="btn btn-primary" href="#/">Go to dashboard</a>
+          <p>The link may be out of date. Projects is a good place to pick up from.</p>
+          <a class="btn btn-primary" href="#/">Go to projects</a>
         </div>
       </div>`;
   }

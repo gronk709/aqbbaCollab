@@ -233,6 +233,25 @@ export function renderProject(id) {
             </div>
           </div>
 
+          ${p.topics && p.topics.length ? `
+            <div class="panel">
+              <div class="panel-head">
+                <h2>Topic areas</h2>
+                <span class="spacer"></span>
+                <span class="caption mono">${p.topics.length}</span>
+              </div>
+              <div class="panel-body panel-body-flush">
+                ${p.topics.map((t) => `
+                  <a class="sub" href="${t.href}">
+                    <div class="sub-title">
+                      <strong>${esc(t.name)}</strong>
+                      <span>${esc(t.desc)}</span>
+                    </div>
+                    ${icons.chevron}
+                  </a>`).join('')}
+              </div>
+            </div>` : ''}
+
           <div class="panel">
             <div class="panel-head"><h2>Participation</h2></div>
             <div class="panel-body">

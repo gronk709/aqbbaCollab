@@ -29,11 +29,22 @@ serve stale JS and CSS after an edit.
 **Sign-in gate** — the only surface outside the member wall, per the members-only access
 model. Offers Wild Apricot SSO (simulated handoff) or direct credentials.
 
-**Research dashboard** (`#/`) — program-wide figures, then a card per research apiary
-showing location, coordinates, program stage (initialising / assessment / maintenance),
-manager, hive count, mean VSH, hives in treatment and hives treatment-free for three or
-more seasons. Below that: the honeycomb hive grid, a colony status breakdown, upcoming
-and recently completed inspections, and the contributing breeders with their queen lines.
+**The VSH program is itself a project.** The Varroa Sensitive Hygiene Breeding Program is
+PRJ-00 — the flagship entry on the Projects page, with the same structure as every other
+project (Background, Aims, Questions, Participation, Timeline, Coordinators,
+Participants). What it has that single-question projects don't is a **Topic areas** panel
+(an optional `topics` field on any project) linking to its working surfaces: the research
+dashboard, the apiary records, and the two assessment-related repository sub-topics.
+Because the program is the organizing concept, **Projects is the landing page** (`#/`);
+there is no top-level Dashboard nav item any more.
+
+**Research dashboard** (`#/projects/p0/dashboard`) — a topic area of PRJ-00, reached from
+the program's summary page and breadcrumbed back to it. Program-wide figures, then a card
+per research apiary showing location, coordinates, program stage (initialising /
+assessment / maintenance), manager, hive count, mean VSH, hives in treatment and hives
+treatment-free for three or more seasons. Below that: the honeycomb hive grid, a colony
+status breakdown, upcoming and recently completed inspections, and the contributing
+breeders with their queen lines.
 
 **Apiary records** (`#/apiaries`) — a comparison table across sites, then per-apiary: the
 full hive grid, queen lines present with site performance measured against each line's

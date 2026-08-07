@@ -194,7 +194,12 @@ export function renderDashboard() {
   const html = `
     <div class="topbar">
       <div style="width:100%">
-        <div class="eyebrow">Varroa sensitive hygiene program · 2026 season</div>
+        <div class="crumb">
+          <a href="#/projects">Projects</a> ${icons.chevron}
+          <a href="#/projects/p0">Varroa Sensitive Hygiene Breeding Program</a> ${icons.chevron}
+          <span>Dashboard</span>
+        </div>
+        <div class="eyebrow">PRJ-00 · 2026 season</div>
         <h1>Research dashboard</h1>
       </div>
       <div class="topbar-actions">
