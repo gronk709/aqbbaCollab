@@ -214,6 +214,38 @@ imports straight into a database.
 redistribute — your own material and openly-licensed references (e.g. the COLOSS
 standard-methods series). Publisher PDFs should stay out unless the repo goes private.
 
+## Hosting & backend
+
+**Decision: Vercel (hosting) + Supabase, Sydney region (Postgres + auth + Edge
+Functions).** Vercel deploys straight from this GitHub repo on every push, no separate
+build config needed since the app has no build step. Supabase was chosen over a plain
+managed Postgres because it also gives small serverless "Edge Functions" — the natural
+home for the Wild Apricot token exchange (see below), so it solves hosting the database
+*and* hosting the one piece of server-side logic this app needs, rather than requiring a
+second platform for that. Sydney region matters here specifically because the program
+stores member personal data (phone, email, home address) — keeping it in Australia is
+free on Supabase and awkward to change after the fact.
+
+Both have free tiers that comfortably cover AQBBA's scale; there's no reason to pay until
+real usage says otherwise. Setup, once you're ready to move off `serve.py`:
+
+1. **Supabase** — sign up at supabase.com, create a new project, and pick the **Sydney
+   (ap-southeast-2)** region at creation time (this can't be changed later without
+   migrating). Project Settings → API gives you the values for `.env.local` (copy
+   `.env.example` from the repo root) — `SUPABASE_URL` and `SUPABASE_ANON_KEY` are safe to
+   expose in frontend code; `SUPABASE_SERVICE_ROLE_KEY` is not and never leaves
+   server-side environment variables.
+2. **Vercel** — sign up at vercel.com with the same GitHub account this repo is under,
+   then "Import Project" and select it. No configuration should be needed for the static
+   site to deploy; every push to `main` then auto-deploys.
+3. Add the Supabase and Wild Apricot environment variables to the Vercel project's
+   Settings → Environment Variables (not committed to the repo — that's what
+   `.env.example` documents instead of real values).
+
+Nothing in the app depends on this yet — it still runs entirely from `serve.py` with mock
+data. This section exists so the decision is written down and the next session (or
+person) doesn't have to re-derive it.
+
 ## Wiring up the real integrations
 
 **Wild Apricot** — the client-side half of the OAuth flow is built (`js/waAuth.js`); the
@@ -224,13 +256,13 @@ the server side needs to make. In short:
 1. In the Wild Apricot admin, create an Authorized Application (contact-level access, not
    the account-wide API key) and note its Client ID and Client Secret.
 2. Fill in `WA_CONFIG.clientId` in `js/waAuth.js` — the ID is not sensitive. The Client
-   Secret goes nowhere near this repo; it belongs only in the future server-side
-   endpoint's environment variables.
-3. Once real hosting exists (see "What server platform" below), add a small endpoint
-   there that does the token exchange and calls `/contacts/me`, and have
-   `js/waAuth.js`'s `completeWildApricotLogin(code)` (sketched but commented out at the
-   bottom of that file) call it. Map the returned contact's membership level to the roles
-   in `js/data.js`.
+   Secret goes nowhere near this repo; it belongs only in Vercel's environment variables
+   (`WA_CLIENT_SECRET` in `.env.example`).
+3. Add a Supabase Edge Function (see "Hosting & backend" above) that does the token
+   exchange and calls `/contacts/me`, and have `js/waAuth.js`'s
+   `completeWildApricotLogin(code)` (sketched but commented out at the bottom of that
+   file) call it. Map the returned contact's membership level to the roles in
+   `js/data.js`.
 
 Until then, `WA_CONFIG.clientId` stays empty and the gate's "Continue with Wild Apricot"
 button keeps using the simulated sign-in it always has — filling in the client ID is what

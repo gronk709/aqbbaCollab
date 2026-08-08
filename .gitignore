@@ -1,0 +1,15 @@
+# Secrets — never commit real values. Copy .env.example to .env.local and
+# fill it in; Vercel/Supabase get the real values through their own
+# dashboards, not this file.
+.env
+.env.local
+.env.*.local
+
+# OS / editor cruft
+.DS_Store
+*.swp
+
+# Future Node tooling (Supabase CLI, any build step)
+node_modules/
+.vercel/
+.supabase/
