@@ -216,11 +216,28 @@ standard-methods series). Publisher PDFs should stay out unless the repo goes pr
 
 ## Wiring up the real integrations
 
-**Wild Apricot** — replace `signIn()` in `js/store.js` with the OAuth flow. Wild Apricot
-exposes a standard authorization-code flow; on return, exchange the code for a token,
-call `/accounts/{id}/contacts/me`, and map the contact's membership level to the roles in
-`js/data.js`. The interface reads the signed-in member from a single exported
-`currentUser`, so nothing else needs to change.
+**Wild Apricot** — the client-side half of the OAuth flow is built (`js/waAuth.js`); the
+server-side half is not, because it needs a client secret, which can't live in a browser.
+See that file's header comment for the full setup checklist and exactly which two calls
+the server side needs to make. In short:
+
+1. In the Wild Apricot admin, create an Authorized Application (contact-level access, not
+   the account-wide API key) and note its Client ID and Client Secret.
+2. Fill in `WA_CONFIG.clientId` in `js/waAuth.js` — the ID is not sensitive. The Client
+   Secret goes nowhere near this repo; it belongs only in the future server-side
+   endpoint's environment variables.
+3. Once real hosting exists (see "What server platform" below), add a small endpoint
+   there that does the token exchange and calls `/contacts/me`, and have
+   `js/waAuth.js`'s `completeWildApricotLogin(code)` (sketched but commented out at the
+   bottom of that file) call it. Map the returned contact's membership level to the roles
+   in `js/data.js`.
+
+Until then, `WA_CONFIG.clientId` stays empty and the gate's "Continue with Wild Apricot"
+button keeps using the simulated sign-in it always has — filling in the client ID is what
+switches it over to a real (but not yet completable) redirect, which is why the button's
+caption changes automatically once it's set. The interface reads the signed-in member
+from a single exported `currentUser` in `js/store.js`, so nothing else in the app needs
+to change once real sign-in lands.
 
 **Notification email** — every point that would send mail currently calls `toast()` with
 the message and recipient count. Those call sites are the integration points: forum

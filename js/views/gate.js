@@ -6,6 +6,7 @@
 import { apiaries, queenLines, members } from '../data.js';
 import { signIn } from '../store.js';
 import { brandMark, icons, esc } from '../ui.js';
+import { isConfigured, startWildApricotLogin } from '../waAuth.js';
 
 /* A field of hexes drawn behind the headline. Pointy-top cells tile at
    three-quarter vertical pitch with alternate rows shifted half a cell,
@@ -93,9 +94,16 @@ export function renderGate() {
           </form>
 
           <div class="gate-hint">
-            <strong>Prototype.</strong> Wild Apricot is not connected yet, so any details
-            sign you in as <code>${esc(members[0].name)}</code> — Research Coordinator, full
-            access. Notification emails are shown on screen instead of being sent.
+            <strong>Prototype.</strong> ${isConfigured() ? `
+              Wild Apricot login redirects for real, but can't complete sign-in yet — the
+              server-side piece that exchanges the result for a session doesn't exist.
+              Use the form below to continue testing as <code>${esc(members[0].name)}</code>.
+            ` : `
+              Wild Apricot is not connected yet, so any details in the form below sign you
+              in as <code>${esc(members[0].name)}</code> — Research Coordinator, full
+              access.
+            `}
+            Notification emails are shown on screen instead of being sent.
           </div>
         </div>
       </section>
@@ -106,6 +114,18 @@ export function renderGate() {
 document.addEventListener('click', (e) => {
   if (e.target.closest('#sso')) {
     const btn = e.target.closest('#sso');
+
+    if (isConfigured()) {
+      /* A real client ID is set — actually leave the app and go to Wild
+         Apricot's login page. This will redirect back with ?code=, which
+         app.js's boot check picks up; there's just nothing yet that can
+         finish the exchange (see waAuth.js). */
+      startWildApricotLogin();
+      return;
+    }
+
+    /* No client ID configured: keep the existing simulated handoff so the
+       prototype demos the same as it always has. */
     btn.innerHTML = `
       <span class="gate-sso-badge">${icons.check}</span>
       <span><strong>Authorised</strong><span>Loading your member profile…</span></span>`;

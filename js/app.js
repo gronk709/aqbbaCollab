@@ -18,6 +18,7 @@ import { renderRepository, renderSubTopic, renderArticle } from './views/reposit
 import { renderMarketplace } from './views/marketplace.js';
 import { renderNotifications } from './views/notifications.js';
 import { loadContent } from './content.js';
+import { isWildApricotCallback, consumeWildApricotCallback } from './waAuth.js';
 
 const app = document.getElementById('app');
 
@@ -195,6 +196,21 @@ onChange(refreshBadge);
 
 /* Views ask for a re-render after mutating state. */
 window.__aqbba_render = render;
+
+/* Wild Apricot redirects back with a real page load and ?code=/?error= in
+   the query string, not the hash — so this has to run once at boot, ahead
+   of the hash router, regardless of sign-in state. There is deliberately no
+   path here that signs the member in: that needs the server-side token
+   exchange described in js/waAuth.js, which doesn't exist yet. This only
+   reports what happened and leaves the gate showing. */
+if (isWildApricotCallback()) {
+  const result = consumeWildApricotCallback();
+  if (result.error) {
+    toast(`Wild Apricot sign-in failed: ${result.error}`);
+  } else {
+    toast('Wild Apricot returned a valid authorization code — sign-in can\'t complete until the server-side exchange exists. See js/waAuth.js.');
+  }
+}
 
 /* The repository content manifest loads before first paint (top-level await
    in an ES module). If it's missing, loadContent leaves an empty index and
