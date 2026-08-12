@@ -129,13 +129,9 @@ export const statusNote = {
 };
 
 export const queenColours = ['white', 'yellow', 'red', 'green', 'blue'];
-/* Weighted pool for seed generation — Calm appears twice on purpose so it's
-   drawn more often. For a form dropdown, use temperamentOptions instead. */
-const tempers = ['Calm', 'Calm', 'Steady', 'Steady', 'Runny', 'Defensive'];
-export const temperamentOptions = ['Calm', 'Steady', 'Runny', 'Defensive'];
 
-/* Each hive carries the five data points the assessment protocol requires:
-   VSH score, mite load, brood frames, temperament, and last inspection. */
+/* Each hive carries the four data points the assessment protocol requires:
+   VSH score, mite load, hive configuration, and last inspection. */
 function buildHives(ap) {
   const rng = seeded(ap.seed);
   const pool = statusPool[ap.stage];
@@ -166,7 +162,6 @@ function buildHives(ap) {
       vsh,
       miteLoad: status === 'dormant' ? null : Number(between(rng, 0.1, status === 'critical' ? 8.4 : 3.6).toFixed(1)),
       broodFrames: status === 'dormant' ? 0 : intBetween(rng, 3, 11),
-      temper: pick(rng, tempers),
       lastSeen: intBetween(rng, 1, 34),
       treatmentFree,
     };

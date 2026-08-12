@@ -71,8 +71,7 @@ export function renderReadout(hive) {
           <dt>Mite load</dt>
           <dd>${hive.miteLoad == null ? '—' : hive.miteLoad}<small style="font-size:10px;color:var(--propolis-40)"> /100</small></dd>
         </div>
-        <div><dt>Brood frames</dt><dd>${hive.broodFrames || '—'}</dd></div>
-        <div><dt>Temperament</dt><dd style="font-size:13px">${hive.temper}</dd></div>
+        <div><dt>Hive Configuration</dt><dd>${hive.broodFrames || '—'}</dd></div>
         <div><dt>Last inspected</dt><dd style="font-size:13px">${relDays(-hive.lastSeen)}</dd></div>
         <div><dt>Treatment free</dt><dd style="font-size:13px">${tf}</dd></div>
       </dl>
@@ -94,6 +93,12 @@ export function renderReadout(hive) {
           </div>
         </div>
       </div>
+
+      ${hive.comment ? `
+      <div style="margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
+        <div class="eyebrow">Comments</div>
+        <p style="font-size:13px;margin-top:3px">${esc(hive.comment)}</p>
+      </div>` : ''}
     </div>`;
 }
 

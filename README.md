@@ -139,9 +139,10 @@ would have emailed, with unread state, plus a summary of everything the member f
 ## The honeycomb grid
 
 The dashboard renders all ~100 hives in an apiary as one interlocking honeycomb field.
-Each hexagon is a real hive record; click it to read that hive's five assessment data
-points (VSH score, mite load, brood frames, temperament, last inspection) plus its queen
-line, contributing breeder, and queen marking.
+Each hexagon is a real hive record; click it to read that hive's four assessment data
+points (VSH/UBEEO score, mite load/Harbo assay result, hive configuration, last
+inspection) plus its queen ID, contributing breeder, queen marking, and any comments
+recorded when the hive was registered.
 
 Cell colours quote the **international queen-marking colour code** — the one colour
 system every queen breeder already reads fluently — rather than an arbitrary palette.

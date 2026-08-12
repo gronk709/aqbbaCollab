@@ -9,7 +9,7 @@
 import {
   stageLabels, statusLabels, memberById, members, queenLines,
   lineByCode, tally, vshAverage, relDays, fmtDateLong,
-  projects, projectStatusLabels, inspectionKinds, queenColours, temperamentOptions,
+  projects, projectStatusLabels, inspectionKinds, queenColours,
 } from '../data.js';
 import {
   allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
@@ -398,7 +398,6 @@ function openHiveForm(ap) {
   const colourOptions = queenColours.map((c) => `<option value="${c}">${c}</option>`).join('');
   const statusOptions = Object.entries(statusLabels).map(([v, label]) =>
     `<option value="${v}" ${v === 'thriving' ? 'selected' : ''}>${label}</option>`).join('');
-  const temperOptions = temperamentOptions.map((t) => `<option value="${t}">${t}</option>`).join('');
 
   const body = `
     <p class="caption" style="margin-bottom:var(--s5)">
@@ -425,29 +424,27 @@ function openHiveForm(ap) {
           <input id="h-year" type="number" value="${new Date().getFullYear()}">
         </div>
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
-          <label for="h-frames">Brood frames</label>
-          <input id="h-frames" type="number" min="0" placeholder="optional">
-        </div>
-        <div class="field" style="flex:1">
-          <label for="h-temper">Temperament</label>
-          <select id="h-temper">${temperOptions}</select>
-        </div>
+      <div class="field">
+        <label for="h-frames">Hive Configuration</label>
+        <input id="h-frames" type="number" min="0" placeholder="optional">
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         <div class="field" style="flex:1">
-          <label for="h-vsh">VSH score, if known</label>
+          <label for="h-vsh">UBEEO score, if known</label>
           <input id="h-vsh" type="number" min="0" max="100" placeholder="optional">
         </div>
         <div class="field" style="flex:1">
-          <label for="h-mite">Mite load, if known</label>
+          <label for="h-mite">Harbo Assay Result, if known</label>
           <input id="h-mite" type="number" min="0" step="0.1" placeholder="optional">
         </div>
       </div>
       <div class="field">
         <label for="h-tf">Treatment-free seasons</label>
         <input id="h-tf" type="number" min="0" value="0">
+      </div>
+      <div class="field">
+        <label for="h-comment">Comments</label>
+        <textarea id="h-comment" maxlength="200" placeholder="optional, up to 200 characters"></textarea>
       </div>
     </form>`;
 
@@ -468,10 +465,10 @@ function openHiveForm(ap) {
       queenColour: scrim.querySelector('#h-colour').value,
       queenYear: Number(scrim.querySelector('#h-year').value) || new Date().getFullYear(),
       broodFrames: framesRaw ? Number(framesRaw) : 0,
-      temper: scrim.querySelector('#h-temper').value,
       vsh: vshRaw ? Number(vshRaw) : null,
       miteLoad: miteRaw ? Number(miteRaw) : null,
       treatmentFree: Number(scrim.querySelector('#h-tf').value) || 0,
+      comment: scrim.querySelector('#h-comment').value.trim().slice(0, 200),
     });
     closeModal();
     toast(`${record.id} added to ${ap.name}.`);
