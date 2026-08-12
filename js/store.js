@@ -215,14 +215,10 @@ export function addApiary({ name, region, coords, flora, brief, manager, establi
   return ap;
 }
 
+/* Hive ID is entered by whoever registers the hive (validated for
+   uniqueness in the Add Hive form) rather than assigned automatically. */
 export function addHive(apiaryId, hive) {
-  const ap = allApiaryById(apiaryId);
-  const n = ap.hiveRecords.length + 1;
-  const record = {
-    id: `${ap.code}-${String(n).padStart(3, '0')}`,
-    apiary: apiaryId, lastSeen: 0,
-    ...hive,
-  };
+  const record = { apiary: apiaryId, lastSeen: 0, ...hive };
   state.newHives.push(record);
   commit();
   return record;

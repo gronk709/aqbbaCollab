@@ -214,6 +214,9 @@ export function renderApiary(id) {
 
   const inspRows = insp.map((i) => {
     const by = memberById(i.by);
+    const hiveList = hives.length && hives.every((h) => i.hiveIds.includes(h.id))
+      ? 'All Hives'
+      : i.hiveIds.join(', ');
     return `
       <li>
         <div class="line" style="cursor:default">
@@ -223,7 +226,7 @@ export function renderApiary(id) {
           </div>
           <div class="line-body">
             <strong>${esc(i.kind)}</strong>
-            <span>${i.hiveIds.length} hive${i.hiveIds.length > 1 ? 's' : ''} · ${esc(by.name)}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
+            <span>${esc(hiveList)} · ${esc(by.name)}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
             <p class="caption" style="margin-top:3px">${esc(i.note)}</p>
           </div>
           <div class="line-meta">
@@ -400,18 +403,25 @@ function openHiveForm(ap) {
     `<option value="${v}" ${v === 'thriving' ? 'selected' : ''}>${label}</option>`).join('');
 
   const body = `
-    <p class="caption" style="margin-bottom:var(--s5)">
-      The hive ID is assigned automatically from ${ap.code} and the next available number.
-    </p>
     <form id="hive-form">
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         <div class="field" style="flex:1">
-          <label for="h-line">Queen ID</label>
-          <select id="h-line">${lineOptions}</select>
+          <label for="h-id">Hive ID</label>
+          <input id="h-id" type="text" placeholder="e.g. ${ap.code}-105">
         </div>
         <div class="field" style="flex:1">
           <label for="h-status">Status</label>
           <select id="h-status">${statusOptions}</select>
+        </div>
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="h-line">Queen Line</label>
+          <select id="h-line">${lineOptions}</select>
+        </div>
+        <div class="field" style="flex:1">
+          <label for="h-queen-id">Queen ID</label>
+          <input id="h-queen-id" type="text" placeholder="optional">
         </div>
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
@@ -455,12 +465,25 @@ function openHiveForm(ap) {
   const scrim = modal({ title: `Add a hive at ${ap.name}`, body, actions });
 
   scrim.querySelector('#pub-hive').addEventListener('click', () => {
+    const hiveId = scrim.querySelector('#h-id').value.trim();
+    if (!hiveId) {
+      toast('Enter a hive ID.');
+      return;
+    }
+    const taken = new Set(allApiaries().flatMap((a) => a.hiveRecords.map((h) => h.id)));
+    if (taken.has(hiveId)) {
+      toast(`Hive ID "${hiveId}" is already in use — pick a different one.`);
+      return;
+    }
+
     const vshRaw = scrim.querySelector('#h-vsh').value;
     const miteRaw = scrim.querySelector('#h-mite').value;
     const framesRaw = scrim.querySelector('#h-frames').value;
 
     const record = addHive(ap.id, {
+      id: hiveId,
       line: scrim.querySelector('#h-line').value,
+      queenId: scrim.querySelector('#h-queen-id').value.trim(),
       status: scrim.querySelector('#h-status').value,
       queenColour: scrim.querySelector('#h-colour').value,
       queenYear: Number(scrim.querySelector('#h-year').value) || new Date().getFullYear(),

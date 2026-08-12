@@ -51,8 +51,10 @@ full hive grid, queen lines present with site performance measured against each 
 program mean, the complete inspection schedule, site detail, and which research projects
 are currently running there. This is also where the program's own data gets maintained:
 **Add apiary** registers a new research site, **Add hive** registers a new hive at a site
-(the hive ID is assigned automatically), and **Log inspection** records a completed or
-scheduled inspection against one, several, or all of an apiary's hives. Inspections are
+(the hive ID and the queen's own ID are both entered at registration, validated for
+uniqueness against every existing hive — the queen's breeding line, a separate field, is
+picked from a dropdown), and **Log inspection** records a completed or scheduled
+inspection against one, several, or all of an apiary's hives. Inspections are
 hive-level, not just an apiary headcount: the form's Apiary field is itself a picker
 (scoped to whichever sites the signed-in member can edit), its Hives field is a checklist
 of that apiary's actual hives with an "All hives" toggle, and an optional Status field
@@ -150,8 +152,8 @@ would have emailed, with unread state, plus a summary of everything the member f
 The dashboard renders all ~100 hives in an apiary as one interlocking honeycomb field.
 Each hexagon is a real hive record; click it to read that hive's four assessment data
 points (VSH/UBEEO score, mite load/Harbo assay result, hive configuration, last
-inspection) plus its queen ID, contributing breeder, queen marking, and any comments
-recorded when the hive was registered.
+inspection) plus its queen line, its own queen ID, contributing breeder, queen marking,
+and any comments recorded when the hive was registered.
 
 Cell colours quote the **international queen-marking colour code** — the one colour
 system every queen breeder already reads fluently — rather than an arbitrary palette.

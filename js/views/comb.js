@@ -78,8 +78,12 @@ export function renderReadout(hive) {
 
       <div class="row row-wrap" style="margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade);gap:var(--s5)">
         <div>
-          <div class="eyebrow">Queen ID</div>
+          <div class="eyebrow">Queen Line</div>
           <div class="mono" style="font-size:13px;margin-top:3px">${line.code} · ${esc(line.name)} · gen ${line.gen}</div>
+        </div>
+        <div>
+          <div class="eyebrow">Queen ID</div>
+          <div class="mono" style="font-size:13px;margin-top:3px">${hive.queenId ? esc(hive.queenId) : '—'}</div>
         </div>
         <div>
           <div class="eyebrow">Contributed by</div>
