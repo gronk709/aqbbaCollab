@@ -407,7 +407,7 @@ function openHiveForm(ap) {
     <form id="hive-form">
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         <div class="field" style="flex:1">
-          <label for="h-line">Queen line</label>
+          <label for="h-line">Queen ID</label>
           <select id="h-line">${lineOptions}</select>
         </div>
         <div class="field" style="flex:1">
