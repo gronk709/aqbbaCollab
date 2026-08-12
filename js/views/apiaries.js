@@ -436,7 +436,7 @@ function openHiveForm(ap) {
       </div>
       <div class="field">
         <label for="h-frames">Hive Configuration</label>
-        <input id="h-frames" type="number" min="0" placeholder="optional">
+        <input id="h-frames" type="text" placeholder="optional">
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         <div class="field" style="flex:1">
@@ -487,7 +487,7 @@ function openHiveForm(ap) {
       status: scrim.querySelector('#h-status').value,
       queenColour: scrim.querySelector('#h-colour').value,
       queenYear: Number(scrim.querySelector('#h-year').value) || new Date().getFullYear(),
-      broodFrames: framesRaw ? Number(framesRaw) : 0,
+      broodFrames: framesRaw.trim(),
       vsh: vshRaw ? Number(vshRaw) : null,
       miteLoad: miteRaw ? Number(miteRaw) : null,
       treatmentFree: Number(scrim.querySelector('#h-tf').value) || 0,
