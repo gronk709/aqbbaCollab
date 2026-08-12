@@ -185,19 +185,13 @@ export function vshAverage(hives) {
 }
 
 /* --------------------------------------------------------------------------
-   Inspections. Dates are relative to today so the dashboard never goes stale.
+   Inspections. Hive-level: each inspection names the specific hives it
+   covers (one, a subset, or all of a site) rather than just a headcount,
+   and can update those hives' status (see setHiveStatus in js/store.js).
+   Dates are relative to today so the dashboard never goes stale.
    -------------------------------------------------------------------------- */
 
-export const inspectionKinds = [
-  'Freeze-killed brood assay',
-  'Alcohol wash — mite count',
-  'Brood pattern assessment',
-  'Recapping count',
-  'Queen mating check',
-  'Nuc build assessment',
-  'Full frame audit',
-  'Drone congregation survey',
-];
+export const inspectionKinds = ['Assessment', 'Maintenance', 'Biosecurity'];
 
 function shiftDays(days) {
   const d = new Date();
@@ -206,20 +200,27 @@ function shiftDays(days) {
   return d;
 }
 
+/* hiveIds are a deterministic slice of each apiary's seed hives — close
+   enough to the original headcounts for demo data, no need to match them
+   exactly. The retired, more specific assay names are folded into the note
+   so that detail isn't lost now that kind is just the coarse category. */
+const hivesAt = (apiaryId, n) => apiaryById(apiaryId).hiveRecords.slice(0, n).map((h) => h.id);
+
 const inspectionPlan = [
-  { apiary: 'ap-barrow',  offset: -6, kind: 'Freeze-killed brood assay',  by: 'm3', hives: 24, done: true,  note: 'Recapping above 60% in 19 of 24. BRW-14 leading.' },
-  { apiary: 'ap-tambo',   offset: -4, kind: 'Alcohol wash — mite count',  by: 'm5', hives: 30, done: true,  note: 'Site mean 1.4 mites/100 bees. No intervention required.' },
-  { apiary: 'ap-oradale', offset: -3, kind: 'Nuc build assessment',       by: 'm4', hives: 40, done: true,  note: '6 nucs failed to build. Requeening scheduled.' },
-  { apiary: 'ap-barrow',  offset: -1, kind: 'Brood pattern assessment',   by: 'm9', hives: 18, done: true,  note: 'Two hives with spotty pattern flagged for follow-up.' },
-  { apiary: 'ap-tambo',   offset: 2,  kind: 'Recapping count',            by: 'm5', hives: 32, done: false, note: 'Ninth-generation cohort. Full cohort measure.' },
-  { apiary: 'ap-oradale', offset: 3,  kind: 'Alcohol wash — mite count',  by: 'm4', hives: 48, done: false, note: 'Baseline established for the new site.' },
-  { apiary: 'ap-barrow',  offset: 6,  kind: 'Queen mating check',         by: 'm3', hives: 12, done: false, note: 'Second round of II queens from Coalvale semen.' },
-  { apiary: 'ap-tambo',   offset: 9,  kind: 'Full frame audit',           by: 'm5', hives: 104, done: false, note: 'Pre-season audit across the whole site.' },
-  { apiary: 'ap-oradale', offset: 13, kind: 'Brood pattern assessment',   by: 'm10', hives: 26, done: false, note: 'First assessment on Oradale-mated queens.' },
+  { apiary: 'ap-barrow',  offset: -6, kind: 'Assessment',  by: 'm3',  hiveIds: hivesAt('ap-barrow', 24),  done: true,  note: 'Freeze-killed brood assay. Recapping above 60% in 19 of 24. BRW-14 leading.' },
+  { apiary: 'ap-tambo',   offset: -4, kind: 'Assessment',  by: 'm5',  hiveIds: hivesAt('ap-tambo', 30),   done: true,  note: 'Alcohol wash — mite count. Site mean 1.4 mites/100 bees. No intervention required.' },
+  { apiary: 'ap-oradale', offset: -3, kind: 'Assessment',  by: 'm4',  hiveIds: hivesAt('ap-oradale', 40), done: true,  note: 'Nuc build assessment. 6 nucs failed to build. Requeening scheduled.' },
+  { apiary: 'ap-barrow',  offset: -1, kind: 'Assessment',  by: 'm9',  hiveIds: hivesAt('ap-barrow', 18),  done: true,  note: 'Brood pattern assessment. Two hives with spotty pattern flagged for follow-up.' },
+  { apiary: 'ap-tambo',   offset: 2,  kind: 'Assessment',  by: 'm5',  hiveIds: hivesAt('ap-tambo', 32),   done: false, note: 'Recapping count. Ninth-generation cohort. Full cohort measure.' },
+  { apiary: 'ap-oradale', offset: 3,  kind: 'Assessment',  by: 'm4',  hiveIds: hivesAt('ap-oradale', 48), done: false, note: 'Alcohol wash — mite count. Baseline established for the new site.' },
+  { apiary: 'ap-barrow',  offset: 6,  kind: 'Maintenance', by: 'm3',  hiveIds: hivesAt('ap-barrow', 12),  done: false, note: 'Queen mating check. Second round of II queens from Coalvale semen.' },
+  { apiary: 'ap-tambo',   offset: 9,  kind: 'Maintenance', by: 'm5',  hiveIds: hivesAt('ap-tambo', 104),  done: false, note: 'Full frame audit. Pre-season audit across the whole site.' },
+  { apiary: 'ap-oradale', offset: 13, kind: 'Assessment',  by: 'm10', hiveIds: hivesAt('ap-oradale', 26), done: false, note: 'Brood pattern assessment. First assessment on Oradale-mated queens.' },
 ];
 
 export const inspections = inspectionPlan.map((p, i) => ({
   id: `insp-${i}`,
+  status: null,
   ...p,
   date: shiftDays(p.offset),
 }));

@@ -32,6 +32,7 @@ const defaults = () => ({
   contactDetails: {},
   roleOverrides: {},
   apiaryManagerOverrides: {},
+  hiveOverrides: {},
   previewAs: null,
   digest: 'instant',
 });
@@ -171,9 +172,22 @@ export function recruitingCount() {
    even though the shape of "seeded + member-added, merged for rendering" is
    the same idea throughout. */
 
+/* A hive's status can be updated after the fact by a hive-level inspection
+   (see addInspection below) — stored the same way as roleOverrides etc.,
+   keyed by hive id and applied on top of whichever base record (seed or
+   member-added) the hive came from. */
+function withHiveOverrides(h) {
+  const o = state.hiveOverrides[h.id];
+  return o ? { ...h, ...o } : h;
+}
+
+function setHiveStatus(hiveId, status) {
+  state.hiveOverrides[hiveId] = { ...(state.hiveOverrides[hiveId] || {}), status, lastSeen: 0 };
+}
+
 function withMemberHives(ap) {
   const extra = state.newHives.filter((h) => h.apiary === ap.id);
-  const hiveRecords = [...(ap.hiveRecords || []), ...extra];
+  const hiveRecords = [...(ap.hiveRecords || []), ...extra].map(withHiveOverrides);
   return { ...ap, hiveRecords, hives: hiveRecords.length, managers: managersFor(ap.id) };
 }
 
@@ -225,12 +239,13 @@ function hydrateInspection(i) {
   return { ...i, date: new Date(`${i.dateStr}T00:00:00`), offset: daysFromToday(i.dateStr) };
 }
 
-export function addInspection({ apiary, kind, by, hivesCount, note, dateStr, done }) {
+export function addInspection({ apiary, kind, by, hiveIds, status, note, dateStr, done }) {
   const insp = {
     id: `ui-${Date.now()}`, apiary, kind, by: by || currentUser.id,
-    hives: hivesCount, done: !!done, note: note || '', dateStr,
+    hiveIds: hiveIds || [], status: status || null, done: !!done, note: note || '', dateStr,
   };
   state.newInspections.push(insp);
+  if (status) insp.hiveIds.forEach((hiveId) => setHiveStatus(hiveId, status));
   commit();
   return insp;
 }

@@ -83,7 +83,7 @@ function inspectionLine(insp, { showDate = 'day' } = {}) {
         </div>
         <div class="line-body">
           <strong>${esc(insp.kind)}</strong>
-          <span>${esc(ap.name)} · ${insp.hives} hives · ${esc(by.name)}</span>
+          <span>${esc(ap.name)} · ${insp.hiveIds.length} hive${insp.hiveIds.length > 1 ? 's' : ''} · ${esc(by.name)}</span>
         </div>
         <div class="line-meta">
           <div class="caption mono">${relDays(insp.offset)}</div>

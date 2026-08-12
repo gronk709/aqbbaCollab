@@ -52,13 +52,22 @@ program mean, the complete inspection schedule, site detail, and which research 
 are currently running there. This is also where the program's own data gets maintained:
 **Add apiary** registers a new research site, **Add hive** registers a new hive at a site
 (the hive ID is assigned automatically), and **Log inspection** records a completed or
-scheduled inspection. These three are meaningfully different from the member-facing
-composers elsewhere (forum, marketplace, repository) — they alter the program's research
-data rather than adding social content, so they're access-gated: adding a new apiary is
-Web Admin only, and adding a hive or logging an inspection at an existing site requires
-Web Admin or that site's manager grant (see "Roles & apiary access" below). The prototype
-enforces this today via the **"Preview access as"** selector, since there's only one
-real signed-in user to test with otherwise.
+scheduled inspection against one, several, or all of an apiary's hives. Inspections are
+hive-level, not just an apiary headcount: the form's Apiary field is itself a picker
+(scoped to whichever sites the signed-in member can edit), its Hives field is a checklist
+of that apiary's actual hives with an "All hives" toggle, and an optional Status field
+updates every selected hive's status the moment the inspection is saved — so an inspection
+is how a hive's status changes after it's first registered, not just a log entry (see
+`setHiveStatus` / `addInspection` in `js/store.js`). Inspection type is one of three
+categories — Assessment, Maintenance, Biosecurity — rather than a specific assay name;
+older, more specific seed inspections keep that detail in their notes instead. These
+maintenance flows are meaningfully different from the member-facing composers elsewhere
+(forum, marketplace, repository) — they alter the program's research data rather than
+adding social content, so they're access-gated: adding a new apiary is Web Admin only,
+and adding a hive or logging an inspection at an existing site requires Web Admin or that
+site's manager grant (see "Roles & apiary access" below). The prototype enforces this
+today via the **"Preview access as"** selector, since there's only one real signed-in
+user to test with otherwise.
 
 **Manager details** (`#/managers/:id`) — phone, email and postal address for whoever is
 listed as an apiary's manager. Phone and email are mandatory once a record is saved
