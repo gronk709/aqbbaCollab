@@ -100,7 +100,7 @@ export function renderGate() {
               Use the form below to continue testing as <code>${esc(members[0].name)}</code>.
             ` : `
               Wild Apricot is not connected yet, so any details in the form below sign you
-              in as <code>${esc(members[0].name)}</code> — Research Coordinator, full
+              in as <code>${esc(members[0].name)}</code> — Web Admin, full
               access.
             `}
             Notification emails are shown on screen instead of being sent.

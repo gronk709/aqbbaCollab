@@ -94,7 +94,7 @@ function shellHTML(inner) {
           <button class="rail-out" data-signout>Sign out</button>
 
           <div class="rail-preview">
-            <label for="preview-as">Preview apiary access as <span title="Testing only — doesn't change who posts, joins or lists things as you.">(prototype)</span></label>
+            <label for="preview-as">Preview access as <span title="Testing only — doesn't change who posts to the forum, joins projects, or lists items in the marketplace as you.">(prototype)</span></label>
             <select id="preview-as">
               ${members.map((m) => `<option value="${m.id}" ${previewUser().id === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
             </select>
@@ -149,7 +149,7 @@ function bindGlobal() {
   const preview = app.querySelector('#preview-as');
   if (preview) preview.addEventListener('change', (e) => {
     setPreviewAs(e.target.value);
-    toast(`Previewing apiary access as ${previewUser().name}.`);
+    toast(`Previewing access as ${previewUser().name}.`);
     render();
   });
 

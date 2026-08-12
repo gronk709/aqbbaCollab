@@ -13,7 +13,7 @@ import {
 } from '../data.js';
 import {
   allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
-  addApiary, addHive, addInspection, roleLabel, isCoordinator, canEditApiary,
+  addApiary, addHive, addInspection, roleLabel, isWebAdmin, canEditApiary,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -55,7 +55,7 @@ export function renderApiaries() {
         <h1>Research apiaries</h1>
       </div>
       <div class="topbar-actions">
-        ${isCoordinator() ? `<button class="btn btn-primary btn-sm" id="new-apiary">${icons.plus} Add apiary</button>` : ''}
+        ${isWebAdmin() ? `<button class="btn btn-primary btn-sm" id="new-apiary">${icons.plus} Add apiary</button>` : ''}
       </div>
     </div>
 

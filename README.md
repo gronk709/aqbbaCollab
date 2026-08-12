@@ -54,10 +54,11 @@ are currently running there. This is also where the program's own data gets main
 (the hive ID is assigned automatically), and **Log inspection** records a completed or
 scheduled inspection. These three are meaningfully different from the member-facing
 composers elsewhere (forum, marketplace, repository) — they alter the program's research
-data rather than adding social content, so in a production build they'd want to be
-restricted to apiary managers and the research coordinator rather than open to any member.
-The prototype doesn't enforce that distinction since there's only one signed-in user to
-test with, but it's a real access-control decision for later, not an oversight.
+data rather than adding social content, so they're access-gated: adding a new apiary is
+Web Admin only, and adding a hive or logging an inspection at an existing site requires
+Web Admin or that site's manager grant (see "Roles & apiary access" below). The prototype
+enforces this today via the **"Preview access as"** selector, since there's only one
+real signed-in user to test with otherwise.
 
 **Manager details** (`#/managers/:id`) — phone, email and postal address for whoever is
 listed as an apiary's manager. Phone and email are mandatory once a record is saved
@@ -71,21 +72,39 @@ way, since who runs a given site is whoever `apiary.manager` names, not a fixed 
 
 **Roles & apiary access** — also on the manager details page. A member can hold several
 roles at once (e.g. a Breeder who is also an Apiary Manager), edited from a fixed list
-(`roleOptions` in `js/data.js`, which includes "Operator" alongside the original roles).
-Holding the "Apiary Manager" title is not itself a permission — actual edit access to a
-site (adding a hive, logging an inspection, and creating new apiaries) is a separate
-grant, checked per apiary. A member with that grant for Barrowfield cannot touch
-Oradale's data unless separately granted there too; the Research Coordinator can always
-edit every site. Editing roles and grants is itself restricted to the Coordinator.
+(`roleOptions` in `js/data.js`), each carrying a short description shown next to its
+checkbox in the roles editor:
 
-This app has exactly one real signed-in identity, so the restriction above would never
-actually trigger in testing — everyone who opens it is the Coordinator. To make it
-demonstrable, the rail has a **"Preview apiary access as"** selector, clearly marked
-`(prototype)`. It only affects the three gated actions (add hive, log inspection, add
-apiary) — authorship of forum posts, listings and project joins always stays the real
-signed-in member. This selector has no production equivalent; a real deployment derives
-permissions from the actual authenticated Wild Apricot member, and this whole mechanism
-(`previewUser`/`setPreviewAs` in `js/store.js`) should be deleted once that's wired up.
+- **Web Admin** — superuser; full access everywhere, including every apiary and every
+  member's roles/access grants.
+- **Apiary Manager** — complete CRUD privileges for the apiary they manage.
+- **Operator** — assists the Apiary Manager with inspections and data updates; change
+  and update privileges only, no create or delete.
+- **Breeder** — change and update privileges only. Replaces the old Breeder — Level 1/2/3,
+  Instrumental Insem., and Laboratory — Assays roles, which have been retired.
+- **Member** — read-only on apiary data and the repository; full forum access (publish,
+  subscribe, notifications) and can list items in the Marketplace.
+- **Creator** — everything Member has, plus the ability to contribute repository content.
+
+Holding the "Apiary Manager" title is not itself a site-level permission — actual edit
+access to a specific site (adding a hive, logging an inspection) is a separate grant,
+checked per apiary via `canEditApiary` in `js/store.js`. A member with that grant for
+Barrowfield cannot touch Oradale's data unless separately granted there too; Web Admin
+can always edit every site, and creating a brand-new apiary is Web Admin only.
+Repository contribution (`canContributeRepository` in `js/store.js`) is gated by role
+instead — to the four operational roles above plus Creator — so a plain Member sees the
+repository read-only, with no Contribute button. Editing roles and grants themselves is
+restricted to Web Admin.
+
+This app has exactly one real signed-in identity, so these restrictions would never
+actually trigger in testing — everyone who opens it is Web Admin. To make them
+demonstrable, the rail has a **"Preview access as"** selector, clearly marked
+`(prototype)`. It affects the apiary actions above (add hive, log inspection, add
+apiary) and the repository's Contribute button — authorship of forum posts, listings and
+project joins always stays the real signed-in member. This selector has no production
+equivalent; a real deployment derives permissions from the actual authenticated Wild
+Apricot member, and this whole mechanism (`previewUser`/`setPreviewAs` in `js/store.js`)
+should be deleted once that's wired up.
 
 **Projects** (`#/projects`) — coordinated research initiatives, distinct from apiaries: a
 project is a question with a method attached, and can span apiaries, run at one, or wait

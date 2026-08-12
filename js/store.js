@@ -305,23 +305,35 @@ export function setManagedApiaries(memberId, apiaryIds) {
 
 /* --- permission preview -----------------------------------------------------
    This app has exactly one real signed-in identity — everyone who opens it
-   is the Research Coordinator, who can act on every site. To make per-site
-   restrictions demonstrable at all, this lets a tester preview the apiary
-   pages as if signed in as someone else. It only affects the two gated
-   actions below (adding a hive, logging an inspection, and creating a new
-   apiary); authorship of forum posts, listings, and project joins always
-   stays the real signed-in member. There is no real multi-user session here
-   — production would derive this from the actual authenticated member. */
+   is Web Admin, who can act on every site. To make per-site restrictions
+   demonstrable at all, this lets a tester preview the apiary pages as if
+   signed in as someone else. It only affects the two gated actions below
+   (adding a hive, logging an inspection, and creating a new apiary);
+   authorship of forum posts, listings, and project joins always stays the
+   real signed-in member. There is no real multi-user session here —
+   production would derive this from the actual authenticated member. */
 
 export function setPreviewAs(memberId) { state.previewAs = memberId || null; commit(); }
 export const previewUser = () => memberById(state.previewAs || currentUser.id);
 
-export const isCoordinator = (memberId = previewUser().id) => rolesFor(memberId).includes('Research Coordinator');
+export const isWebAdmin = (memberId = previewUser().id) => rolesFor(memberId).includes('Web Admin');
 
 export function canEditApiary(apiaryId) {
   const uid = previewUser().id;
-  if (isCoordinator(uid)) return true;
+  if (isWebAdmin(uid)) return true;
   return managersFor(apiaryId).includes(uid);
+}
+
+/* --- repository permissions --------------------------------------------------
+   Member is read-only in the repository; Creator adds Member's access plus
+   the ability to contribute content. The operational roles (Web Admin,
+   Apiary Manager, Operator, Breeder) keep the full repository access they've
+   always had, unrelated to the apiary edit grants above. */
+
+const REPOSITORY_CONTRIBUTOR_ROLES = ['Web Admin', 'Apiary Manager', 'Operator', 'Breeder', 'Creator'];
+
+export function canContributeRepository(memberId = previewUser().id) {
+  return rolesFor(memberId).some((r) => REPOSITORY_CONTRIBUTOR_ROLES.includes(r));
 }
 
 /* --- session ------------------------------------------------------------- */

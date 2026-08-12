@@ -17,7 +17,7 @@
 import { memberById, currentUser, roleOptions } from '../data.js';
 import {
   allApiaries, contactFor, hasContact, setContact,
-  roleLabel, rolesFor, setRoles, isCoordinator, managersFor, setManagedApiaries,
+  roleLabel, rolesFor, setRoles, isWebAdmin, managersFor, setManagedApiaries,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
@@ -29,7 +29,7 @@ export function renderManager(id) {
   const complete = hasContact(id);
   const manages = allApiaries().filter((a) => a.managers.includes(id));
   const roles = rolesFor(id);
-  const canManageRoles = isCoordinator(currentUser.id);
+  const canManageRoles = isWebAdmin(currentUser.id);
 
   const html = `
     <div class="topbar">
@@ -92,7 +92,7 @@ export function renderManager(id) {
                 ${manages.length ? manages.map((a) => `<a class="tag tag-amber" href="#/apiaries/${a.id}">${a.code} · ${esc(a.name)}</a>`).join('')
                   : '<span class="caption">No sites granted.</span>'}
               </div>
-              ${!canManageRoles ? `<p class="caption" style="margin-top:var(--s4)">Only the research coordinator can change roles and site access.</p>` : ''}
+              ${!canManageRoles ? `<p class="caption" style="margin-top:var(--s4)">Only Web Admin can change roles and site access.</p>` : ''}
             </div>
           </div>
         </div>
@@ -203,9 +203,12 @@ function openRolesForm(m) {
   const apiaries = allApiaries();
 
   const roleChecks = roleOptions.map((r) => `
-    <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:6px">
-      <input type="checkbox" value="${esc(r)}" class="r-role" ${currentRoles.includes(r) ? 'checked' : ''}>
-      ${esc(r)}
+    <label class="row" style="align-items:flex-start;gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:8px">
+      <input type="checkbox" value="${esc(r.name)}" class="r-role" style="margin-top:3px" ${currentRoles.includes(r.name) ? 'checked' : ''}>
+      <span>
+        <span style="display:block">${esc(r.name)}</span>
+        <span class="caption" style="display:block">${esc(r.description)}</span>
+      </span>
     </label>`).join('');
 
   const siteChecks = apiaries.map((a) => `
