@@ -33,7 +33,7 @@ const defaults = () => ({
   roleOverrides: {},
   apiaryManagerOverrides: {},
   hiveOverrides: {},
-  stageOverrides: {},
+  apiaryOverrides: {},
   previewAs: null,
   digest: 'instant',
 });
@@ -173,7 +173,8 @@ export function recruitingCount() {
    even though the shape of "seeded + member-added, merged for rendering" is
    the same idea throughout. */
 
-/* A hive's status can be updated after the fact by a hive-level inspection
+/* A hive's fields can be corrected or updated after the fact — either the
+   full Edit Hive form, or just a status change from a hive-level inspection
    (see addInspection below) — stored the same way as roleOverrides etc.,
    keyed by hive id and applied on top of whichever base record (seed or
    member-added) the hive came from. */
@@ -186,18 +187,23 @@ function setHiveStatus(hiveId, status) {
   state.hiveOverrides[hiveId] = { ...(state.hiveOverrides[hiveId] || {}), status, lastSeen: 0 };
 }
 
-/* An apiary's status is editable after creation, same override pattern as
-   hive status above. */
-export function setApiaryStage(apiaryId, stage) {
-  state.stageOverrides[apiaryId] = stage;
+export function updateHive(hiveId, patch) {
+  state.hiveOverrides[hiveId] = { ...(state.hiveOverrides[hiveId] || {}), ...patch };
+  commit();
+}
+
+/* An apiary's fields — including status — are editable after creation from
+   its own page, same override pattern as hives above. */
+export function updateApiary(apiaryId, patch) {
+  state.apiaryOverrides[apiaryId] = { ...(state.apiaryOverrides[apiaryId] || {}), ...patch };
   commit();
 }
 
 function withMemberHives(ap) {
   const extra = state.newHives.filter((h) => h.apiary === ap.id);
   const hiveRecords = [...(ap.hiveRecords || []), ...extra].map(withHiveOverrides);
-  const stage = state.stageOverrides[ap.id] || ap.stage;
-  return { ...ap, stage, hiveRecords, hives: hiveRecords.length, managers: managersFor(ap.id) };
+  const override = state.apiaryOverrides[ap.id] || {};
+  return { ...ap, ...override, hiveRecords, hives: hiveRecords.length, managers: managersFor(ap.id) };
 }
 
 export function allApiaries() {

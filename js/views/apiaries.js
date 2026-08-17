@@ -13,7 +13,7 @@ import {
 } from '../data.js';
 import {
   allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
-  addApiary, addHive, addInspection, roleLabel, isWebAdmin, canEditApiary, setApiaryStage,
+  addApiary, addHive, addInspection, roleLabel, isWebAdmin, canEditApiary, updateApiary, updateHive,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -250,7 +250,7 @@ export function renderApiary(id) {
       </div>
       <div class="topbar-actions">
         <span class="tag ${stageVariant[ap.stage]}">${stageLabels[ap.stage]}</span>
-        ${canEdit ? `<button class="btn btn-ghost btn-sm" id="edit-stage">${icons.pen} Edit status</button>` : ''}
+        ${canEdit ? `<button class="btn btn-ghost btn-sm" id="edit-apiary">${icons.pen} Edit apiary</button>` : ''}
       </div>
     </div>
 
@@ -379,7 +379,7 @@ export function renderApiary(id) {
 
   setTimeout(() => {
     const root = document.getElementById('main');
-    if (root && hives.length) bindComb(root, hives);
+    if (root && hives.length) bindComb(root, hives, canEdit ? { onEditHive: openHiveEditForm } : {});
 
     ['new-hive', 'empty-hive'].forEach((elId) => {
       const btn = document.getElementById(elId);
@@ -389,33 +389,175 @@ export function renderApiary(id) {
     const instBtn = document.getElementById('new-inspection');
     if (instBtn) instBtn.addEventListener('click', () => openInspectionForm(ap));
 
-    const stageBtn = document.getElementById('edit-stage');
-    if (stageBtn) stageBtn.addEventListener('click', () => openApiaryStatusForm(ap));
+    const apEditBtn = document.getElementById('edit-apiary');
+    if (apEditBtn) apEditBtn.addEventListener('click', () => openApiaryEditForm(ap));
   }, 0);
 
   return html;
 }
 
-function openApiaryStatusForm(ap) {
+function openApiaryEditForm(ap) {
   const stageOptions = Object.entries(stageLabels)
     .map(([v, label]) => `<option value="${v}" ${v === ap.stage ? 'selected' : ''}>${label}</option>`).join('');
+  const managerOptions = members.map((m) =>
+    `<option value="${m.id}" ${m.id === ap.manager ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
 
   const body = `
-    <div class="field">
-      <label for="a-stage">Status</label>
-      <select id="a-stage">${stageOptions}</select>
-    </div>`;
+    <form id="apiary-edit-form">
+      <div class="field">
+        <label for="ae-name">Site name</label>
+        <input id="ae-name" required value="${esc(ap.name)}">
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="ae-region">Region</label>
+          <input id="ae-region" required value="${esc(ap.region)}">
+        </div>
+        <div class="field" style="flex:1">
+          <label for="ae-established">Year established</label>
+          <input id="ae-established" type="number" value="${ap.established}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="ae-coords">Coordinates (optional)</label>
+        <input id="ae-coords" value="${esc(ap.coords || '')}">
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="ae-stage">Status</label>
+          <select id="ae-stage">${stageOptions}</select>
+        </div>
+        <div class="field" style="flex:1">
+          <label for="ae-manager">Manager</label>
+          <select id="ae-manager">${managerOptions}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="ae-flora">Dominant flora</label>
+        <input id="ae-flora" value="${esc(ap.flora || '')}">
+      </div>
+      <div class="field">
+        <label for="ae-brief">Brief</label>
+        <textarea id="ae-brief" required>${esc(ap.brief)}</textarea>
+      </div>
+    </form>`;
 
   const actions = `
     <button class="btn btn-ghost" data-close>Cancel</button>
-    <button class="btn btn-primary" id="save-stage">Save</button>`;
+    <button class="btn btn-primary" id="save-apiary">Save changes</button>`;
 
-  const scrim = modal({ title: `Apiary status — ${ap.name}`, body, actions });
+  const scrim = modal({ title: `Edit apiary — ${ap.name}`, body, actions });
 
-  scrim.querySelector('#save-stage').addEventListener('click', () => {
-    setApiaryStage(ap.id, scrim.querySelector('#a-stage').value);
+  scrim.querySelector('#save-apiary').addEventListener('click', () => {
+    const name = scrim.querySelector('#ae-name').value.trim();
+    const region = scrim.querySelector('#ae-region').value.trim();
+    const brief = scrim.querySelector('#ae-brief').value.trim();
+    if (!name || !region || !brief) {
+      toast('Site name, region and brief are all required.');
+      return;
+    }
+
+    updateApiary(ap.id, {
+      name, region, brief,
+      coords: scrim.querySelector('#ae-coords').value.trim(),
+      flora: scrim.querySelector('#ae-flora').value.trim(),
+      stage: scrim.querySelector('#ae-stage').value,
+      manager: scrim.querySelector('#ae-manager').value,
+      established: Number(scrim.querySelector('#ae-established').value) || ap.established,
+    });
     closeModal();
-    toast(`${ap.name}'s status updated.`);
+    toast(`${name} updated.`);
+    window.__aqbba_render();
+  });
+}
+
+function openHiveEditForm(hive) {
+  const lineOptions = queenLines.map((l) =>
+    `<option value="${l.code}" ${l.code === hive.line ? 'selected' : ''}>${l.code} · ${esc(l.name)}</option>`).join('');
+  const colourOptions = queenColours.map((c) =>
+    `<option value="${c}" ${c === hive.queenColour ? 'selected' : ''}>${c}</option>`).join('');
+  const statusOptions = Object.entries(statusLabels).map(([v, label]) =>
+    `<option value="${v}" ${v === hive.status ? 'selected' : ''}>${label}</option>`).join('');
+
+  const body = `
+    <p class="caption" style="margin-bottom:var(--s5)">
+      Hive ID <strong class="mono">${esc(hive.id)}</strong> is fixed once registered.
+    </p>
+    <form id="hive-edit-form">
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="he-status">Status</label>
+          <select id="he-status">${statusOptions}</select>
+        </div>
+        <div class="field" style="flex:1">
+          <label for="he-line">Queen Line</label>
+          <select id="he-line">${lineOptions}</select>
+        </div>
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="he-queen-id">Queen ID</label>
+          <input id="he-queen-id" type="text" placeholder="optional" value="${esc(hive.queenId || '')}">
+        </div>
+        <div class="field" style="flex:1">
+          <label for="he-colour">Queen marked</label>
+          <select id="he-colour">${colourOptions}</select>
+        </div>
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="he-year">Queen year</label>
+          <input id="he-year" type="number" value="${hive.queenYear}">
+        </div>
+        <div class="field" style="flex:1">
+          <label for="he-frames">Hive Configuration</label>
+          <input id="he-frames" type="text" placeholder="optional" value="${esc(hive.broodFrames || '')}">
+        </div>
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="he-vsh">UBEEO score, if known</label>
+          <input id="he-vsh" type="number" min="0" max="100" placeholder="optional" value="${hive.vsh ?? ''}">
+        </div>
+        <div class="field" style="flex:1">
+          <label for="he-mite">Harbo Assay Result, if known</label>
+          <input id="he-mite" type="number" min="0" step="0.1" placeholder="optional" value="${hive.miteLoad ?? ''}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="he-tf">Treatment-free seasons</label>
+        <input id="he-tf" type="number" min="0" value="${hive.treatmentFree || 0}">
+      </div>
+      <div class="field">
+        <label for="he-comment">Comments</label>
+        <textarea id="he-comment" maxlength="200" placeholder="optional, up to 200 characters">${esc(hive.comment || '')}</textarea>
+      </div>
+    </form>`;
+
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-hive">Save changes</button>`;
+
+  const scrim = modal({ title: `Edit hive — ${hive.id}`, body, actions });
+
+  scrim.querySelector('#save-hive').addEventListener('click', () => {
+    const vshRaw = scrim.querySelector('#he-vsh').value;
+    const miteRaw = scrim.querySelector('#he-mite').value;
+
+    updateHive(hive.id, {
+      status: scrim.querySelector('#he-status').value,
+      line: scrim.querySelector('#he-line').value,
+      queenId: scrim.querySelector('#he-queen-id').value.trim(),
+      queenColour: scrim.querySelector('#he-colour').value,
+      queenYear: Number(scrim.querySelector('#he-year').value) || hive.queenYear,
+      broodFrames: scrim.querySelector('#he-frames').value.trim(),
+      vsh: vshRaw ? Number(vshRaw) : null,
+      miteLoad: miteRaw ? Number(miteRaw) : null,
+      treatmentFree: Number(scrim.querySelector('#he-tf').value) || 0,
+      comment: scrim.querySelector('#he-comment').value.trim().slice(0, 200),
+    });
+    closeModal();
+    toast(`${hive.id} updated.`);
     window.__aqbba_render();
   });
 }

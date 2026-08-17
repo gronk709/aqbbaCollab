@@ -100,7 +100,7 @@ const apiarySeeds = [
   },
 ];
 
-/* Apiary status — editable after creation via setApiaryStage (js/store.js),
+/* Apiary status — editable after creation via updateApiary (js/store.js),
    not just set once at registration. */
 export const stageLabels = {
   establishing: 'Establishing',

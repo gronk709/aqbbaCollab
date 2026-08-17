@@ -48,8 +48,15 @@ Good / Average / Poor / Treating, recorded per hive and updatable via Log Inspec
 upcoming and recently completed inspections, and the contributing breeders with their
 queen lines.
 
-Apiary status is editable after creation from the apiary's own page (`js/store.js`'s
-`setApiaryStage`) — it isn't just set once at registration.
+Every apiary and hive field is editable after creation, not just status — **Edit apiary**
+(on the apiary's own page) covers name, region, coordinates, year established, status,
+manager and dominant flora; **Edit** on a selected hive's readout covers everything set
+at registration (status, queen line, queen ID, queen marking, hive configuration, UBEEO/
+Harbo results, treatment-free seasons, comments) except the hive ID itself, which stays
+fixed once assigned since inspections and other records refer to it. Both are stored the
+same way as role/contact overrides — `updateApiary` / `updateHive` in `js/store.js` —
+merged on top of the seed or member-added record whenever it's read, and gated by the
+same manager/Web Admin permission as adding a hive or logging an inspection at that site.
 
 **Apiary records** (`#/apiaries`) — a comparison table across sites, then per-apiary: the
 full hive grid, queen lines present with site performance measured against each line's

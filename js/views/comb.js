@@ -35,7 +35,7 @@ export function renderComb(hives, { id = 'comb' } = {}) {
     <div class="comb-legend">${legend}</div>`;
 }
 
-export function renderReadout(hive) {
+export function renderReadout(hive, { editable = false } = {}) {
   if (!hive) {
     return `<div class="readout-empty" id="readout">
       Select any cell above to read that hive's record.
@@ -58,6 +58,7 @@ export function renderReadout(hive) {
           <p class="caption" style="margin-top:4px">${esc(statusNote[hive.status])}</p>
         </div>
         <span class="spacer"></span>
+        ${editable ? `<button class="btn btn-ghost btn-sm" id="edit-hive">${icons.pen} Edit</button>` : ''}
         <span class="tag ${statusVariant}"><span class="pip pip-${hive.status}"></span>${statusLabels[hive.status]}</span>
       </div>
 
@@ -106,10 +107,20 @@ export function renderReadout(hive) {
     </div>`;
 }
 
-/* Wire cell selection. Call after the comb is in the DOM. */
-export function bindComb(root, hives) {
+/* Wire cell selection. Call after the comb is in the DOM. Pass onEditHive to
+   show and wire an Edit button on the readout (omit it — e.g. on the
+   read-only dashboard preview — and no Edit button renders at all). */
+export function bindComb(root, hives, { onEditHive } = {}) {
   const field = root.querySelector('.comb-field');
   if (!field) return;
+
+  const wireEditBtn = () => {
+    if (!onEditHive) return;
+    const btn = root.querySelector('#edit-hive');
+    const picked = field.querySelector('.cell.is-picked');
+    const hive = picked && hives.find((h) => h.id === picked.dataset.hive);
+    if (btn && hive) btn.addEventListener('click', () => onEditHive(hive));
+  };
 
   field.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-hive]');
@@ -120,6 +131,7 @@ export function bindComb(root, hives) {
     btn.classList.add('is-picked');
 
     const old = root.querySelector('#readout');
-    if (old) old.outerHTML = renderReadout(hive);
+    if (old) old.outerHTML = renderReadout(hive, { editable: !!onEditHive });
+    wireEditBtn();
   });
 }
