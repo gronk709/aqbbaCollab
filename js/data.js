@@ -94,38 +94,42 @@ const apiarySeeds = [
   {
     id: 'ap-oradale', name: 'Oradale', code: 'ORA',
     region: 'Darling Downs, QLD', coords: '27.9012° S, 151.6144° E',
-    stage: 'initialising', manager: 'm4', established: 2026, hives: 96, seed: 1907,
+    stage: 'establishing', manager: 'm4', established: 2026, hives: 96, seed: 1907,
     flora: 'Spotted gum, brigalow, cultivated sunflower',
     brief: 'Site commissioned March 2026. Nucs drawn from Tambo and Kellyanne stock; baseline mite counts still in progress.',
   },
 ];
 
+/* Apiary status — editable after creation via setApiaryStage (js/store.js),
+   not just set once at registration. */
 export const stageLabels = {
-  initialising: 'Initialising',
+  establishing: 'Establishing',
   assessment:   'Assessment',
   maintenance:  'Maintenance',
+  requeening:   'Re-queening',
 };
 
 const statusPool = {
-  maintenance:  ['thriving', 'thriving', 'thriving', 'thriving', 'watch', 'thriving', 'thriving', 'dormant', 'watch', 'thriving'],
-  assessment:   ['thriving', 'thriving', 'watch', 'treatment', 'thriving', 'watch', 'thriving', 'treatment', 'critical', 'thriving'],
-  initialising: ['thriving', 'watch', 'watch', 'treatment', 'thriving', 'dormant', 'watch', 'thriving', 'treatment', 'watch'],
+  maintenance:  ['thriving', 'thriving', 'good', 'thriving', 'good', 'thriving', 'average', 'thriving', 'good', 'thriving'],
+  assessment:   ['thriving', 'good', 'average', 'poor', 'thriving', 'good', 'treating', 'average', 'good', 'thriving'],
+  establishing: ['average', 'poor', 'good', 'treating', 'average', 'thriving', 'poor', 'average', 'good', 'average'],
+  requeening:   ['poor', 'treating', 'average', 'poor', 'treating', 'average', 'good', 'poor', 'treating', 'average'],
 };
 
 export const statusLabels = {
-  thriving:  'Thriving',
-  watch:     'Under watch',
-  treatment: 'In treatment',
-  critical:  'Critical',
-  dormant:   'Dormant / requeening',
+  thriving: 'Thriving',
+  good:     'Good',
+  average:  'Average',
+  poor:     'Poor',
+  treating: 'Treating',
 };
 
 export const statusNote = {
-  thriving:  'Meeting all assessment thresholds.',
-  watch:     'One metric outside threshold. Re-check at next inspection.',
-  treatment: 'Under miticide treatment. Excluded from selection data this cycle.',
-  critical:  'Mite load above intervention threshold. Manager notified.',
-  dormant:   'Queenless or requeening. No data collected this cycle.',
+  thriving: 'Meeting all assessment thresholds.',
+  good:     'Slightly below thriving benchmarks but stable.',
+  average:  'Within normal range. No action required.',
+  poor:     'Multiple metrics below threshold. Re-check at next inspection.',
+  treating: 'Under active treatment. Excluded from selection data this cycle.',
 };
 
 export const queenColours = ['white', 'yellow', 'red', 'green', 'blue'];
@@ -135,7 +139,7 @@ export const queenColours = ['white', 'yellow', 'red', 'green', 'blue'];
 function buildHives(ap) {
   const rng = seeded(ap.seed);
   const pool = statusPool[ap.stage];
-  const lines = ap.stage === 'initialising'
+  const lines = ap.stage === 'establishing'
     ? ['TMB-22', 'KLN-03', 'ORA-08']
     : ap.stage === 'assessment'
       ? ['BRW-14', 'TMB-22', 'KLN-03', 'MRN-05', 'ORA-08']
@@ -144,13 +148,12 @@ function buildHives(ap) {
   return Array.from({ length: ap.hives }, (_, i) => {
     const status = pool[Math.floor(rng() * pool.length)];
     const line = pick(rng, lines);
-    const treatmentFree = status !== 'treatment' && ap.stage !== 'initialising'
+    const treatmentFree = status !== 'treating' && ap.stage !== 'establishing'
       ? intBetween(rng, 1, 5)
-      : status === 'treatment' ? 0 : intBetween(rng, 0, 1);
+      : status === 'treating' ? 0 : intBetween(rng, 0, 1);
 
     const baseVsh = lineByCode(line).vshMean;
-    const vsh = status === 'dormant' ? null
-      : Math.max(28, Math.min(97, Math.round(baseVsh + between(rng, -14, 12))));
+    const vsh = Math.max(28, Math.min(97, Math.round(baseVsh + between(rng, -14, 12))));
 
     return {
       id: `${ap.code}-${String(i + 1).padStart(3, '0')}`,
@@ -160,8 +163,8 @@ function buildHives(ap) {
       queenColour: queenColours[(ap.established + Math.floor(rng() * 2)) % 5],
       queenYear: 2026 - intBetween(rng, 0, 2),
       vsh,
-      miteLoad: status === 'dormant' ? null : Number(between(rng, 0.1, status === 'critical' ? 8.4 : 3.6).toFixed(1)),
-      broodFrames: status === 'dormant' ? 0 : intBetween(rng, 3, 11),
+      miteLoad: Number(between(rng, 0.1, status === 'poor' ? 8.4 : 3.6).toFixed(1)),
+      broodFrames: intBetween(rng, 3, 11),
       lastSeen: intBetween(rng, 1, 34),
       treatmentFree,
     };

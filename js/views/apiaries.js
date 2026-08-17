@@ -13,7 +13,7 @@ import {
 } from '../data.js';
 import {
   allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
-  addApiary, addHive, addInspection, roleLabel, isWebAdmin, canEditApiary,
+  addApiary, addHive, addInspection, roleLabel, isWebAdmin, canEditApiary, setApiaryStage,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -23,7 +23,7 @@ import { renderComb, renderReadout, bindComb } from './comb.js';
 const projectsForApiary = (apiaryId) =>
   [...memberProjects(), ...projects].filter((p) => p.sites.includes(apiaryId));
 
-const stageVariant = { initialising: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green' };
+const stageVariant = { establishing: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green', requeening: 'tag-red' };
 
 export function renderApiaries() {
   const apiaries = allApiaries();
@@ -42,8 +42,8 @@ export function renderApiaries() {
         <td><a href="#/managers/${mgr.id}">${esc(mgr.name)}</a></td>
         <td class="mono">${ap.hives}</td>
         <td class="mono">${vshAverage(ap.hiveRecords)}%</td>
-        <td class="mono">${t.treatment || 0}</td>
-        <td class="mono">${t.critical || 0}</td>
+        <td class="mono">${t.treating || 0}</td>
+        <td class="mono">${t.poor || 0}</td>
         <td>${ap.established}</td>
       </tr>`;
   }).join('');
@@ -106,7 +106,7 @@ export function renderApiaries() {
 
 function openApiaryForm() {
   const stageOptions = Object.entries(stageLabels)
-    .map(([v, label]) => `<option value="${v}" ${v === 'initialising' ? 'selected' : ''}>${label}</option>`).join('');
+    .map(([v, label]) => `<option value="${v}" ${v === 'establishing' ? 'selected' : ''}>${label}</option>`).join('');
   const managerOptions = members.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
 
   const body = `
@@ -250,6 +250,7 @@ export function renderApiary(id) {
       </div>
       <div class="topbar-actions">
         <span class="tag ${stageVariant[ap.stage]}">${stageLabels[ap.stage]}</span>
+        ${canEdit ? `<button class="btn btn-ghost btn-sm" id="edit-stage">${icons.pen} Edit status</button>` : ''}
       </div>
     </div>
 
@@ -387,9 +388,36 @@ export function renderApiary(id) {
 
     const instBtn = document.getElementById('new-inspection');
     if (instBtn) instBtn.addEventListener('click', () => openInspectionForm(ap));
+
+    const stageBtn = document.getElementById('edit-stage');
+    if (stageBtn) stageBtn.addEventListener('click', () => openApiaryStatusForm(ap));
   }, 0);
 
   return html;
+}
+
+function openApiaryStatusForm(ap) {
+  const stageOptions = Object.entries(stageLabels)
+    .map(([v, label]) => `<option value="${v}" ${v === ap.stage ? 'selected' : ''}>${label}</option>`).join('');
+
+  const body = `
+    <div class="field">
+      <label for="a-stage">Status</label>
+      <select id="a-stage">${stageOptions}</select>
+    </div>`;
+
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-stage">Save</button>`;
+
+  const scrim = modal({ title: `Apiary status — ${ap.name}`, body, actions });
+
+  scrim.querySelector('#save-stage').addEventListener('click', () => {
+    setApiaryStage(ap.id, scrim.querySelector('#a-stage').value);
+    closeModal();
+    toast(`${ap.name}'s status updated.`);
+    window.__aqbba_render();
+  });
 }
 
 function todayStr() {

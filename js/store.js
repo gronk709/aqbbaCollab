@@ -33,6 +33,7 @@ const defaults = () => ({
   roleOverrides: {},
   apiaryManagerOverrides: {},
   hiveOverrides: {},
+  stageOverrides: {},
   previewAs: null,
   digest: 'instant',
 });
@@ -185,10 +186,18 @@ function setHiveStatus(hiveId, status) {
   state.hiveOverrides[hiveId] = { ...(state.hiveOverrides[hiveId] || {}), status, lastSeen: 0 };
 }
 
+/* An apiary's status is editable after creation, same override pattern as
+   hive status above. */
+export function setApiaryStage(apiaryId, stage) {
+  state.stageOverrides[apiaryId] = stage;
+  commit();
+}
+
 function withMemberHives(ap) {
   const extra = state.newHives.filter((h) => h.apiary === ap.id);
   const hiveRecords = [...(ap.hiveRecords || []), ...extra].map(withHiveOverrides);
-  return { ...ap, hiveRecords, hives: hiveRecords.length, managers: managersFor(ap.id) };
+  const stage = state.stageOverrides[ap.id] || ap.stage;
+  return { ...ap, stage, hiveRecords, hives: hiveRecords.length, managers: managersFor(ap.id) };
 }
 
 export function allApiaries() {
@@ -206,7 +215,7 @@ export function addApiary({ name, region, coords, flora, brief, manager, establi
   const ap = {
     id: `ap-${Date.now()}`, name, code,
     region, coords: coords || '—',
-    stage: stage || 'initialising', manager,
+    stage: stage || 'establishing', manager,
     established: established || new Date().getFullYear(),
     hives: 0, flora: flora || '—', brief, hiveRecords: [], managers: [manager],
   };

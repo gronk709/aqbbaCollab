@@ -19,7 +19,7 @@ import { renderComb, renderReadout, bindComb } from './comb.js';
 const getAllHives = () => allApiaries().flatMap((a) => a.hiveRecords);
 
 function stageTag(stage) {
-  const v = { initialising: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green' }[stage];
+  const v = { establishing: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green', requeening: 'tag-red' }[stage];
   return `<span class="tag ${v}">${stageLabels[stage]}</span>`;
 }
 
@@ -27,7 +27,7 @@ function apiaryCard(ap) {
   const t = tally(ap.hiveRecords);
   const mgr = memberById(ap.manager);
   const vsh = vshAverage(ap.hiveRecords);
-  const inTreatment = t.treatment || 0;
+  const inTreatment = t.treating || 0;
   const tf = ap.hiveRecords.filter((h) => h.treatmentFree >= 3).length;
 
   return `
@@ -60,7 +60,7 @@ function apiaryCard(ap) {
             <dt>Mean VSH</dt><dd style="font-size:1.375rem">${vsh}<small>%</small></dd>
           </div>
           <div class="tile" style="padding:var(--s3) var(--s4)">
-            <dt>In treatment</dt><dd style="font-size:1.375rem">${inTreatment}</dd>
+            <dt>Treating</dt><dd style="font-size:1.375rem">${inTreatment}</dd>
           </div>
           <div class="tile" style="padding:var(--s3) var(--s4)">
             <dt>TF 3+ seasons</dt><dd style="font-size:1.375rem">${tf}</dd>
@@ -188,7 +188,7 @@ export function renderDashboard() {
   const recentInspections = allRecentInspections();
   const t = tally(allHives);
   const focus = apiaries.find((a) => a.stage === 'assessment') || apiaries[0];
-  const attention = allHives.filter((h) => h.status === 'critical').length;
+  const attention = allHives.filter((h) => h.status === 'poor').length;
   const next = upcomingInspections[0];
 
   const html = `
@@ -220,8 +220,8 @@ export function renderDashboard() {
           <div class="tile-trend"><b>+4</b> on last season</div>
         </div>
         <div class="tile">
-          <dt>In treatment</dt>
-          <dd>${t.treatment || 0}</dd>
+          <dt>Treating</dt>
+          <dd>${t.treating || 0}</dd>
           <div class="tile-trend">excluded from selection this cycle</div>
         </div>
         <div class="tile">

@@ -44,11 +44,11 @@ export function renderReadout(hive) {
 
   const line = lineByCode(hive.line);
   const breeder = memberById(line.breeder);
-  const tf = hive.status === 'treatment'
+  const tf = hive.status === 'treating'
     ? 'Under treatment'
     : hive.treatmentFree === 0 ? 'Not yet established' : `${hive.treatmentFree} season${hive.treatmentFree > 1 ? 's' : ''}`;
 
-  const statusVariant = { thriving: 'tag-green', watch: 'tag', treatment: 'tag-blue', critical: 'tag-red', dormant: 'tag' }[hive.status];
+  const statusVariant = { thriving: 'tag-green', good: 'tag-green', average: 'tag-amber', poor: 'tag-red', treating: 'tag-blue' }[hive.status];
 
   return `
     <div class="readout" id="readout">

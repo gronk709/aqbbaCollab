@@ -40,11 +40,16 @@ there is no top-level Dashboard nav item any more.
 
 **Research dashboard** (`#/projects/p0/dashboard`) — a topic area of PRJ-00, reached from
 the program's summary page and breadcrumbed back to it. Program-wide figures, then a card
-per research apiary showing location, coordinates, program stage (initialising /
-assessment / maintenance), manager, hive count, mean VSH, hives in treatment and hives
-treatment-free for three or more seasons. Below that: the honeycomb hive grid, a colony
-status breakdown, upcoming and recently completed inspections, and the contributing
-breeders with their queen lines.
+per research apiary showing location, coordinates, apiary status (Establishing /
+Assessment / Maintenance / Re-queening), manager, hive count, mean VSH, hives being
+treated and hives treatment-free for three or more seasons. Below that: the honeycomb
+hive grid, a colony status breakdown (hive status is its own separate field — Thriving /
+Good / Average / Poor / Treating, recorded per hive and updatable via Log Inspection),
+upcoming and recently completed inspections, and the contributing breeders with their
+queen lines.
+
+Apiary status is editable after creation from the apiary's own page (`js/store.js`'s
+`setApiaryStage`) — it isn't just set once at registration.
 
 **Apiary records** (`#/apiaries`) — a comparison table across sites, then per-apiary: the
 full hive grid, queen lines present with site performance measured against each line's
