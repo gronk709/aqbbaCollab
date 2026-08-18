@@ -202,7 +202,6 @@ export function renderApiary(id) {
     const b = breederById(line.breeder);
     return `
       <tr>
-        <td class="mono">${line.code}</td>
         <td>${esc(line.name)}</td>
         <td>${esc(b.name)}</td>
         <td class="mono">${set.length}</td>
@@ -285,7 +284,7 @@ export function renderApiary(id) {
             <div class="tbl-scroll">
               <table class="tbl">
                 <thead>
-                  <tr><th>Code</th><th>Line</th><th>Breeder</th><th>Hives</th><th>Site VSH</th><th>vs line mean</th></tr>
+                  <tr><th>Line</th><th>Breeder</th><th>Hives</th><th>Site VSH</th><th>vs line mean</th></tr>
                 </thead>
                 <tbody>${lineRows}</tbody>
               </table>
@@ -474,7 +473,7 @@ function openApiaryEditForm(ap) {
 
 function openHiveEditForm(hive) {
   const lineOptions = allQueenLines().map((l) =>
-    `<option value="${l.code}" ${l.code === hive.line ? 'selected' : ''}>${l.code} · ${esc(l.name)}</option>`).join('');
+    `<option value="${l.code}" ${l.code === hive.line ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
   const colourOptions = queenColours.map((c) =>
     `<option value="${c}" ${c === hive.queenColour ? 'selected' : ''}>${c}</option>`).join('');
   const statusOptions = Object.entries(statusLabels).map(([v, label]) =>
@@ -568,7 +567,7 @@ function todayStr() {
 }
 
 function openHiveForm(ap) {
-  const lineOptions = allQueenLines().map((l) => `<option value="${l.code}">${l.code} · ${esc(l.name)}</option>`).join('');
+  const lineOptions = allQueenLines().map((l) => `<option value="${l.code}">${esc(l.name)}</option>`).join('');
   const colourOptions = queenColours.map((c) => `<option value="${c}">${c}</option>`).join('');
   const statusOptions = Object.entries(statusLabels).map(([v, label]) =>
     `<option value="${v}" ${v === 'thriving' ? 'selected' : ''}>${label}</option>`).join('');

@@ -48,9 +48,11 @@ Good / Average / Poor / Treating, recorded per hive and updatable via Log Inspec
 upcoming and recently completed inspections, and the contributing breeders with their
 queen lines — the program's other two editable records, Web Admin only:
 
-- **Queen lines** — code, name, breeder, generation, mean VSH, and a note. A line's code
-  is fixed once created (`js/store.js`'s `lineByCode`/`allQueenLines`) since hives
-  reference a line by that code (`hive.line`), same reasoning as hive ids.
+- **Queen lines** — name, breeder, generation, mean VSH, and a note. Hives reference a
+  line by an internal code (`hive.line`), same reasoning as hive ids, but that code is
+  never shown or entered anywhere — members only see and edit the line's name, which can
+  change over time, while the code stays fixed and is generated automatically
+  (`js/store.js`'s `addQueenLine`/`lineByCode`/`allQueenLines`).
 - **Breeders** — a queen line's breeder is either an existing member, or a standalone
   breeder record (name, state, note) for someone contributing a line who isn't a
   registered platform member. Standalone breeders have no login and no roles; they exist

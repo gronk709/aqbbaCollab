@@ -163,7 +163,7 @@ function breedersPanel() {
             <span class="caption">${esc(b.state || '')}</span>
           </div>
           <div class="mono" style="font-size:12px;color:var(--propolis-60);margin-top:2px">
-            ${line.code} · ${esc(line.name)} · generation ${line.gen}
+            ${esc(line.name)} · generation ${line.gen}
           </div>
           <p class="caption" style="margin-top:4px">${esc(line.note)}</p>
         </div>
@@ -251,21 +251,12 @@ function openBreederForm(breeder) {
   });
 }
 
-/* Queen line code is fixed once created (Edit mode shows it read-only) —
-   hives reference a line by code (hive.line), same reasoning as hive ids. */
+/* Queen lines have an internal code (hives reference a line by it — see
+   hive.line), but members only ever see and edit the name; the code itself
+   is generated in addQueenLine (js/store.js) and never shown here. */
 function openQueenLineForm(line) {
   const body = `
     <form id="line-form">
-      ${line ? `
-        <p class="caption" style="margin-bottom:var(--s5)">
-          Line code <strong class="mono">${esc(line.code)}</strong> is fixed once created.
-        </p>
-      ` : `
-        <div class="field">
-          <label for="ql-code">Line code</label>
-          <input id="ql-code" required placeholder="e.g. BRW-15">
-        </div>
-      `}
       <div class="field">
         <label for="ql-name">Line name</label>
         <input id="ql-name" required value="${esc(line ? line.name : '')}" placeholder="e.g. Barrowfield 15">
@@ -294,7 +285,7 @@ function openQueenLineForm(line) {
     <button class="btn btn-ghost" data-close>Cancel</button>
     <button class="btn btn-primary" id="save-line">${line ? 'Save changes' : 'Add queen line'}</button>`;
 
-  const scrim = modal({ title: line ? `Edit queen line — ${line.code}` : 'Add a queen line', body, actions });
+  const scrim = modal({ title: line ? `Edit queen line — ${line.name}` : 'Add a queen line', body, actions });
 
   scrim.querySelector('#save-line').addEventListener('click', () => {
     const name = scrim.querySelector('#ql-name').value.trim();
@@ -312,27 +303,11 @@ function openQueenLineForm(line) {
       note: scrim.querySelector('#ql-note').value.trim(),
     };
 
-    if (line) {
-      updateQueenLine(line.code, patch);
-      closeModal();
-      toast(`${line.code} updated.`);
-      window.__aqbba_render();
-      return;
-    }
+    if (line) updateQueenLine(line.code, patch);
+    else addQueenLine(patch);
 
-    const code = scrim.querySelector('#ql-code').value.trim();
-    if (!code) {
-      toast('Enter a line code.');
-      return;
-    }
-    if (lineByCode(code)) {
-      toast(`Line code "${code}" is already in use — pick a different one.`);
-      return;
-    }
-
-    addQueenLine({ code, ...patch });
     closeModal();
-    toast(`${code} added to the program.`);
+    toast(`${name} ${line ? 'updated' : 'added to the program'}.`);
     window.__aqbba_render();
   });
 }

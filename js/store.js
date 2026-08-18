@@ -207,10 +207,13 @@ export function updateApiary(apiaryId, patch) {
 /* --- queen lines & breeders --------------------------------------------------
    Queen lines are a program-wide record, not scoped to one apiary — hives
    reference a line by its code (hive.line), so the code stays fixed once a
-   line is created, same reasoning as hive ids. A line's breeder can be
-   either an existing member (id like 'm7') or a standalone breeder record
-   added below, for someone contributing a line who isn't a registered
-   platform member — resolved uniformly by breederById. */
+   line is created, same reasoning as hive ids. Unlike hive id, the code is
+   never shown in the UI — members only ever see and edit the line's name,
+   which can change; the code is an internal key only, so it's generated
+   here rather than entered. A line's breeder can be either an existing
+   member (id like 'm7') or a standalone breeder record added below, for
+   someone contributing a line who isn't a registered platform member —
+   resolved uniformly by breederById. */
 
 export function allQueenLines() {
   return [...state.newQueenLines, ...queenLines].map((l) => ({ ...l, ...(state.queenLineOverrides[l.code] || {}) }));
@@ -218,8 +221,17 @@ export function allQueenLines() {
 
 export const lineByCode = (code) => allQueenLines().find((l) => l.code === code);
 
-export function addQueenLine({ code, name, breeder, gen, vshMean, note }) {
-  const line = { code, name, breeder, gen: gen || 1, vshMean: vshMean ?? 0, note: note || '' };
+function generateLineCode(name) {
+  const base = (name.match(/[A-Za-z]+/) || ['LIN'])[0].slice(0, 3).toUpperCase() || 'LIN';
+  const taken = new Set(allQueenLines().map((l) => l.code));
+  let n = 1;
+  let code = `${base}-${String(n).padStart(2, '0')}`;
+  while (taken.has(code)) { n++; code = `${base}-${String(n).padStart(2, '0')}`; }
+  return code;
+}
+
+export function addQueenLine({ name, breeder, gen, vshMean, note }) {
+  const line = { code: generateLineCode(name), name, breeder, gen: gen || 1, vshMean: vshMean ?? 0, note: note || '' };
   state.newQueenLines.unshift(line);
   commit();
   return line;
