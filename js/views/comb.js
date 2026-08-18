@@ -3,7 +3,8 @@
    Each cell is a real hive record. Colour is colony status. Click for detail.
    ========================================================================== */
 
-import { statusLabels, statusNote, lineByCode, memberById, relDays } from '../data.js';
+import { statusLabels, statusNote, relDays } from '../data.js';
+import { lineByCode, breederById } from '../store.js';
 import { esc, icons } from '../ui.js';
 
 const PER_ROW = 14;
@@ -43,7 +44,7 @@ export function renderReadout(hive, { editable = false } = {}) {
   }
 
   const line = lineByCode(hive.line);
-  const breeder = memberById(line.breeder);
+  const breeder = breederById(line.breeder);
   const tf = hive.status === 'treating'
     ? 'Under treatment'
     : hive.treatmentFree === 0 ? 'Not yet established' : `${hive.treatmentFree} season${hive.treatmentFree > 1 ? 's' : ''}`;

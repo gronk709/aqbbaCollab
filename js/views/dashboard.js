@@ -5,13 +5,15 @@
    ========================================================================== */
 
 import {
-  stageLabels, statusLabels, memberById, queenLines, projects,
+  stageLabels, statusLabels, memberById, members, projects,
   tally, vshAverage, relDays, fmtDate, fmtDateLong,
 } from '../data.js';
 import {
-  allApiaries, allApiaryById, allRecentInspections, allUpcomingInspections,
+  allApiaries, allApiaryById, allRecentInspections, allUpcomingInspections, isWebAdmin,
+  allQueenLines, lineByCode, addQueenLine, updateQueenLine,
+  allBreeders, breederById, addBreeder, updateBreeder,
 } from '../store.js';
-import { esc, icons, avatar, tag } from '../ui.js';
+import { esc, icons, avatar, tag, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
 
 /* Recomputed on every call rather than cached at module load, since member-
@@ -147,8 +149,10 @@ function colonyStatusPanel() {
 
 function breedersPanel() {
   const allHives = getAllHives();
-  const rows = queenLines.map((line) => {
-    const b = memberById(line.breeder);
+  const lines = allQueenLines();
+  const canManage = isWebAdmin();
+  const rows = lines.map((line) => {
+    const b = breederById(line.breeder);
     const inProgram = allHives.filter((h) => h.line === line.code).length;
     return `
       <div class="breeder">
@@ -156,7 +160,7 @@ function breedersPanel() {
         <div style="flex:1;min-width:0">
           <div class="row" style="gap:var(--s2)">
             <strong style="font-size:13.5px">${esc(b.name)}</strong>
-            <span class="caption">${b.state}</span>
+            <span class="caption">${esc(b.state || '')}</span>
           </div>
           <div class="mono" style="font-size:12px;color:var(--propolis-60);margin-top:2px">
             ${line.code} · ${esc(line.name)} · generation ${line.gen}
@@ -166,6 +170,7 @@ function breedersPanel() {
         <div style="flex:none;text-align:right">
           <div class="mono" style="font-size:1.0625rem">${line.vshMean}<small style="font-size:10px;color:var(--propolis-40)">%</small></div>
           <div class="caption" style="font-size:11px">${inProgram} hives</div>
+          ${canManage ? `<button class="btn btn-ghost btn-sm" style="margin-top:6px" data-edit-line="${line.code}">${icons.pen} Edit</button>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -175,10 +180,161 @@ function breedersPanel() {
       <div class="panel-head">
         <h2>Contributing breeders</h2>
         <span class="spacer"></span>
-        <span class="caption">${queenLines.length} lines in program</span>
+        <span class="caption" style="margin-right:var(--s3)">${lines.length} lines in program</span>
+        ${canManage ? `
+          <button class="btn btn-ghost btn-sm" id="new-breeder">${icons.plus} Add breeder</button>
+          <button class="btn btn-primary btn-sm" id="new-line">${icons.plus} Add queen line</button>
+        ` : ''}
       </div>
-      <div class="panel-body panel-body-flush">${rows}</div>
+      <div class="panel-body panel-body-flush" id="breeders-list">${rows}</div>
     </div>`;
+}
+
+function breederOptions(selectedId) {
+  const memberOpts = members.map((m) =>
+    `<option value="${m.id}" ${m.id === selectedId ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+  const standalone = allBreeders();
+  const standaloneOpts = standalone.map((b) =>
+    `<option value="${b.id}" ${b.id === selectedId ? 'selected' : ''}>${esc(b.name)} (not a member)</option>`).join('');
+
+  return `
+    <optgroup label="Members">${memberOpts}</optgroup>
+    ${standalone.length ? `<optgroup label="Breeders (not a platform member)">${standaloneOpts}</optgroup>` : ''}`;
+}
+
+/* Breeders are a lightweight record independent of Members — just enough to
+   credit a queen line to someone who isn't a registered platform member.
+   No login, no roles; see breederById in js/store.js for how a queen
+   line's breeder field resolves either kind uniformly. */
+function openBreederForm(breeder) {
+  const body = `
+    <form id="breeder-form">
+      <div class="field">
+        <label for="br-name">Name</label>
+        <input id="br-name" required value="${esc(breeder ? breeder.name : '')}">
+      </div>
+      <div class="field">
+        <label for="br-state">State (optional)</label>
+        <input id="br-state" placeholder="e.g. NSW" value="${esc(breeder ? breeder.state || '' : '')}">
+      </div>
+      <div class="field">
+        <label for="br-note">Note (optional)</label>
+        <textarea id="br-note" placeholder="Anything worth knowing about this breeder">${esc(breeder ? breeder.note || '' : '')}</textarea>
+      </div>
+    </form>`;
+
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-breeder">${breeder ? 'Save changes' : 'Add breeder'}</button>`;
+
+  const scrim = modal({ title: breeder ? `Edit breeder — ${breeder.name}` : 'Add a breeder', body, actions });
+
+  scrim.querySelector('#save-breeder').addEventListener('click', () => {
+    const name = scrim.querySelector('#br-name').value.trim();
+    if (!name) {
+      toast('Enter a name.');
+      return;
+    }
+
+    const patch = {
+      name,
+      state: scrim.querySelector('#br-state').value.trim(),
+      note: scrim.querySelector('#br-note').value.trim(),
+    };
+
+    if (breeder) updateBreeder(breeder.id, patch);
+    else addBreeder(patch);
+
+    closeModal();
+    toast(breeder ? `${name} updated.` : `${name} added as a breeder.`);
+    window.__aqbba_render();
+  });
+}
+
+/* Queen line code is fixed once created (Edit mode shows it read-only) —
+   hives reference a line by code (hive.line), same reasoning as hive ids. */
+function openQueenLineForm(line) {
+  const body = `
+    <form id="line-form">
+      ${line ? `
+        <p class="caption" style="margin-bottom:var(--s5)">
+          Line code <strong class="mono">${esc(line.code)}</strong> is fixed once created.
+        </p>
+      ` : `
+        <div class="field">
+          <label for="ql-code">Line code</label>
+          <input id="ql-code" required placeholder="e.g. BRW-15">
+        </div>
+      `}
+      <div class="field">
+        <label for="ql-name">Line name</label>
+        <input id="ql-name" required value="${esc(line ? line.name : '')}" placeholder="e.g. Barrowfield 15">
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="ql-breeder">Breeder</label>
+          <select id="ql-breeder">${breederOptions(line ? line.breeder : null)}</select>
+        </div>
+        <div class="field" style="flex:1">
+          <label for="ql-gen">Generation</label>
+          <input id="ql-gen" type="number" min="1" value="${line ? line.gen : 1}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="ql-vsh">Mean VSH (%)</label>
+        <input id="ql-vsh" type="number" min="0" max="100" value="${line ? line.vshMean : ''}" placeholder="optional">
+      </div>
+      <div class="field">
+        <label for="ql-note">Note</label>
+        <textarea id="ql-note" placeholder="What's notable about this line?">${esc(line ? line.note : '')}</textarea>
+      </div>
+    </form>`;
+
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-line">${line ? 'Save changes' : 'Add queen line'}</button>`;
+
+  const scrim = modal({ title: line ? `Edit queen line — ${line.code}` : 'Add a queen line', body, actions });
+
+  scrim.querySelector('#save-line').addEventListener('click', () => {
+    const name = scrim.querySelector('#ql-name').value.trim();
+    const vshRaw = scrim.querySelector('#ql-vsh').value;
+    if (!name) {
+      toast('Enter a line name.');
+      return;
+    }
+
+    const patch = {
+      name,
+      breeder: scrim.querySelector('#ql-breeder').value,
+      gen: Number(scrim.querySelector('#ql-gen').value) || 1,
+      vshMean: vshRaw ? Number(vshRaw) : 0,
+      note: scrim.querySelector('#ql-note').value.trim(),
+    };
+
+    if (line) {
+      updateQueenLine(line.code, patch);
+      closeModal();
+      toast(`${line.code} updated.`);
+      window.__aqbba_render();
+      return;
+    }
+
+    const code = scrim.querySelector('#ql-code').value.trim();
+    if (!code) {
+      toast('Enter a line code.');
+      return;
+    }
+    if (lineByCode(code)) {
+      toast(`Line code "${code}" is already in use — pick a different one.`);
+      return;
+    }
+
+    addQueenLine({ code, ...patch });
+    closeModal();
+    toast(`${code} added to the program.`);
+    window.__aqbba_render();
+  });
 }
 
 export function renderDashboard() {
@@ -298,6 +454,20 @@ export function renderDashboard() {
   setTimeout(() => {
     const root = document.getElementById('main');
     if (root) bindComb(root, focus.hiveRecords);
+
+    const newBreederBtn = document.getElementById('new-breeder');
+    if (newBreederBtn) newBreederBtn.addEventListener('click', () => openBreederForm());
+
+    const newLineBtn = document.getElementById('new-line');
+    if (newLineBtn) newLineBtn.addEventListener('click', () => openQueenLineForm());
+
+    const list = document.getElementById('breeders-list');
+    if (list) list.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-edit-line]');
+      if (!btn) return;
+      const line = lineByCode(btn.dataset.editLine);
+      if (line) openQueenLineForm(line);
+    });
   }, 0);
 
   return html;

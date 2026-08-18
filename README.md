@@ -46,7 +46,17 @@ treated and hives treatment-free for three or more seasons. Below that: the hone
 hive grid, a colony status breakdown (hive status is its own separate field — Thriving /
 Good / Average / Poor / Treating, recorded per hive and updatable via Log Inspection),
 upcoming and recently completed inspections, and the contributing breeders with their
-queen lines.
+queen lines — the program's other two editable records, Web Admin only:
+
+- **Queen lines** — code, name, breeder, generation, mean VSH, and a note. A line's code
+  is fixed once created (`js/store.js`'s `lineByCode`/`allQueenLines`) since hives
+  reference a line by that code (`hive.line`), same reasoning as hive ids.
+- **Breeders** — a queen line's breeder is either an existing member, or a standalone
+  breeder record (name, state, note) for someone contributing a line who isn't a
+  registered platform member. Standalone breeders have no login and no roles; they exist
+  purely to be credited on a line (`addBreeder`/`breederById` in `js/store.js`), since this
+  app has no general "Add Member" feature — membership is meant to come from Wild Apricot,
+  not be created here.
 
 Every apiary and hive field is editable after creation, not just status — **Edit apiary**
 (on the apiary's own page) covers name, region, coordinates, year established, status,

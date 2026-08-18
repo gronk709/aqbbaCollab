@@ -5,6 +5,7 @@
 
 import {
   threads, allSubs, notifications, currentUser, projects, apiaries, inspections, memberById,
+  queenLines,
 } from './data.js';
 
 const KEY = 'aqbba.session.v1';
@@ -34,6 +35,10 @@ const defaults = () => ({
   apiaryManagerOverrides: {},
   hiveOverrides: {},
   apiaryOverrides: {},
+  newQueenLines: [],
+  queenLineOverrides: {},
+  breeders: [],
+  breederOverrides: {},
   previewAs: null,
   digest: 'instant',
 });
@@ -197,6 +202,57 @@ export function updateHive(hiveId, patch) {
 export function updateApiary(apiaryId, patch) {
   state.apiaryOverrides[apiaryId] = { ...(state.apiaryOverrides[apiaryId] || {}), ...patch };
   commit();
+}
+
+/* --- queen lines & breeders --------------------------------------------------
+   Queen lines are a program-wide record, not scoped to one apiary — hives
+   reference a line by its code (hive.line), so the code stays fixed once a
+   line is created, same reasoning as hive ids. A line's breeder can be
+   either an existing member (id like 'm7') or a standalone breeder record
+   added below, for someone contributing a line who isn't a registered
+   platform member — resolved uniformly by breederById. */
+
+export function allQueenLines() {
+  return [...state.newQueenLines, ...queenLines].map((l) => ({ ...l, ...(state.queenLineOverrides[l.code] || {}) }));
+}
+
+export const lineByCode = (code) => allQueenLines().find((l) => l.code === code);
+
+export function addQueenLine({ code, name, breeder, gen, vshMean, note }) {
+  const line = { code, name, breeder, gen: gen || 1, vshMean: vshMean ?? 0, note: note || '' };
+  state.newQueenLines.unshift(line);
+  commit();
+  return line;
+}
+
+export function updateQueenLine(code, patch) {
+  state.queenLineOverrides[code] = { ...(state.queenLineOverrides[code] || {}), ...patch };
+  commit();
+}
+
+const initialsOf = (name) => name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 3) || '?';
+
+export function allBreeders() {
+  return state.breeders.map((b) => ({ ...b, ...(state.breederOverrides[b.id] || {}) }));
+}
+
+export function addBreeder({ name, state: region, note }) {
+  const b = { id: `br-${Date.now()}`, name, state: region || '', note: note || '', initials: initialsOf(name) };
+  state.breeders.unshift(b);
+  commit();
+  return b;
+}
+
+export function updateBreeder(breederId, patch) {
+  state.breederOverrides[breederId] = { ...(state.breederOverrides[breederId] || {}), ...patch };
+  commit();
+}
+
+/* A queen line's breeder is either a member id ('m7') or a standalone
+   breeder id ('br-...') — resolve to a display-ready shape either way. */
+export function breederById(id) {
+  if (/^m\d+$/.test(id)) return memberById(id);
+  return allBreeders().find((b) => b.id === id) || { id, name: 'Unknown breeder', state: '', initials: '?' };
 }
 
 function withMemberHives(ap) {

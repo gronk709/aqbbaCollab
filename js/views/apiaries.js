@@ -7,13 +7,14 @@
    ========================================================================== */
 
 import {
-  stageLabels, statusLabels, memberById, members, queenLines,
-  lineByCode, tally, vshAverage, relDays, fmtDateLong,
+  stageLabels, statusLabels, memberById, members,
+  tally, vshAverage, relDays, fmtDateLong,
   projects, projectStatusLabels, inspectionKinds, queenColours,
 } from '../data.js';
 import {
   allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
   addApiary, addHive, addInspection, roleLabel, isWebAdmin, canEditApiary, updateApiary, updateHive,
+  allQueenLines, lineByCode, breederById,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -198,7 +199,7 @@ export function renderApiary(id) {
     const scored = set.filter((h) => h.vsh != null);
     const mean = scored.length ? Math.round(scored.reduce((s, h) => s + h.vsh, 0) / scored.length) : 0;
     const delta = mean - line.vshMean;
-    const b = memberById(line.breeder);
+    const b = breederById(line.breeder);
     return `
       <tr>
         <td class="mono">${line.code}</td>
@@ -472,7 +473,7 @@ function openApiaryEditForm(ap) {
 }
 
 function openHiveEditForm(hive) {
-  const lineOptions = queenLines.map((l) =>
+  const lineOptions = allQueenLines().map((l) =>
     `<option value="${l.code}" ${l.code === hive.line ? 'selected' : ''}>${l.code} · ${esc(l.name)}</option>`).join('');
   const colourOptions = queenColours.map((c) =>
     `<option value="${c}" ${c === hive.queenColour ? 'selected' : ''}>${c}</option>`).join('');
@@ -567,7 +568,7 @@ function todayStr() {
 }
 
 function openHiveForm(ap) {
-  const lineOptions = queenLines.map((l) => `<option value="${l.code}">${l.code} · ${esc(l.name)}</option>`).join('');
+  const lineOptions = allQueenLines().map((l) => `<option value="${l.code}">${l.code} · ${esc(l.name)}</option>`).join('');
   const colourOptions = queenColours.map((c) => `<option value="${c}">${c}</option>`).join('');
   const statusOptions = Object.entries(statusLabels).map(([v, label]) =>
     `<option value="${v}" ${v === 'thriving' ? 'selected' : ''}>${label}</option>`).join('');
