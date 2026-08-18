@@ -326,6 +326,14 @@ caption changes automatically once it's set. The interface reads the signed-in m
 from a single exported `currentUser` in `js/store.js`, so nothing else in the app needs
 to change once real sign-in lands.
 
+**Members directory (planned)** — there is currently no page listing every member; a
+member's page (`#/managers/:id`) is only reachable via a link to them (an apiary's
+manager, a hive form's Conducted By list, etc.), and roles/access are edited from that
+same page. Once Wild Apricot sync lands, add a members index so the association can
+cross-check who Wild Apricot says is a paid member against who actually has roles/access
+on this site — a double-check against drift between the two systems (e.g. a lapsed
+member who still has Web Admin, or a current member with no role at all).
+
 **Notification email** — every point that would send mail currently calls `toast()` with
 the message and recipient count. Those call sites are the integration points: forum
 topic publish, forum reply, repository contribution. Subscriptions are already stored as
