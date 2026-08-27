@@ -14,6 +14,10 @@
    dormant and js/views/gate.js keeps using its simulated sign-in — nothing
    about the current demo changes on its own.
 
+   SUPABASE_CONFIG used to live in this file; it's now in js/supabaseClient.js
+   since every table read/write shares the same project connection, not just
+   this Edge Function call.
+
    --------------------------------------------------------------------------
    Setup checklist:
 
@@ -43,6 +47,8 @@
         supabase secrets set WA_CLIENT_ID=<client id> WA_CLIENT_SECRET=<client secret>
    -------------------------------------------------------------------------- */
 
+import { SUPABASE_CONFIG, getSupabase } from './supabaseClient.js';
+
 export const WA_CONFIG = {
   /* Fill in after completing the setup checklist above. */
   clientId: 'AQBBACollab',
@@ -62,14 +68,6 @@ export const WA_CONFIG = {
      for reading the full directory) would need explaining to members during
      consent and aren't needed for anything built so far. */
   scope: 'contacts_me',
-};
-
-export const SUPABASE_CONFIG = {
-  url: 'https://dtzegdvjgzmlhtjlzzyp.supabase.co',
-  /* Public anon key — safe in frontend code, distinct from the service
-     role key which must never leave server-side environment variables.
-     Supabase dashboard → Project Settings → API. */
-  anonKey: 'sb_publishable_K6Sv_hrNXzSdn0gbCyXzYg_uEZoSqju',
 };
 
 export const isConfigured = () => Boolean(WA_CONFIG.clientId);
@@ -139,8 +137,16 @@ export function consumeWildApricotCallback() {
    function call itself fails; js/app.js's boot-time caller catches this and
    toasts the failure rather than leaving the page stuck.
 
-   Returns { waContactId, name, email, membershipLevel, roles } — the shape
-   js/store.js's signInAsWildApricotMember expects. */
+   The Edge Function does the actual identity work — resolving or
+   provisioning a `members` row for this Wild Apricot contact and minting a
+   real Supabase session for it (see that function's header comment for the
+   full story) — and returns { access_token, refresh_token, name }. This
+   function's own job is just the two mechanical steps around that: call
+   the function, then hand its tokens to supabase.auth.setSession() so
+   auth.uid() is populated for every request from here on and RLS applies
+   for real. Returns { name }, useful only for an immediate welcome toast —
+   js/store.js's loadSignedInMember() is what actually reads the signed-in
+   member's row (roles, contact details, etc.) once the session is set. */
 export async function completeWildApricotLogin(code) {
   if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.anonKey) {
     throw new Error('SUPABASE_CONFIG is not set — see the setup checklist at the top of js/waAuth.js.');
@@ -158,5 +164,13 @@ export async function completeWildApricotLogin(code) {
 
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || 'Sign-in failed.');
-  return body;
+
+  const supabase = await getSupabase();
+  const { error } = await supabase.auth.setSession({
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+  });
+  if (error) throw new Error(error.message || 'Could not start a session.');
+
+  return { name: body.name };
 }

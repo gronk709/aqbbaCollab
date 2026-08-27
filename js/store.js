@@ -7,6 +7,7 @@ import {
   threads, allSubs, notifications, projects, apiaries, inspections, queenLines,
   members as seedMembers, currentUser as seedCurrentUser,
 } from './data.js';
+import { getSupabase } from './supabaseClient.js';
 
 const KEY = 'aqbba.session.v1';
 
@@ -43,6 +44,7 @@ const defaults = () => ({
   digest: 'instant',
   currentUserId: null,
   provisionedMembers: [],
+  remoteMember: null,
 });
 
 function load() {
@@ -69,41 +71,72 @@ export function commit() {
    currentUser is session state, not a constant — which member it resolves
    to depends on how sign-in happened. The simulated demo path (signIn, used
    by the gate's plain email/password form) always resolves to the seed
-   currentUser (Pete Czeti, full access, for testing). A real Wild Apricot
-   login (signInAsWildApricotMember, called from completeWildApricotLogin in
-   js/waAuth.js once the server-side token exchange exists) points it at
-   whichever member matches by email, auto-provisioning a minimal record —
-   name, email, roles from their membership level, no site grants yet — the
-   first time a real contact who isn't one of the seed members signs in. */
+   currentUser (Pete Czeti, full access, for testing) via state.currentUserId
+   — kept only for that testing convenience (see README: "no production
+   equivalent"), not touched by real sign-in.
+
+   A real Wild Apricot login goes through completeWildApricotLogin (js/
+   waAuth.js), which sets a real Supabase Auth session, then
+   loadSignedInMember() below, which reads that signed-in member's own row
+   — id, name, roles, contact details — from Postgres (RLS lets a member
+   read their own full row; see supabase/migrations) and caches it as
+   state.remoteMember. Everything else in this app still keeps working
+   synchronously off that cache; only the sign-in moment itself is async,
+   deliberately, rather than threading async through every render. */
 
 export function allMembers() {
-  return [...seedMembers, ...state.provisionedMembers];
+  const base = [...seedMembers, ...state.provisionedMembers];
+  if (state.remoteMember && !base.some((m) => m.id === state.remoteMember.id)) {
+    return [...base, state.remoteMember];
+  }
+  return base;
 }
 
 export function memberById(id) {
+  if (state.remoteMember && state.remoteMember.id === id) return state.remoteMember;
   return allMembers().find((m) => m.id === id) || seedCurrentUser;
 }
 
 export function currentUser() {
+  if (state.remoteMember) return state.remoteMember;
   return memberById(state.currentUserId || seedCurrentUser.id);
 }
 
-export function signInAsWildApricotMember({ waContactId, name, email, roles }) {
-  const existing = email && allMembers().find((m) => (m.email || '').toLowerCase() === email.toLowerCase());
-  if (existing) {
-    state.currentUserId = existing.id;
-  } else {
-    const id = `wa-${waContactId}`;
-    const initials = (name || 'New member').split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2) || '?';
-    state.provisionedMembers.push({
-      id, name: name || 'New member', initials, email,
-      roles: roles && roles.length ? roles : ['Member'],
-      state: '', since: new Date().getFullYear(), wa: `WA-${waContactId}`,
-    });
-    state.currentUserId = id;
-  }
+/* Reads the signed-in member's own row from Supabase and caches it as
+   state.remoteMember — the one async step the real sign-in path needs.
+   Called right after completeWildApricotLogin sets a session, and once at
+   boot to restore a session that survived a page reload (Supabase persists
+   it in its own localStorage key, separately from this app's session
+   state). Returns the cached member, or null if there's no real session
+   (nothing to restore) or the member row can't be read (also treated as
+   "no real session" — the simulated demo path, if any, still works). */
+export async function loadSignedInMember() {
+  const supabase = await getSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return null;
+
+  const { data: row, error } = await supabase
+    .from('members')
+    .select('id, name, initials, state, member_since, member_roles(role_name), member_contact_details(phone, email, address)')
+    .eq('auth_user_id', session.user.id)
+    .maybeSingle();
+  if (error || !row) return null;
+
+  const contact = Array.isArray(row.member_contact_details) ? row.member_contact_details[0] : row.member_contact_details;
+  state.remoteMember = {
+    id: row.id,
+    name: row.name,
+    initials: row.initials,
+    state: row.state,
+    since: row.member_since,
+    roles: (row.member_roles || []).map((r) => r.role_name),
+    phone: contact?.phone || '',
+    email: contact?.email || '',
+    address: contact?.address || '',
+  };
   state.signedIn = true;
   commit();
+  return state.remoteMember;
 }
 
 export function signIn() {
@@ -481,4 +514,18 @@ export function canContributeRepository(memberId = previewUser().id) {
 
 /* --- session ------------------------------------------------------------- */
 
-export function signOut() { state.signedIn = false; commit(); }
+/* Async because a real sign-in needs its Supabase session cleared too —
+   otherwise a page reload would silently sign the member back in via that
+   persisted session. Best-effort: if Supabase itself can't be reached, the
+   local state still clears and the member is signed out of this app. */
+export async function signOut() {
+  state.signedIn = false;
+  state.remoteMember = null;
+  commit();
+  try {
+    const supabase = await getSupabase();
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.warn('Could not clear the Supabase session:', err);
+  }
+}

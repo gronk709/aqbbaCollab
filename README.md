@@ -297,10 +297,19 @@ real usage says otherwise. Setup, once you're ready to move off `serve.py`:
    Settings → Environment Variables (not committed to the repo — that's what
    `.env.example` documents instead of real values).
 
-The app's own data (members, apiaries, hives, etc.) still runs entirely from `serve.py`
-with mock data — nothing depends on Supabase for that yet. The one piece that does now is
-sign-in: `supabase/functions/wildapricot-auth` is a real Edge Function (see "Wiring up
-the real integrations" below) that needs an actual Supabase project to deploy to.
+**Backend migration, in progress.** The app is moving off mock data + localStorage onto
+real Postgres tables with Row Level Security, entity by entity — see
+`/root/.claude/plans/zazzy-swinging-scone.md` for the full phased plan (identity first,
+then marketplace, forum/repository, queen lines/breeders, apiaries/hives/inspections,
+projects, notifications, then a final cleanup pass). Phase 1 (identity — `members`,
+`member_roles`, `apiary_managers`, contact details, and the Wild Apricot auth bridge) has
+its schema and code written (`supabase/migrations/`, the extended Edge Function, and the
+`js/waAuth.js`/`js/store.js` client wiring) but **not yet applied to a live Supabase
+project or deployed** — that, plus a real Wild Apricot sign-in test against a Vercel
+preview deployment, is the checkpoint before merging this phase. Every other entity
+(apiaries, hives, inspections, forum, repository, marketplace, projects, notifications)
+still runs entirely from `js/data.js` mock data + `js/store.js`'s localStorage patches,
+unchanged, until its own phase comes up.
 
 ## Wiring up the real integrations
 
@@ -334,30 +343,38 @@ The gate's "Continue with Wild Apricot" button automatically uses the real redir
 simulated sign-in the prototype always had.
 
 `currentUser` is genuinely session state now (`js/store.js`), not the constant it used to
-be — it resolves to whichever member last signed in, by whichever path (simulated or
-real). A real Wild Apricot contact who signs in is matched to an existing member by
-email; if none matches, `signInAsWildApricotMember` auto-provisions a minimal record on
-the spot (name, email, the default `Member` role, no site/manager grants) so they can use
-the site immediately — an admin adjusts their access afterward via the roles editor, same
-as any other member.
+be — it resolves to whichever member last signed in, by whichever path. The simulated
+demo path (`signIn`, the gate's plain email/password form) still always resolves to the
+seed `currentUser` (Pete Czeti), kept only as a testing convenience with no production
+equivalent, same as before. A real Wild Apricot sign-in is different now that Phase 1's
+identity migration is written: `completeWildApricotLogin` (`js/waAuth.js`) sets a real
+Supabase Auth session from the Edge Function's tokens, and `loadSignedInMember` (`js/
+store.js`) then reads that member's own row straight from Postgres — the matching,
+auto-provisioning (default `Member` role, no site/manager grants — an admin adjusts
+access afterward via the roles editor, same as any other member), and `auth.users`
+creation all happen server-side in the Edge Function now, against real tables, gated by
+real RLS, instead of client-side against a local array.
 
-**Members directory** (`#/members`, Web Admin only) — every member (seed/demo plus
-anyone who's signed in via real Wild Apricot), their roles, whether contact details are
-on file, and a "Source" column distinguishing an actual Wild Apricot sign-in from this
-prototype's seed/demo roster — the intended cross-check against drift between the two
-systems (a lapsed member who still holds a role here, or a current member with none).
-Each row links to that member's page (`#/managers/:id`) where roles/contact are edited.
-Not in the main nav for anyone else, and the route itself checks `isWebAdmin` too, not
-just the nav link, so it can't be reached by typing the URL either.
+**Members directory** (`#/members`, Web Admin only) — for now, still reads the same
+seed/demo roster plus anyone provisioned via the *old* client-side path (kept for
+backward compatibility until this view itself migrates to Postgres in a later phase). A
+member who signs in for the first time via the new Phase-1 auth bridge resolves
+correctly for their own session (`currentUser`, roles, contact details) but won't yet
+appear as a row in this directory or in the "Preview access as" list unless they also
+happen to match an existing seed member by email — a known, temporary gap that closes
+once the members directory itself moves to Postgres.
 
 **Notification email** — every point that would send mail currently calls `toast()` with
 the message and recipient count. Those call sites are the integration points: forum
 topic publish, forum reply, repository contribution. Subscriptions are already stored as
 stable keys (`thread:<id>`, `repo:<id>`, `cat:<id>`) ready to become subscription rows.
 
-**Persistence** — `js/store.js` writes to `localStorage` behind a small interface
-(`commit`, `toggleSub`, `addThread`, `addPost`, `addListing`). Swapping it for API calls
-is contained to that module.
+**Persistence** — `js/store.js` still writes everything except identity to `localStorage`
+behind a small interface (`commit`, `toggleSub`, `addThread`, `addPost`, `addListing`).
+Identity (`loadSignedInMember`, `signOut`) now reads/writes real Supabase state instead;
+every other entity's functions in this module are next, one migration phase at a time.
 
-**Data** — `js/data.js` exports plain arrays and lookup helpers. Replace the module with
-fetches returning the same shapes.
+**Data** — `js/data.js` exports plain arrays and lookup helpers, each tagged `[PERMANENT]`
+(pure reference/formatting code that survives the migration) or `[SEED — Phase N]` (mock
+content standing in for a real table, deleted in that phase once views read from Supabase
+instead) — see the module's own header comment.
