@@ -95,8 +95,10 @@ export function renderGate() {
 
           <div class="gate-hint">
             <strong>Prototype.</strong> ${isConfigured() ? `
-              Wild Apricot login redirects for real, but can't complete sign-in yet — the
-              server-side piece that exchanges the result for a session doesn't exist.
+              Wild Apricot login redirects for real. The server-side exchange
+              (<code>supabase/functions/wildapricot-auth</code>) is built, but sign-in
+              won't complete until it's deployed with its secrets and
+              <code>SUPABASE_CONFIG</code> in <code>js/waAuth.js</code> has its anon key.
               Use the form below to continue testing as <code>${esc(members[0].name)}</code>.
             ` : `
               Wild Apricot is not connected yet, so any details in the form below sign you

@@ -45,7 +45,7 @@
 
 export const WA_CONFIG = {
   /* Fill in after completing the setup checklist above. */
-  clientId: '',
+  clientId: 'AQBBACollab',
   /* Must exactly match a redirect URI registered on the WA application.
      window.location.origin means "wherever this is actually running" —
      fine for now, but pin this to a real URL once hosting is chosen, since
