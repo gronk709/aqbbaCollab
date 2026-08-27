@@ -125,7 +125,10 @@ export async function loadSignedInMember() {
 
   const { data: row, error } = await supabase
     .from('members')
-    .select('id, name, initials, state, member_since, member_roles(role_name), member_contact_details(phone, email, address)')
+    /* member_roles!member_id hints PostgREST at which foreign key to embed
+       on — member_roles has two FKs to members (member_id, whose row it
+       is, and granted_by, who granted it), which is otherwise ambiguous. */
+    .select('id, name, initials, state, member_since, member_roles!member_id(role_name), member_contact_details(phone, email, address)')
     .eq('auth_user_id', session.user.id)
     .maybeSingle();
   if (error) {
