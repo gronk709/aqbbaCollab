@@ -95,11 +95,13 @@ export function renderGate() {
 
           <div class="gate-hint">
             <strong>Prototype.</strong> ${isConfigured() ? `
-              Wild Apricot login redirects for real. The server-side exchange
-              (<code>supabase/functions/wildapricot-auth</code>) is built, but sign-in
-              won't complete until it's deployed with its secrets and
-              <code>SUPABASE_CONFIG</code> in <code>js/waAuth.js</code> has its anon key.
-              Use the form below to continue testing as <code>${esc(members[0].name)}</code>.
+              "Continue with Wild Apricot" is fully wired to real sign-in. Membership
+              level → role mapping is still a placeholder though
+              (<code>supabase/functions/wildapricot-auth</code>'s
+              <code>MEMBERSHIP_LEVEL_TO_ROLES</code>), so every real member currently
+              signs in with just the Member role until AQBBA's actual level names are
+              filled in. The form below still signs you in as
+              <code>${esc(members[0].name)}</code> for quick testing without a real login.
             ` : `
               Wild Apricot is not connected yet, so any details in the form below sign you
               in as <code>${esc(members[0].name)}</code> — Web Admin, full

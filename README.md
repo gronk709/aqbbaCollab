@@ -304,30 +304,33 @@ the real integrations" below) that needs an actual Supabase project to deploy to
 
 ## Wiring up the real integrations
 
-**Wild Apricot** — both halves of the OAuth flow are built now. `js/waAuth.js` handles
-the browser-safe parts (the redirect to Wild Apricot's login, parsing the callback) and
-calls the part that can't run in a browser — exchanging the code for a token, which needs
-the application's client secret — via a Supabase Edge Function,
+**Wild Apricot** — live and confirmed working end-to-end (real login → real member signed
+in). `js/waAuth.js` handles the browser-safe parts (the redirect to Wild Apricot's login,
+parsing the callback) and calls the part that can't run in a browser — exchanging the code
+for a token, which needs the application's client secret — via a Supabase Edge Function,
 `supabase/functions/wildapricot-auth/index.ts`, that does the token exchange and fetches
 the signed-in member's own contact record. See `js/waAuth.js`'s header comment for the
-full setup checklist. What's left to actually turn it on:
+full setup checklist.
 
-1. In the Wild Apricot admin, create an Authorized Application (contact-level access, not
-   the account-wide API key) and note its Client ID and Client Secret.
-2. Fill in `WA_CONFIG.clientId` and `SUPABASE_CONFIG` (url + anon key) in `js/waAuth.js` —
-   all three are public/safe in frontend code. The Client Secret goes nowhere near this
-   repo; deploy the function and set it as a Supabase secret instead:
-   `supabase functions deploy wildapricot-auth`, then
-   `supabase secrets set WA_CLIENT_ID=... WA_CLIENT_SECRET=...`.
-3. Map AQBBA's real Wild Apricot membership level names to this app's roles in
-   `MEMBERSHIP_LEVEL_TO_ROLES` at the top of the Edge Function — it's currently a
-   placeholder (empty), so every real sign-in falls back to the plain `Member` role until
-   this is filled in. Any level not listed always falls back rather than failing sign-in.
+Two Wild Apricot API details worth remembering if this ever needs debugging again: the
+login/authorize redirect goes to AQBBA's *own* Wild Apricot site
+(`https://aqbba.org.au/sys/login/OAuthLogin`), not a shared host, and only takes exactly
+four query params (`client_id`, `redirect_uri`, `scope`, `state` — no `response_type`);
+the token exchange afterward *is* a shared host (`oauth.wildapricot.org/auth/token`) and
+needs `client_id` and `scope` in the POST body in addition to the Basic-auth header, not
+just `grant_type`/`code`/`redirect_uri`. Both were wrong on the first real test and had to
+be corrected against Wild Apricot's own API docs.
 
-Until `WA_CONFIG.clientId` is filled in, the gate's "Continue with Wild Apricot" button
-keeps using the simulated sign-in it always has — filling in the client ID is what
-switches it over to a real redirect, which is why the button's caption changes
-automatically once it's set.
+One thing still outstanding:
+
+- Map AQBBA's real Wild Apricot membership level names to this app's roles in
+  `MEMBERSHIP_LEVEL_TO_ROLES` at the top of the Edge Function — it's currently a
+  placeholder (empty), so every real sign-in falls back to the plain `Member` role until
+  this is filled in. Any level not listed always falls back rather than failing sign-in.
+
+The gate's "Continue with Wild Apricot" button automatically uses the real redirect once
+`WA_CONFIG.clientId` is set (its caption changes to match); before that it stays on the
+simulated sign-in the prototype always had.
 
 `currentUser` is genuinely session state now (`js/store.js`), not the constant it used to
 be — it resolves to whichever member last signed in, by whichever path (simulated or
