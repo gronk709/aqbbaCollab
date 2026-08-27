@@ -214,9 +214,9 @@ if (isWildApricotCallback()) {
     toast(`Wild Apricot sign-in failed: ${result.error}`);
   } else {
     try {
-      const { name } = await completeWildApricotLogin(result.code);
+      const { firstName } = await completeWildApricotLogin(result.code);
       await loadSignedInMember();
-      toast(`Welcome, ${name.split(' ')[0]}.`);
+      toast(`Welcome, ${firstName}.`);
     } catch (err) {
       toast(`Wild Apricot sign-in failed: ${err.message}`);
     }

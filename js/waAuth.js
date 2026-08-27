@@ -144,7 +144,7 @@ export function consumeWildApricotCallback() {
    function's own job is just the two mechanical steps around that: call
    the function, then hand its tokens to supabase.auth.setSession() so
    auth.uid() is populated for every request from here on and RLS applies
-   for real. Returns { name }, useful only for an immediate welcome toast —
+   for real. Returns { name, firstName }, useful only for an immediate welcome toast —
    js/store.js's loadSignedInMember() is what actually reads the signed-in
    member's row (roles, contact details, etc.) once the session is set. */
 export async function completeWildApricotLogin(code) {
@@ -172,5 +172,5 @@ export async function completeWildApricotLogin(code) {
   });
   if (error) throw new Error(error.message || 'Could not start a session.');
 
-  return { name: body.name };
+  return { name: body.name, firstName: body.firstName };
 }
