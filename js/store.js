@@ -107,9 +107,17 @@ export function currentUser() {
    Called right after completeWildApricotLogin sets a session, and once at
    boot to restore a session that survived a page reload (Supabase persists
    it in its own localStorage key, separately from this app's session
-   state). Returns the cached member, or null if there's no real session
-   (nothing to restore) or the member row can't be read (also treated as
-   "no real session" — the simulated demo path, if any, still works). */
+   state).
+
+   Returns null only for "there's genuinely no session to restore" — the
+   ordinary case on a fresh visit or after the simulated demo sign-in,
+   where boot's silent console.warn-and-carry-on handling is correct.
+   Throws for every other failure (the member row can't be read, RLS
+   denies it, no row is linked to this auth user yet) so the caller right
+   after a real Wild Apricot sign-in — which already wraps this in the
+   same try/catch as completeWildApricotLogin — shows an actual error
+   toast instead of a false "Welcome" for a sign-in that didn't really
+   finish. */
 export async function loadSignedInMember() {
   const supabase = await getSupabase();
   const { data: { session } } = await supabase.auth.getSession();
@@ -120,7 +128,13 @@ export async function loadSignedInMember() {
     .select('id, name, initials, state, member_since, member_roles(role_name), member_contact_details(phone, email, address)')
     .eq('auth_user_id', session.user.id)
     .maybeSingle();
-  if (error || !row) return null;
+  if (error) {
+    console.error('Could not load the signed-in member:', error);
+    throw new Error(`Couldn't load your member record (${error.message}).`);
+  }
+  if (!row) {
+    throw new Error('Signed in, but no member record is linked to this account. Contact your Web Admin.');
+  }
 
   const contact = Array.isArray(row.member_contact_details) ? row.member_contact_details[0] : row.member_contact_details;
   state.remoteMember = {

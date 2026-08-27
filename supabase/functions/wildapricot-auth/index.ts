@@ -12,13 +12,15 @@
    Called by completeWildApricotLogin(code) in js/waAuth.js with
    { code, redirectUri }. Returns, on success:
 
-     { access_token, refresh_token, name }
+     { access_token, refresh_token, name, firstName }
 
    The client calls supabase.auth.setSession({ access_token, refresh_token })
    with these — see js/waAuth.js and js/store.js (loadSignedInMember)
-   for the client side of this. `name` is only for the immediate "Welcome,
-   X" toast; once the session is set, the client re-reads the member's own
-   row (RLS-protected) as the source of truth for everything else — roles,
+   for the client side of this. `name`/`firstName` are only for the
+   immediate "Welcome, X" toast (firstName specifically, since a Wild
+   Apricot account's DisplayName word order isn't reliably "First Last" —
+   some show "Last, First"); once the session is set, the client re-reads
+   the member's own row (RLS-protected) as the source of truth for everything else — roles,
    contact details, etc. — rather than trusting anything this function said
    about them. On failure: a non-2xx response with { error }.
 
@@ -171,6 +173,11 @@ Deno.serve(async (req) => {
 
     const waContactId = String(contact.Id);
     const name = contact.DisplayName || `${contact.FirstName ?? ''} ${contact.LastName ?? ''}`.trim() || 'New member';
+    /* DisplayName's word order varies by WA account (some show "Last, First"),
+       so it's not safe to assume its first word is a first name — FirstName
+       is the actual field for that, used only for the client's welcome
+       greeting; `name` above (unaffected) is still what's stored. */
+    const firstName = contact.FirstName || name.split(/[\s,]+/)[0];
     const email: string | null = contact.Email ?? null;
 
     // Every path below ends in generateLink/verifyOtp (step 5), which needs
@@ -273,6 +280,7 @@ Deno.serve(async (req) => {
       access_token: verified.data.session.access_token,
       refresh_token: verified.data.session.refresh_token,
       name,
+      firstName,
     });
   } catch (err) {
     console.error('Unexpected error during Wild Apricot sign-in:', err);
