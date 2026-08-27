@@ -4,7 +4,7 @@
 
 import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
-  roleLabel, previewUser, setPreviewAs, currentUser, allMembers, signInAsWildApricotMember,
+  roleLabel, previewUser, setPreviewAs, currentUser, allMembers, loadSignedInMember,
   isWebAdmin,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
@@ -148,7 +148,7 @@ function bindGlobal() {
   if (scrim) scrim.addEventListener('click', () => document.body.classList.remove('rail-open'));
 
   const out = app.querySelector('[data-signout]');
-  if (out) out.addEventListener('click', () => { signOut(); location.hash = '#/'; render(); });
+  if (out) out.addEventListener('click', async () => { await signOut(); location.hash = '#/'; render(); });
 
   const preview = app.querySelector('#preview-as');
   if (preview) preview.addEventListener('change', (e) => {
@@ -204,22 +204,33 @@ window.__aqbba_render = render;
 /* Wild Apricot redirects back with a real page load and ?code=/?error= in
    the query string, not the hash — so this has to run once at boot, ahead
    of the hash router, regardless of sign-in state. completeWildApricotLogin
-   calls the server-side token exchange (js/waAuth.js); its result is handed
-   to signInAsWildApricotMember, which resolves it to a member (matching by
-   email, or auto-provisioning a minimal record on first sign-in) and makes
-   currentUser() resolve to them from here on. */
+   calls the server-side token exchange (js/waAuth.js) and sets a real
+   Supabase session from its result; loadSignedInMember() (js/store.js) then
+   reads that signed-in member's own row so currentUser() resolves to them
+   from here on. */
 if (isWildApricotCallback()) {
   const result = consumeWildApricotCallback();
   if (result.error) {
     toast(`Wild Apricot sign-in failed: ${result.error}`);
   } else {
     try {
-      const member = await completeWildApricotLogin(result.code);
-      signInAsWildApricotMember(member);
-      toast(`Welcome, ${member.name.split(' ')[0]}.`);
+      const { name } = await completeWildApricotLogin(result.code);
+      await loadSignedInMember();
+      toast(`Welcome, ${name.split(' ')[0]}.`);
     } catch (err) {
       toast(`Wild Apricot sign-in failed: ${err.message}`);
     }
+  }
+} else {
+  /* Not a fresh Wild Apricot redirect — but a previous real sign-in's
+     Supabase session may still be valid (it persists in its own
+     localStorage key across reloads). Best-effort and silent: if this
+     fails (offline, CDN unreachable), the app still boots — it just shows
+     the sign-in gate rather than resuming a session it couldn't check. */
+  try {
+    await loadSignedInMember();
+  } catch (err) {
+    console.warn('Could not check for a persisted Supabase session:', err);
   }
 }
 

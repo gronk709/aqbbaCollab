@@ -1,9 +1,24 @@
 /* ==========================================================================
    Mock data store. Deterministic: a seeded generator means hive records are
    identical on every reload, so a hive you inspected is the same hive later.
-   Replace this module with API calls when the backend lands.
+
+   This module is mid-migration to a real Supabase/Postgres backend (see
+   /root/.claude/plans/zazzy-swinging-scone.md for the full plan, or the
+   README's backend-migration section). Every export below is tagged:
+
+     [PERMANENT] — pure reference/formatting code: vocabularies, labels, and
+       pure functions with no member/entity data in them. These survive the
+       migration and keep being imported by views after their entity moves
+       to Postgres.
+
+     [SEED — Phase N] — mock content standing in for a real table, deleted
+       once that table exists and views read from Supabase instead. N is
+       the migration-plan phase that removes it. Until then, nothing here
+       changes: seed content keeps working exactly as it does today.
    ========================================================================== */
 
+/* [SEED — Phase 5] RNG helpers, used only to fabricate hive records below.
+   Dead code the moment hives are real rows — real hives don't need a seed. */
 /* Mulberry32 — small, fast, seeded. */
 function seeded(seed) {
   return function () {
@@ -19,7 +34,10 @@ const between = (rng, lo, hi) => lo + rng() * (hi - lo);
 const intBetween = (rng, lo, hi) => Math.floor(between(rng, lo, hi + 1));
 
 /* --------------------------------------------------------------------------
-   Members. The signed-in user is Pete; the rest populate activity.
+   [SEED — Phase 1] Members. The signed-in user is Pete; the rest populate
+   activity. Replaced by the real `members`/`member_roles` tables — Pete
+   Czeti's Web Admin row survives the migration too, just as a seeded
+   Postgres row instead of array index 0.
    -------------------------------------------------------------------------- */
 
 export const members = [
@@ -38,12 +56,13 @@ export const members = [
   { id: 'm10', name: 'Fiona Delacourt',   initials: 'FD', roles: ['Breeder'],               state: 'QLD', since: 2017, wa: 'WA-36104' },
 ];
 
-/* Canonical role list for the roles-editor. A member can hold any number of
-   these at once — e.g. a Breeder who is also the Apiary Manager for a site.
-   Each entry carries a description shown next to its checkbox in the editor
-   (see openRolesForm in js/views/managers.js) and, for the operational roles,
-   read by the permission checks in js/store.js (isWebAdmin,
-   canContributeRepository). */
+/* [PERMANENT] Canonical role list for the roles-editor — becomes the seed
+   data for the `role_options` table (Phase 1), not deleted by it. A member
+   can hold any number of these at once — e.g. a Breeder who is also the
+   Apiary Manager for a site. Each entry carries a description shown next to
+   its checkbox in the editor (see openRolesForm in js/views/managers.js)
+   and, for the operational roles, read by the permission checks in
+   js/store.js (isWebAdmin, canContributeRepository). */
 export const roleOptions = [
   { name: 'Web Admin', description: 'Superuser. Full access to every apiary, member record, and role/access grant.' },
   { name: 'Apiary Manager', description: 'Complete CRUD privileges for the apiary they manage.' },
@@ -53,11 +72,15 @@ export const roleOptions = [
   { name: 'Creator', description: 'Everything a Member has, plus the ability to add content to the information repository.' },
 ];
 
+/* [SEED — Phase 1] currentUser/memberById go away with the members array
+   above — js/store.js's currentUser()/memberById() already wrap these and
+   are the real call sites every view uses; once members live in Postgres
+   those wrappers query Supabase instead and these two exports are deleted. */
 export const currentUser = members[0];
 export const memberById = (id) => members.find((m) => m.id === id) || members[0];
 
 /* --------------------------------------------------------------------------
-   Queen lines. Each traces to a contributing breeder.
+   [SEED — Phase 4] Queen lines. Each traces to a contributing breeder.
    -------------------------------------------------------------------------- */
 
 export const queenLines = [
@@ -70,10 +93,12 @@ export const queenLines = [
   { code: 'CVE-17', name: 'Coalvale 17',     breeder: 'm6', gen: 8, vshMean: 85, note: 'II-maintained closed population. Narrow genetic base.' },
 ];
 
+/* [SEED — Phase 4] */
 export const lineByCode = (code) => queenLines.find((l) => l.code === code);
 
 /* --------------------------------------------------------------------------
-   Research apiaries. Three sites at different program stages.
+   [SEED — Phase 5] Research apiaries. Three sites at different program
+   stages.
    -------------------------------------------------------------------------- */
 
 const apiarySeeds = [
@@ -100,8 +125,9 @@ const apiarySeeds = [
   },
 ];
 
-/* Apiary status — editable after creation via updateApiary (js/store.js),
-   not just set once at registration. */
+/* [PERMANENT] Apiary status — editable after creation via updateApiary
+   (js/store.js), not just set once at registration. Stays as the display
+   vocabulary for `apiaries.stage` once that column is a real Postgres enum. */
 export const stageLabels = {
   establishing: 'Establishing',
   assessment:   'Assessment',
@@ -109,6 +135,7 @@ export const stageLabels = {
   requeening:   'Re-queening',
 };
 
+/* [SEED — Phase 5] Only used to fabricate seed hive statuses below. */
 const statusPool = {
   maintenance:  ['thriving', 'thriving', 'good', 'thriving', 'good', 'thriving', 'average', 'thriving', 'good', 'thriving'],
   assessment:   ['thriving', 'good', 'average', 'poor', 'thriving', 'good', 'treating', 'average', 'good', 'thriving'],
@@ -116,6 +143,7 @@ const statusPool = {
   requeening:   ['poor', 'treating', 'average', 'poor', 'treating', 'average', 'good', 'poor', 'treating', 'average'],
 };
 
+/* [PERMANENT] Display vocabulary for `hives.status`. */
 export const statusLabels = {
   thriving: 'Thriving',
   good:     'Good',
@@ -124,6 +152,7 @@ export const statusLabels = {
   treating: 'Treating',
 };
 
+/* [PERMANENT] */
 export const statusNote = {
   thriving: 'Meeting all assessment thresholds.',
   good:     'Slightly below thriving benchmarks but stable.',
@@ -132,10 +161,13 @@ export const statusNote = {
   treating: 'Under active treatment. Excluded from selection data this cycle.',
 };
 
+/* [PERMANENT] */
 export const queenColours = ['white', 'yellow', 'red', 'green', 'blue'];
 
-/* Each hive carries the four data points the assessment protocol requires:
-   VSH score, mite load, hive configuration, and last inspection. */
+/* [SEED — Phase 5] Each fabricated hive carries the four data points the
+   assessment protocol requires: VSH score, mite load, hive configuration,
+   and last inspection. Real hives get these from actual inspection data
+   instead of a seeded RNG. */
 function buildHives(ap) {
   const rng = seeded(ap.seed);
   const pool = statusPool[ap.stage];
@@ -171,16 +203,19 @@ function buildHives(ap) {
   });
 }
 
-/* managers: who may add hives / log inspections at this site, beyond
-   Web Admin, who always can. Defaults to just the primary manager; the
-   roles editor can grant additional members access per site. */
+/* [SEED — Phase 5] managers: who may add hives / log inspections at this
+   site, beyond Web Admin, who always can. Defaults to just the primary
+   manager; the roles editor can grant additional members access per site. */
 export const apiaries = apiarySeeds.map((ap) => ({ ...ap, hiveRecords: buildHives(ap), managers: [ap.manager] }));
 export const apiaryById = (id) => apiaries.find((a) => a.id === id);
 
+/* [PERMANENT] Pure aggregation over whatever hive array is passed in —
+   keeps working unchanged once that array comes from Supabase. */
 export function tally(hives) {
   return hives.reduce((acc, h) => { acc[h.status] = (acc[h.status] || 0) + 1; return acc; }, {});
 }
 
+/* [PERMANENT] */
 export function vshAverage(hives) {
   const scored = hives.filter((h) => h.vsh != null);
   if (!scored.length) return 0;
@@ -188,14 +223,18 @@ export function vshAverage(hives) {
 }
 
 /* --------------------------------------------------------------------------
-   Inspections. Hive-level: each inspection names the specific hives it
-   covers (one, a subset, or all of a site) rather than just a headcount,
-   and can update those hives' status (see setHiveStatus in js/store.js).
-   Dates are relative to today so the dashboard never goes stale.
+   [SEED — Phase 5, except inspectionKinds] Inspections. Hive-level: each
+   inspection names the specific hives it covers (one, a subset, or all of a
+   site) rather than just a headcount, and can update those hives' status
+   (see setHiveStatus in js/store.js). Dates are relative to today so the
+   dashboard never goes stale.
    -------------------------------------------------------------------------- */
 
+/* [PERMANENT] */
 export const inspectionKinds = ['Assessment', 'Maintenance', 'Biosecurity'];
 
+/* [SEED — Phase 5] Only used to compute the fabricated inspection dates
+   below relative to today; real inspections just store a real date. */
 function shiftDays(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -232,6 +271,7 @@ export const recentInspections   = inspections.filter((i) => i.done).sort((a, b)
 export const upcomingInspections = inspections.filter((i) => !i.done).sort((a, b) => a.date - b.date);
 
 /* --------------------------------------------------------------------------
+   [SEED — Phase 6, except projectStatusLabels]
    Projects. Coordinated research initiatives that can span apiaries, or run
    openly across whatever member sites choose to take part. A project is not
    the same thing as an apiary: an apiary is a place, a project is a question
@@ -243,6 +283,7 @@ export const upcomingInspections = inspections.filter((i) => !i.done).sort((a, b
    project to answer it, other members join with what they can contribute.
    -------------------------------------------------------------------------- */
 
+/* [PERMANENT] */
 export const projectStatusLabels = {
   recruiting: 'Recruiting',
   active: 'Active',
@@ -459,7 +500,7 @@ export const projectById = (id) => projects.find((p) => p.id === id);
 export const projectForThread = (threadId) => projects.find((p) => p.linkedThread === threadId);
 
 /* --------------------------------------------------------------------------
-   Forum. Member-created topics with subscribe + notify.
+   [SEED — Phase 3] Forum. Member-created topics with subscribe + notify.
    -------------------------------------------------------------------------- */
 
 export const forumCategories = [
@@ -548,7 +589,10 @@ export const threadById = (id) => threads.find((t) => t.id === id);
 export const categoryName = (id) => (forumCategories.find((c) => c.id === id) || {}).name || '';
 
 /* --------------------------------------------------------------------------
-   Repository. Three tracks — a genuine progression, so ordinals carry meaning.
+   [SEED — Phase 3] Repository. Three tracks — a genuine progression, so
+   ordinals carry meaning. Only the subscribable track/sub-topic metadata
+   below moves to Postgres — article/document content stays exactly as-is,
+   flat Markdown under content/repository/ loaded via js/content.js.
    -------------------------------------------------------------------------- */
 
 export const repository = [
@@ -607,7 +651,8 @@ export const repository = [
 export const allSubs = repository.flatMap((t) => t.subs.map((s) => ({ ...s, track: t.name, trackId: t.id })));
 export const subById = (id) => allSubs.find((s) => s.id === id);
 
-/* A representative article, shown when a sub-topic is opened. */
+/* [SEED — Phase 3] Fallback sample article, shown when a sub-topic has no
+   real content in content/repository/ yet. */
 export const sampleArticle = {
   title: 'Scoring partial removals in the freeze-killed brood assay',
   by: 'm9', at: 0, track: 'Queen Breeding', sub: 'Assessment methods',
@@ -629,7 +674,7 @@ export const sampleArticle = {
 };
 
 /* --------------------------------------------------------------------------
-   Marketplace.
+   [SEED — Phase 2] Marketplace.
    -------------------------------------------------------------------------- */
 
 export const listings = [
@@ -665,7 +710,9 @@ export const listings = [
 export const listingKinds = ['All', 'Queens', 'Nucs', 'Semen', 'Equipment'];
 
 /* --------------------------------------------------------------------------
-   Notifications — what the subscription machinery would have delivered.
+   [SEED — Phase 7] Notifications — what the subscription machinery would
+   have delivered. Migrated last since it aggregates activity from the
+   forum/marketplace/repository/projects entities above.
    -------------------------------------------------------------------------- */
 
 export const notifications = [
@@ -684,7 +731,7 @@ export const notifications = [
 ];
 
 /* --------------------------------------------------------------------------
-   Helpers shared across views
+   [PERMANENT] Helpers shared across views
    -------------------------------------------------------------------------- */
 
 export function relDays(offset) {
