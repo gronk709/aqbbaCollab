@@ -18,9 +18,88 @@ import { roleOptions } from '../data.js';
 import {
   allApiaries, contactFor, hasContact, setContact,
   roleLabel, rolesFor, setRoles, isWebAdmin, managersFor, setManagedApiaries,
-  memberById, currentUser,
+  memberById, currentUser, allMembers, state,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
+
+/* Members directory — lets Web Admin see everyone who has access at a
+   glance, and cross-check who actually signed in via real Wild Apricot
+   sign-in (state.provisionedMembers) against this prototype's seed/demo
+   roster, which is otherwise indistinguishable in the rest of the app. */
+export function renderMembers() {
+  const canManage = isWebAdmin(currentUser().id);
+  if (!canManage) {
+    return `
+      <div class="topbar">
+        <div style="width:100%">
+          <h1>Members</h1>
+        </div>
+      </div>
+      <div class="wrap view">
+        <div class="empty">
+          <h3>Web Admin only</h3>
+          <p>Only Web Admin can view the members directory.</p>
+        </div>
+      </div>`;
+  }
+
+  const members = allMembers().slice().sort((a, b) => a.name.localeCompare(b.name));
+  const provisionedIds = new Set(state.provisionedMembers.map((m) => m.id));
+
+  const rows = members.map((m) => {
+    const roles = rolesFor(m.id);
+    const viaWA = provisionedIds.has(m.id);
+    return `
+      <tr>
+        <td>
+          <a class="row" style="gap:var(--s3)" href="#/managers/${m.id}">
+            ${avatar(m)}
+            <div>
+              <div style="font-size:13.5px;font-weight:600">${esc(m.name)}</div>
+              <div class="caption">${esc(m.state || '—')}</div>
+            </div>
+          </a>
+        </td>
+        <td>
+          ${roles.length ? roles.map((r) => `<span class="tag tag-outline" style="margin:2px 3px 2px 0">${esc(r)}</span>`).join('') : '<span class="caption">No roles set.</span>'}
+        </td>
+        <td>
+          <span class="tag ${viaWA ? 'tag-green' : 'tag'}">${viaWA ? 'Wild Apricot sign-in' : 'Seed / demo data'}</span>
+        </td>
+        <td>
+          ${hasContact(m.id) ? '<span class="caption">On file</span>' : '<span class="tag tag-amber">Missing</span>'}
+        </td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div class="topbar">
+      <div style="width:100%">
+        <div class="eyebrow">${members.length} people with access</div>
+        <h1>Members</h1>
+      </div>
+    </div>
+
+    <div class="wrap view">
+      <div class="panel">
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead>
+              <tr><th>Member</th><th>Roles</th><th>Source</th><th>Contact</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+      <p class="caption" style="margin-top:var(--s4)">
+        "Wild Apricot sign-in" means this person has actually authenticated through Wild
+        Apricot at least once — the intended cross-check against drift between the two
+        systems (a lapsed member who still has a role here, or a current member with no
+        role at all). "Seed / demo data" rows are this prototype's placeholder roster,
+        not real Wild Apricot members.
+      </p>
+    </div>`;
+}
 
 export function renderManager(id) {
   const m = memberById(id);

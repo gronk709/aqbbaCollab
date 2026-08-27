@@ -5,12 +5,13 @@
 import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
   roleLabel, previewUser, setPreviewAs, currentUser, allMembers, signInAsWildApricotMember,
+  isWebAdmin,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderApiaries, renderApiary } from './views/apiaries.js';
-import { renderManager } from './views/managers.js';
+import { renderManager, renderMembers } from './views/managers.js';
 import { renderProjects, renderProject } from './views/projects.js';
 import { renderForum, renderThread } from './views/forum.js';
 import { renderRepository, renderSubTopic, renderArticle } from './views/repository.js';
@@ -34,12 +35,14 @@ const NAV = [
   { path: '#/marketplace', label: 'Marketplace',  icon: 'tag' },
   { group: 'You' },
   { path: '#/notifications', label: 'Notifications', icon: 'bell', badge: unreadCount },
+  { path: '#/members',     label: 'Members',      icon: 'user', adminOnly: true },
 ];
 
 const ROUTES = [
   { test: /^#\/?$/,                    view: renderProjects },
   { test: /^#\/apiaries\/?$/,          view: renderApiaries },
   { test: /^#\/apiaries\/(.+)$/,       view: renderApiary },
+  { test: /^#\/members\/?$/,           view: renderMembers },
   { test: /^#\/managers\/(.+)$/,       view: renderManager },
   { test: /^#\/projects\/?$/,          view: renderProjects },
   /* The dashboard is a topic area of the VSH program (PRJ-00), not a page in
@@ -60,8 +63,9 @@ const ROUTES = [
 
 function shellHTML(inner) {
   const me = currentUser();
+  const canManageMembers = isWebAdmin(me.id);
   const hash = location.hash || '#/';
-  const nav = NAV.map((item) => {
+  const nav = NAV.filter((item) => !item.adminOnly || canManageMembers).map((item) => {
     if (item.group) return `<div class="rail-group"><span>${item.group}</span></div>`;
     const active = hash.startsWith(item.path) || (item.home && /^#\/?$/.test(hash));
     const n = item.badge ? item.badge() : 0;

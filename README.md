@@ -341,13 +341,14 @@ the spot (name, email, the default `Member` role, no site/manager grants) so the
 the site immediately — an admin adjusts their access afterward via the roles editor, same
 as any other member.
 
-**Members directory (planned)** — there is currently no page listing every member; a
-member's page (`#/managers/:id`) is only reachable via a link to them (an apiary's
-manager, a hive form's Conducted By list, etc.), and roles/access are edited from that
-same page. Once Wild Apricot sync lands, add a members index so the association can
-cross-check who Wild Apricot says is a paid member against who actually has roles/access
-on this site — a double-check against drift between the two systems (e.g. a lapsed
-member who still has Web Admin, or a current member with no role at all).
+**Members directory** (`#/members`, Web Admin only) — every member (seed/demo plus
+anyone who's signed in via real Wild Apricot), their roles, whether contact details are
+on file, and a "Source" column distinguishing an actual Wild Apricot sign-in from this
+prototype's seed/demo roster — the intended cross-check against drift between the two
+systems (a lapsed member who still holds a role here, or a current member with none).
+Each row links to that member's page (`#/managers/:id`) where roles/contact are edited.
+Not in the main nav for anyone else, and the route itself checks `isWebAdmin` too, not
+just the nav link, so it can't be reached by typing the URL either.
 
 **Notification email** — every point that would send mail currently calls `toast()` with
 the message and recipient count. Those call sites are the integration points: forum
