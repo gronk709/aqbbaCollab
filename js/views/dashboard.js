@@ -5,13 +5,13 @@
    ========================================================================== */
 
 import {
-  stageLabels, statusLabels, memberById, members, projects,
+  stageLabels, statusLabels, projects,
   tally, vshAverage, relDays, fmtDate, fmtDateLong,
 } from '../data.js';
 import {
   allApiaries, allApiaryById, allRecentInspections, allUpcomingInspections, isWebAdmin,
   allQueenLines, lineByCode, addQueenLine, updateQueenLine,
-  allBreeders, breederById, addBreeder, updateBreeder,
+  allBreeders, breederById, addBreeder, updateBreeder, memberById, allMembers,
 } from '../store.js';
 import { esc, icons, avatar, tag, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -191,7 +191,7 @@ function breedersPanel() {
 }
 
 function breederOptions(selectedId) {
-  const memberOpts = members.map((m) =>
+  const memberOpts = allMembers().map((m) =>
     `<option value="${m.id}" ${m.id === selectedId ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
   const standalone = allBreeders();
   const standaloneOpts = standalone.map((b) =>

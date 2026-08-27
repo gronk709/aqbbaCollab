@@ -7,14 +7,14 @@
    ========================================================================== */
 
 import {
-  stageLabels, statusLabels, memberById, members,
+  stageLabels, statusLabels,
   tally, vshAverage, relDays, fmtDateLong,
   projects, projectStatusLabels, inspectionKinds, queenColours,
 } from '../data.js';
 import {
   allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
   addApiary, addHive, addInspection, roleLabel, isWebAdmin, canEditApiary, updateApiary, updateHive,
-  allQueenLines, lineByCode, breederById,
+  allQueenLines, lineByCode, breederById, memberById, allMembers,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -108,7 +108,7 @@ export function renderApiaries() {
 function openApiaryForm() {
   const stageOptions = Object.entries(stageLabels)
     .map(([v, label]) => `<option value="${v}" ${v === 'establishing' ? 'selected' : ''}>${label}</option>`).join('');
-  const managerOptions = members.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+  const managerOptions = allMembers().map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
 
   const body = `
     <form id="apiary-form">
@@ -399,7 +399,7 @@ export function renderApiary(id) {
 function openApiaryEditForm(ap) {
   const stageOptions = Object.entries(stageLabels)
     .map(([v, label]) => `<option value="${v}" ${v === ap.stage ? 'selected' : ''}>${label}</option>`).join('');
-  const managerOptions = members.map((m) =>
+  const managerOptions = allMembers().map((m) =>
     `<option value="${m.id}" ${m.id === ap.manager ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
 
   const body = `
@@ -706,7 +706,7 @@ function openInspectionForm(ap) {
   const kindOptions = inspectionKinds.map((k) => `<option>${esc(k)}</option>`).join('');
   const statusOptions = `<option value="">No change</option>` +
     Object.entries(statusLabels).map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
-  const memberOptions = members.map((m) =>
+  const memberOptions = allMembers().map((m) =>
     `<option value="${m.id}" ${m.id === ap.manager ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
 
   const body = `

@@ -5,10 +5,11 @@
 
 import {
   threads, threadById, forumCategories, categoryName,
-  memberById, currentUser, members, relDays, relHours, projectForThread,
+  members, relDays, relHours, projectForThread,
 } from '../data.js';
 import {
   isSubscribed, addThread, addPost, postsFor, memberThreads, state, roleLabel,
+  memberById, currentUser,
 } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
@@ -100,7 +101,7 @@ export function renderForum() {
             <div class="panel-body">
               <p style="font-size:13px;color:var(--propolis-60)">
                 You are subscribed to ${subCount} ${subCount === 1 ? 'topic' : 'topics'}.
-                New posts are emailed to <span class="mono" style="font-size:12px">${esc(currentUser.wa)}</span>
+                New posts are emailed to <span class="mono" style="font-size:12px">${esc(currentUser().wa)}</span>
                 on file with Wild Apricot.
               </p>
               <div class="field" style="margin-top:var(--s4)">

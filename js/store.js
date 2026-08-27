@@ -4,8 +4,8 @@
    ========================================================================== */
 
 import {
-  threads, allSubs, notifications, currentUser, projects, apiaries, inspections, memberById,
-  queenLines,
+  threads, allSubs, notifications, projects, apiaries, inspections, queenLines,
+  members as seedMembers, currentUser as seedCurrentUser,
 } from './data.js';
 
 const KEY = 'aqbba.session.v1';
@@ -41,6 +41,8 @@ const defaults = () => ({
   breederOverrides: {},
   previewAs: null,
   digest: 'instant',
+  currentUserId: null,
+  provisionedMembers: [],
 });
 
 function load() {
@@ -63,6 +65,53 @@ export function commit() {
   listeners.forEach((fn) => fn());
 }
 
+/* --- identity -------------------------------------------------------------
+   currentUser is session state, not a constant — which member it resolves
+   to depends on how sign-in happened. The simulated demo path (signIn, used
+   by the gate's plain email/password form) always resolves to the seed
+   currentUser (Pete Czeti, full access, for testing). A real Wild Apricot
+   login (signInAsWildApricotMember, called from completeWildApricotLogin in
+   js/waAuth.js once the server-side token exchange exists) points it at
+   whichever member matches by email, auto-provisioning a minimal record —
+   name, email, roles from their membership level, no site grants yet — the
+   first time a real contact who isn't one of the seed members signs in. */
+
+export function allMembers() {
+  return [...seedMembers, ...state.provisionedMembers];
+}
+
+export function memberById(id) {
+  return allMembers().find((m) => m.id === id) || seedCurrentUser;
+}
+
+export function currentUser() {
+  return memberById(state.currentUserId || seedCurrentUser.id);
+}
+
+export function signInAsWildApricotMember({ waContactId, name, email, roles }) {
+  const existing = email && allMembers().find((m) => (m.email || '').toLowerCase() === email.toLowerCase());
+  if (existing) {
+    state.currentUserId = existing.id;
+  } else {
+    const id = `wa-${waContactId}`;
+    const initials = (name || 'New member').split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+    state.provisionedMembers.push({
+      id, name: name || 'New member', initials, email,
+      roles: roles && roles.length ? roles : ['Member'],
+      state: '', since: new Date().getFullYear(), wa: `WA-${waContactId}`,
+    });
+    state.currentUserId = id;
+  }
+  state.signedIn = true;
+  commit();
+}
+
+export function signIn() {
+  state.currentUserId = null;
+  state.signedIn = true;
+  commit();
+}
+
 /* --- subscriptions ------------------------------------------------------- */
 
 export const isSubscribed = (key) => state.subs.includes(key);
@@ -79,11 +128,11 @@ export function toggleSub(key) {
 export function feed() {
   const generated = [
     ...state.newThreads.map((t) => ({
-      id: `gn-${t.id}`, kind: 'thread', at: t.at, source: t.categoryName, by: currentUser.id,
+      id: `gn-${t.id}`, kind: 'thread', at: t.at, source: t.categoryName, by: currentUser().id,
       text: `You created the topic “${t.title}”. Subscribers have been notified.`, to: `#/forum/${t.id}`,
     })),
     ...state.newListings.map((l) => ({
-      id: `gl-${l.id}`, kind: 'market', at: l.at, source: 'Marketplace', by: currentUser.id,
+      id: `gl-${l.id}`, kind: 'market', at: l.at, source: 'Marketplace', by: currentUser().id,
       text: `Your listing “${l.title}” is live.`, to: '#/marketplace',
     })),
   ];
@@ -108,7 +157,7 @@ export function markRead(id) {
 export function addThread({ title, category, categoryName, body }) {
   const t = {
     id: `ut-${Date.now()}`, title, category, categoryName, body,
-    author: currentUser.id, at: 0, created: 0, replies: 0, watchers: 1,
+    author: currentUser().id, at: 0, created: 0, replies: 0, watchers: 1,
   };
   state.newThreads.unshift(t);
   state.subs.push(`thread:${t.id}`);
@@ -118,14 +167,14 @@ export function addThread({ title, category, categoryName, body }) {
 
 export function addPost(threadId, body) {
   if (!state.newPosts[threadId]) state.newPosts[threadId] = [];
-  state.newPosts[threadId].push({ by: currentUser.id, at: 0, body });
+  state.newPosts[threadId].push({ by: currentUser().id, at: 0, body });
   commit();
 }
 
 export const postsFor = (threadId) => state.newPosts[threadId] || [];
 
 export function addListing(listing) {
-  const l = { ...listing, id: `ul-${Date.now()}`, at: 0, posted: 0, seller: currentUser.id };
+  const l = { ...listing, id: `ul-${Date.now()}`, at: 0, posted: 0, seller: currentUser().id };
   state.newListings.unshift(l);
   commit();
   return l;
@@ -143,7 +192,7 @@ export function joinProject(projectId, contribution) {
   if (!state.projectJoins.includes(projectId)) state.projectJoins.push(projectId);
   if (!state.projectParticipants[projectId]) state.projectParticipants[projectId] = [];
   state.projectParticipants[projectId].push({
-    member: currentUser.id, contribution: contribution || 'Joined without a stated contribution.', joined: 0,
+    member: currentUser().id, contribution: contribution || 'Joined without a stated contribution.', joined: 0,
   });
   commit();
 }
@@ -157,7 +206,7 @@ export function addProject({ title, summary, background, aims, questions, method
     background: [background], aims, questions, sites, openSites,
     participation: { summary: methods, methods: [methods], addons },
     timeline: 'Timeline to be confirmed once the project has its first participants.',
-    coordinators: [currentUser.id], created: 0, participants: [],
+    coordinators: [currentUser().id], created: 0, participants: [],
   };
   state.newProjects.unshift(p);
   commit();
@@ -320,7 +369,7 @@ function hydrateInspection(i) {
 
 export function addInspection({ apiary, kind, by, hiveIds, status, note, dateStr, done }) {
   const insp = {
-    id: `ui-${Date.now()}`, apiary, kind, by: by || currentUser.id,
+    id: `ui-${Date.now()}`, apiary, kind, by: by || currentUser().id,
     hiveIds: hiveIds || [], status: status || null, done: !!done, note: note || '', dateStr,
   };
   state.newInspections.push(insp);
@@ -408,7 +457,7 @@ export function setManagedApiaries(memberId, apiaryIds) {
    production would derive this from the actual authenticated member. */
 
 export function setPreviewAs(memberId) { state.previewAs = memberId || null; commit(); }
-export const previewUser = () => memberById(state.previewAs || currentUser.id);
+export const previewUser = () => memberById(state.previewAs || currentUser().id);
 
 export const isWebAdmin = (memberId = previewUser().id) => rolesFor(memberId).includes('Web Admin');
 
@@ -432,5 +481,4 @@ export function canContributeRepository(memberId = previewUser().id) {
 
 /* --- session ------------------------------------------------------------- */
 
-export function signIn() { state.signedIn = true; commit(); }
 export function signOut() { state.signedIn = false; commit(); }

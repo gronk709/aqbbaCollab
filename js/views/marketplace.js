@@ -2,8 +2,8 @@
    Marketplace. Members advertise queens, nucs, semen and equipment.
    ========================================================================== */
 
-import { listings, listingKinds, memberById, relDays, currentUser } from '../data.js';
-import { addListing, state } from '../store.js';
+import { listings, listingKinds, relDays } from '../data.js';
+import { addListing, state, memberById, currentUser } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
 let activeKind = 'All';
@@ -185,7 +185,7 @@ function openListingForm() {
       unit: scrim.querySelector('#l-unit').value.trim() || 'each',
       qty: scrim.querySelector('#l-qty').value.trim() || 'Enquire for availability',
       detail: scrim.querySelector('#l-detail').value.trim() || 'Contact the seller for detail.',
-      state: currentUser.state,
+      state: currentUser().state,
     });
 
     closeModal();

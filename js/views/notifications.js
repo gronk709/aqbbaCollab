@@ -3,8 +3,8 @@
    machinery would have sent. Shown on screen while email delivery is stubbed.
    ========================================================================== */
 
-import { memberById, currentUser, relHours, allSubs, subById, threads, threadById } from '../data.js';
-import { feed, markAllRead, markRead, state, unreadCount } from '../store.js';
+import { relHours, allSubs, subById, threads, threadById } from '../data.js';
+import { feed, markAllRead, markRead, state, unreadCount, memberById, currentUser } from '../store.js';
 import { esc, icons, avatar, toast } from '../ui.js';
 
 const kindMeta = {
@@ -77,10 +77,10 @@ export function renderNotifications() {
             <div class="panel-head"><h2>Delivery</h2></div>
             <div class="panel-body">
               <div class="row" style="gap:var(--s3)">
-                ${avatar(currentUser)}
+                ${avatar(currentUser())}
                 <div style="min-width:0">
-                  <div style="font-size:13.5px;font-weight:600">${esc(currentUser.name)}</div>
-                  <div class="caption mono" style="font-size:11.5px">${esc(currentUser.wa)}</div>
+                  <div style="font-size:13.5px;font-weight:600">${esc(currentUser().name)}</div>
+                  <div class="caption mono" style="font-size:11.5px">${esc(currentUser().wa)}</div>
                 </div>
               </div>
               <div class="field" style="margin-top:var(--s5)">

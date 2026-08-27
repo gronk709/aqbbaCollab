@@ -297,34 +297,45 @@ real usage says otherwise. Setup, once you're ready to move off `serve.py`:
    Settings → Environment Variables (not committed to the repo — that's what
    `.env.example` documents instead of real values).
 
-Nothing in the app depends on this yet — it still runs entirely from `serve.py` with mock
-data. This section exists so the decision is written down and the next session (or
-person) doesn't have to re-derive it.
+The app's own data (members, apiaries, hives, etc.) still runs entirely from `serve.py`
+with mock data — nothing depends on Supabase for that yet. The one piece that does now is
+sign-in: `supabase/functions/wildapricot-auth` is a real Edge Function (see "Wiring up
+the real integrations" below) that needs an actual Supabase project to deploy to.
 
 ## Wiring up the real integrations
 
-**Wild Apricot** — the client-side half of the OAuth flow is built (`js/waAuth.js`); the
-server-side half is not, because it needs a client secret, which can't live in a browser.
-See that file's header comment for the full setup checklist and exactly which two calls
-the server side needs to make. In short:
+**Wild Apricot** — both halves of the OAuth flow are built now. `js/waAuth.js` handles
+the browser-safe parts (the redirect to Wild Apricot's login, parsing the callback) and
+calls the part that can't run in a browser — exchanging the code for a token, which needs
+the application's client secret — via a Supabase Edge Function,
+`supabase/functions/wildapricot-auth/index.ts`, that does the token exchange and fetches
+the signed-in member's own contact record. See `js/waAuth.js`'s header comment for the
+full setup checklist. What's left to actually turn it on:
 
 1. In the Wild Apricot admin, create an Authorized Application (contact-level access, not
    the account-wide API key) and note its Client ID and Client Secret.
-2. Fill in `WA_CONFIG.clientId` in `js/waAuth.js` — the ID is not sensitive. The Client
-   Secret goes nowhere near this repo; it belongs only in Vercel's environment variables
-   (`WA_CLIENT_SECRET` in `.env.example`).
-3. Add a Supabase Edge Function (see "Hosting & backend" above) that does the token
-   exchange and calls `/contacts/me`, and have `js/waAuth.js`'s
-   `completeWildApricotLogin(code)` (sketched but commented out at the bottom of that
-   file) call it. Map the returned contact's membership level to the roles in
-   `js/data.js`.
+2. Fill in `WA_CONFIG.clientId` and `SUPABASE_CONFIG` (url + anon key) in `js/waAuth.js` —
+   all three are public/safe in frontend code. The Client Secret goes nowhere near this
+   repo; deploy the function and set it as a Supabase secret instead:
+   `supabase functions deploy wildapricot-auth`, then
+   `supabase secrets set WA_CLIENT_ID=... WA_CLIENT_SECRET=...`.
+3. Map AQBBA's real Wild Apricot membership level names to this app's roles in
+   `MEMBERSHIP_LEVEL_TO_ROLES` at the top of the Edge Function — it's currently a
+   placeholder (empty), so every real sign-in falls back to the plain `Member` role until
+   this is filled in. Any level not listed always falls back rather than failing sign-in.
 
-Until then, `WA_CONFIG.clientId` stays empty and the gate's "Continue with Wild Apricot"
-button keeps using the simulated sign-in it always has — filling in the client ID is what
-switches it over to a real (but not yet completable) redirect, which is why the button's
-caption changes automatically once it's set. The interface reads the signed-in member
-from a single exported `currentUser` in `js/store.js`, so nothing else in the app needs
-to change once real sign-in lands.
+Until `WA_CONFIG.clientId` is filled in, the gate's "Continue with Wild Apricot" button
+keeps using the simulated sign-in it always has — filling in the client ID is what
+switches it over to a real redirect, which is why the button's caption changes
+automatically once it's set.
+
+`currentUser` is genuinely session state now (`js/store.js`), not the constant it used to
+be — it resolves to whichever member last signed in, by whichever path (simulated or
+real). A real Wild Apricot contact who signs in is matched to an existing member by
+email; if none matches, `signInAsWildApricotMember` auto-provisions a minimal record on
+the spot (name, email, roles from the membership-level mapping, no site/manager grants)
+so they can use the site immediately — an admin adjusts their access afterward via the
+roles editor, same as any other member.
 
 **Members directory (planned)** — there is currently no page listing every member; a
 member's page (`#/managers/:id`) is only reachable via a link to them (an apiary's

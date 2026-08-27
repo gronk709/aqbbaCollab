@@ -14,10 +14,11 @@
    set here independently. A member can hold several roles at once.
    ========================================================================== */
 
-import { memberById, currentUser, roleOptions } from '../data.js';
+import { roleOptions } from '../data.js';
 import {
   allApiaries, contactFor, hasContact, setContact,
   roleLabel, rolesFor, setRoles, isWebAdmin, managersFor, setManagedApiaries,
+  memberById, currentUser,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
@@ -29,7 +30,7 @@ export function renderManager(id) {
   const complete = hasContact(id);
   const manages = allApiaries().filter((a) => a.managers.includes(id));
   const roles = rolesFor(id);
-  const canManageRoles = isWebAdmin(currentUser.id);
+  const canManageRoles = isWebAdmin(currentUser().id);
 
   const html = `
     <div class="topbar">

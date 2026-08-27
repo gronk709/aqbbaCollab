@@ -12,9 +12,9 @@
    ========================================================================== */
 
 import {
-  repository, allSubs, subById, memberById, sampleArticle, relDays, currentUser,
+  repository, allSubs, subById, sampleArticle, relDays,
 } from '../data.js';
-import { isSubscribed, state, roleLabel, canContributeRepository } from '../store.js';
+import { isSubscribed, state, roleLabel, canContributeRepository, memberById } from '../store.js';
 import { contentFor, articleFor, fetchArticleBody, mdToHtml } from '../content.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
