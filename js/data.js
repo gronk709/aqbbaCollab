@@ -674,39 +674,16 @@ export const sampleArticle = {
 };
 
 /* --------------------------------------------------------------------------
-   [SEED — Phase 2] Marketplace.
+   Marketplace. Listings themselves migrated to Postgres in Phase 2 — see
+   js/store.js (loadListings/addListing) and
+   supabase/migrations/20260828000000_marketplace_listings.sql. listingKinds
+   is the one export from this section that survives: the fixed vocabulary
+   used both for the category filter chips and the CHECK constraint on
+   marketplace_listings.kind (kept in sync by hand — 'All' is a UI-only
+   filter value, never a stored kind).
    -------------------------------------------------------------------------- */
 
-export const listings = [
-  { id: 'l1', kind: 'Queens', title: 'Tambo 22 mated queens — ninth generation', price: 78, unit: 'each',
-    seller: 'm5', state: 'TAS', posted: -1, qty: '40 available, December dispatch',
-    detail: 'Open-mated within the Tambo closed population. VSH mean 88% across the parent cohort. Marked and clipped on request.' },
-  { id: 'l2', kind: 'Queens', title: 'Barrowfield 14 breeder queens', price: 240, unit: 'each',
-    seller: 'm2', state: 'VIC', posted: -2, qty: '6 available',
-    detail: 'Instrumentally inseminated, single-drone. Full pedigree and three seasons of assessment data supplied with each queen.' },
-  { id: 'l3', kind: 'Queens', title: 'Kellyanne 3 mated queens', price: 65, unit: 'each',
-    seller: 'm7', state: 'WA', posted: -4, qty: '120 available, staged weekly',
-    detail: 'Calm, broad brood pattern, VSH mean 76%. WA dispatch only — no interstate movement permits held.' },
-  { id: 'l4', kind: 'Semen', title: 'Coalvale 17 semen — collected to order', price: 190, unit: 'per dose',
-    seller: 'm6', state: 'SA', posted: -5, qty: 'By arrangement',
-    detail: 'Eighth-generation closed population, VSH mean 85%. Collected fresh and shipped chilled, or held in liquid nitrogen for scheduled collection.' },
-  { id: 'l5', kind: 'Equipment', title: 'Cell bar frames — cedar, 20-cup', price: 34, unit: 'each',
-    seller: 'm3', state: 'NSW', posted: -6, qty: '50 in stock',
-    detail: 'Western red cedar, three removable bars, sized for Langstroth deep. Cups not included.' },
-  { id: 'l6', kind: 'Equipment', title: 'Poly mini-nuc mating boxes — used, good order', price: 18, unit: 'each',
-    seller: 'm4', state: 'QLD', posted: -8, qty: '80 available',
-    detail: 'Two seasons use. Selling to move to timber for summer heat. Feeders included, frames not.' },
-  { id: 'l7', kind: 'Nucs', title: 'Four-frame nucs — Merrindale 5 queens', price: 210, unit: 'each',
-    seller: 'm10', state: 'QLD', posted: -9, qty: '25 available from January',
-    detail: 'Four frames of brood and stores on a current-season Merrindale queen. Low swarming across three seasons.' },
-  { id: 'l8', kind: 'Equipment', title: 'Instrumental insemination station — Schley 2.0', price: 3400, unit: 'complete',
-    seller: 'm6', state: 'SA', posted: -12, qty: '1 only',
-    detail: 'Full station with CO₂ regulator, stereo microscope, syringes and spare capillaries. Upgrading, not exiting.' },
-  { id: 'l9', kind: 'Queens', title: 'Wandagee 11 mated queens — drought hardy', price: 70, unit: 'each',
-    seller: 'm7', state: 'WA', posted: -14, qty: '60 available',
-    detail: 'Gascoyne-derived stock selected for low water and forage availability. VSH mean 71%.' },
-];
-
+/* [PERMANENT] */
 export const listingKinds = ['All', 'Queens', 'Nucs', 'Semen', 'Equipment'];
 
 /* --------------------------------------------------------------------------

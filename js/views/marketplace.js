@@ -2,8 +2,8 @@
    Marketplace. Members advertise queens, nucs, semen and equipment.
    ========================================================================== */
 
-import { listings, listingKinds, relDays } from '../data.js';
-import { addListing, state, memberById, currentUser } from '../store.js';
+import { listingKinds, relDays } from '../data.js';
+import { addListing, loadListings } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
 let activeKind = 'All';
@@ -31,8 +31,20 @@ function listingArt(kind, seed) {
   return `<svg viewBox="0 0 250 100" preserveAspectRatio="xMidYMid slice">${cells}</svg>`;
 }
 
+/* created_at comes back from Postgres as an ISO timestamp, not the
+   day-offset-from-today number relDays expects (a holdover from the old
+   seed data's shape) — converted here rather than changing relDays, which
+   other still-unmigrated views still call with real offsets. */
+function daysAgo(isoTimestamp) {
+  const then = new Date(isoTimestamp);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  then.setHours(0, 0, 0, 0);
+  return Math.round((then - today) / 86400000);
+}
+
 function listingCard(l, i) {
-  const seller = memberById(l.seller);
+  const seller = l.seller;
   return `
     <article class="listing">
       <div class="listing-art">
@@ -41,14 +53,14 @@ function listingCard(l, i) {
       </div>
       <div class="listing-body">
         <h3>${esc(l.title)}</h3>
-        <div class="listing-price">$${l.price.toLocaleString('en-AU')} <small>${esc(l.unit)}</small></div>
+        <div class="listing-price">$${Number(l.price).toLocaleString('en-AU')} <small>${esc(l.unit)}</small></div>
         <p class="caption" style="line-height:1.5">${esc(l.detail)}</p>
         <p class="caption mono" style="font-size:11px">${esc(l.qty)}</p>
         <div class="listing-foot">
           ${avatar(seller)}
           <div style="min-width:0">
             <div style="font-size:12.5px;color:var(--propolis);font-weight:600">${esc(seller.name)}</div>
-            <div style="font-size:11px">${l.state} · listed ${relDays(l.posted)}</div>
+            <div style="font-size:11px">${esc(l.state || '')} · listed ${relDays(daysAgo(l.created_at))}</div>
           </div>
           <span class="spacer"></span>
           <button class="btn btn-ghost btn-sm" data-enquire="${l.id}">Enquire</button>
@@ -57,8 +69,8 @@ function listingCard(l, i) {
     </article>`;
 }
 
-export function renderMarketplace() {
-  const all = [...state.newListings, ...listings];
+export function renderMarketplace(listings) {
+  const all = listings || [];
   const shown = activeKind === 'All' ? all : all.filter((l) => l.kind === activeKind);
 
   const html = `
@@ -108,11 +120,11 @@ export function renderMarketplace() {
       </div>
     </div>`;
 
-  setTimeout(bindMarket, 0);
+  setTimeout(() => bindMarket(all), 0);
   return html;
 }
 
-function bindMarket() {
+function bindMarket(all) {
   document.querySelectorAll('[data-kind]').forEach((chip) => {
     chip.addEventListener('click', () => {
       activeKind = chip.dataset.kind;
@@ -128,10 +140,8 @@ function bindMarket() {
 
   document.querySelectorAll('[data-enquire]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const all = [...state.newListings, ...listings];
       const l = all.find((x) => x.id === btn.dataset.enquire);
-      const seller = memberById(l.seller);
-      openEnquiry(l, seller);
+      openEnquiry(l, l.seller);
     });
   });
 }
@@ -174,23 +184,33 @@ function openListingForm() {
 
   const scrim = modal({ title: 'List an item', body: body + '</form>', actions });
 
-  scrim.querySelector('#pub-listing').addEventListener('click', () => {
+  const publishBtn = scrim.querySelector('#pub-listing');
+  publishBtn.addEventListener('click', async () => {
     const title = scrim.querySelector('#l-title').value.trim();
     const price = Number(scrim.querySelector('#l-price').value);
     if (!title || !price) { toast('Add a title and a price before publishing.'); return; }
 
-    addListing({
-      kind: scrim.querySelector('#l-kind').value,
-      title, price,
-      unit: scrim.querySelector('#l-unit').value.trim() || 'each',
-      qty: scrim.querySelector('#l-qty').value.trim() || 'Enquire for availability',
-      detail: scrim.querySelector('#l-detail').value.trim() || 'Contact the seller for detail.',
-      state: currentUser().state,
-    });
+    publishBtn.disabled = true;
+    publishBtn.textContent = 'Publishing…';
+    try {
+      await addListing({
+        kind: scrim.querySelector('#l-kind').value,
+        title, price,
+        unit: scrim.querySelector('#l-unit').value.trim() || 'each',
+        qty: scrim.querySelector('#l-qty').value.trim() || 'Enquire for availability',
+        detail: scrim.querySelector('#l-detail').value.trim() || 'Contact the seller for detail.',
+      });
+    } catch (err) {
+      toast(`Couldn't publish the listing: ${err.message}`);
+      publishBtn.disabled = false;
+      publishBtn.textContent = 'Publish listing';
+      return;
+    }
 
     closeModal();
     activeKind = 'All';
     toast('Listing published. It is now visible to all members.');
+    window.__aqbba_invalidateData();
     window.__aqbba_render();
   });
 }
