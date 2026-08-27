@@ -51,7 +51,12 @@ export const WA_CONFIG = {
      fine for now, but pin this to a real URL once hosting is chosen, since
      it must be in WA's allow-list before login will work. */
   redirectUri: `${window.location.origin}/`,
-  authorizeUrl: 'https://oauth.wildapricot.org/auth/login',
+  /* This is AQBBA's own Wild Apricot site (custom domain), not a shared WA
+     host — per WA's docs, the authorize/login step happens on the
+     association's own site; only the later token exchange (see
+     supabase/functions/wildapricot-auth) uses the shared oauth.wildapricot.org
+     host. Update this if the custom domain ever changes. */
+  authorizeUrl: 'https://aqbba.org.au/sys/login/OAuthLogin',
   /* "contacts_me" scopes the token to the logged-in member's own record —
      the right scope for member self-service. Broader scopes (e.g. "contacts"
      for reading the full directory) would need explaining to members during
@@ -87,7 +92,6 @@ export function startWildApricotLogin() {
   sessionStorage.setItem(STATE_KEY, state);
 
   const url = new URL(WA_CONFIG.authorizeUrl);
-  url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', WA_CONFIG.clientId);
   url.searchParams.set('redirect_uri', WA_CONFIG.redirectUri);
   url.searchParams.set('scope', WA_CONFIG.scope);
