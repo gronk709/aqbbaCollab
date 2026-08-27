@@ -22,13 +22,14 @@
      supabase secrets set WA_CLIENT_ID=... WA_CLIENT_SECRET=...
 
    -------------------------------------------------------------------------
-   Membership-level → role mapping is a PLACEHOLDER below. AQBBA's real Wild
-   Apricot membership level names aren't known yet — replace the keys in
-   MEMBERSHIP_LEVEL_TO_ROLES with the real ones from the Wild Apricot admin
-   (Settings → Membership levels) once available. Any level not listed
-   falls back to DEFAULT_ROLES rather than failing sign-in, so an unmapped
-   level never locks someone out — it just under-grants them until the
-   mapping (or their roles directly, via the roles editor) is corrected.
+   Every real sign-in gets DEFAULT_ROLES — deliberately not derived from
+   Wild Apricot Membership Level or Group. Membership Level is a fee tier
+   (e.g. Individual vs. Student), unrelated to what someone should be able
+   to do on this site; Groups are general-purpose org bundling that doesn't
+   map cleanly onto these roles either, and would create a silent coupling
+   between whatever WA groups are used for and this site's access control.
+   Roles are assigned deliberately afterward via the roles editor
+   (js/views/managers.js) instead.
    -------------------------------------------------------------------------- */
 
 import { corsHeaders } from '../_shared/cors.ts';
@@ -39,9 +40,6 @@ const WA_API_BASE = 'https://api.wildapricot.org/v2.2';
    echo the same scope used in the initial authorize redirect. */
 const WA_SCOPE = 'contacts_me';
 
-const MEMBERSHIP_LEVEL_TO_ROLES: Record<string, string[]> = {
-  // PLACEHOLDER — e.g. 'Full Member': ['Breeder'], 'Committee': ['Web Admin']
-};
 const DEFAULT_ROLES = ['Member'];
 
 function json(body: unknown, status = 200) {
@@ -115,15 +113,12 @@ Deno.serve(async (req) => {
     }
     const contact = await contactRes.json();
 
-    const membershipLevel = contact.MembershipLevel?.Name ?? null;
-    const roles = (membershipLevel && MEMBERSHIP_LEVEL_TO_ROLES[membershipLevel]) || DEFAULT_ROLES;
-
     return json({
       waContactId: contact.Id,
       name: contact.DisplayName || `${contact.FirstName ?? ''} ${contact.LastName ?? ''}`.trim() || 'New member',
       email: contact.Email ?? null,
-      membershipLevel,
-      roles,
+      membershipLevel: contact.MembershipLevel?.Name ?? null,
+      roles: DEFAULT_ROLES,
     });
   } catch (err) {
     console.error('Unexpected error during Wild Apricot sign-in:', err);

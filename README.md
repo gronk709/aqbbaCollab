@@ -321,12 +321,13 @@ needs `client_id` and `scope` in the POST body in addition to the Basic-auth hea
 just `grant_type`/`code`/`redirect_uri`. Both were wrong on the first real test and had to
 be corrected against Wild Apricot's own API docs.
 
-One thing still outstanding:
-
-- Map AQBBA's real Wild Apricot membership level names to this app's roles in
-  `MEMBERSHIP_LEVEL_TO_ROLES` at the top of the Edge Function — it's currently a
-  placeholder (empty), so every real sign-in falls back to the plain `Member` role until
-  this is filled in. Any level not listed always falls back rather than failing sign-in.
+Roles are deliberately **not** derived from anything in Wild Apricot — Membership Level
+there is a fee tier (e.g. Individual vs. Student, unrelated to what someone should be able
+to do on this site), and Groups are general-purpose org bundling that doesn't map cleanly
+onto this site's roles either, and would silently couple whatever WA groups are used for
+to access control here. So every real sign-in provisions with the plain `Member` role
+(`DEFAULT_ROLES` in the Edge Function) and an admin assigns real roles afterward via the
+roles editor — a deliberate action instead of an implicit one.
 
 The gate's "Continue with Wild Apricot" button automatically uses the real redirect once
 `WA_CONFIG.clientId` is set (its caption changes to match); before that it stays on the
@@ -336,9 +337,9 @@ simulated sign-in the prototype always had.
 be — it resolves to whichever member last signed in, by whichever path (simulated or
 real). A real Wild Apricot contact who signs in is matched to an existing member by
 email; if none matches, `signInAsWildApricotMember` auto-provisions a minimal record on
-the spot (name, email, roles from the membership-level mapping, no site/manager grants)
-so they can use the site immediately — an admin adjusts their access afterward via the
-roles editor, same as any other member.
+the spot (name, email, the default `Member` role, no site/manager grants) so they can use
+the site immediately — an admin adjusts their access afterward via the roles editor, same
+as any other member.
 
 **Members directory (planned)** — there is currently no page listing every member; a
 member's page (`#/managers/:id`) is only reachable via a link to them (an apiary's
