@@ -5,7 +5,7 @@
 import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
   roleLabel, currentUser, loadSignedInMember,
-  isWebAdmin, loadListings,
+  isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
@@ -50,18 +50,18 @@ const ROUTES = [
      project route, which would otherwise swallow "p0/dashboard" as an id. */
   { test: /^#\/projects\/p0\/dashboard\/?$/, view: renderDashboard },
   { test: /^#\/projects\/(.+)$/,       view: renderProject },
-  { test: /^#\/forum\/?$/,             view: renderForum },
-  { test: /^#\/forum\/(.+)$/,          view: renderThread },
-  { test: /^#\/repository\/?$/,        view: renderRepository },
-  /* Article reader before the sub-topic route, which would otherwise swallow
-     "rs-graft/some-article" whole as a sub-topic id. */
-  { test: /^#\/repository\/([^/]+)\/(.+)$/, view: renderArticle },
-  { test: /^#\/repository\/(.+)$/,     view: renderSubTopic },
-  /* The one async route so far (Phase 2 — marketplace listings are real
+  /* Async routes (Phase 2 marketplace, Phase 3 forum/repository — real
      Supabase rows now). `load` fetches the data render() awaits before
      calling the still-synchronous view below with it — see render()'s own
      comment for how the loading/error states and caching around this
      work. */
+  { test: /^#\/forum\/?$/,             view: renderForum,    load: loadForumThreads },
+  { test: /^#\/forum\/(.+)$/,          view: renderThread,   load: (id) => loadThread(id) },
+  { test: /^#\/repository\/?$/,        view: renderRepository, load: loadRepository },
+  /* Article reader before the sub-topic route, which would otherwise swallow
+     "rs-graft/some-article" whole as a sub-topic id. */
+  { test: /^#\/repository\/([^/]+)\/(.+)$/, view: renderArticle,  load: (subId) => loadSubTopic(subId) },
+  { test: /^#\/repository\/(.+)$/,     view: renderSubTopic, load: (id) => loadSubTopic(id) },
   { test: /^#\/marketplace\/?$/,       view: renderMarketplace, load: loadListings },
   { test: /^#\/notifications\/?$/,     view: renderNotifications },
 ];
@@ -212,19 +212,35 @@ function bindGlobal() {
 
 
   /* Subscribe buttons work identically wherever they appear. A page may show
-     more than one control for the same subscription, so update them all. */
+     more than one control for the same subscription, so update them all.
+     toggleSub writes through to Postgres (Phase 3 — see the plan doc) —
+     this patches the DOM directly on success rather than re-rendering the
+     whole page, since the subscription itself is the only thing that
+     changed; a subscriber *count* elsewhere on the page (e.g. a thread's
+     "N watching") won't reflect this until the next fresh page load, same
+     as every other un-optimistic write in this migration so far. */
   app.querySelectorAll('[data-sub]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const key = btn.dataset.sub;
-      const now = toggleSub(key);
-      app.querySelectorAll(`[data-sub="${key}"]`).forEach((peer) => {
+      const peers = app.querySelectorAll(`[data-sub="${key}"]`);
+      peers.forEach((peer) => { peer.disabled = true; });
+      let now;
+      try {
+        now = await toggleSub(key);
+      } catch (err) {
+        peers.forEach((peer) => { peer.disabled = false; });
+        toast(`Couldn't update subscription: ${err.message}`);
+        return;
+      }
+      peers.forEach((peer) => {
+        peer.disabled = false;
         peer.classList.toggle('is-on', now);
         peer.setAttribute('aria-pressed', String(now));
         peer.innerHTML = `${now ? icons.bellOn : icons.bell}<span>${now ? 'Subscribed' : 'Subscribe'}</span>`;
       });
       const what = btn.dataset.subLabel || 'this topic';
       toast(now
-        ? `Subscribed to ${what}. New posts will go to ${currentUser().name.split(' ')[0].toLowerCase()}@…, matching your digest setting.`
+        ? `Subscribed to ${what}. New posts will go to the email on your member record.`
         : `Unsubscribed from ${what}. No further email.`);
       refreshBadge();
     });

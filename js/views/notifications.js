@@ -106,10 +106,13 @@ export function renderNotifications() {
             </div>
             <div class="panel-body">
               ${section('Forum topics', threadSubs.map((k) => {
+                /* threadById only knows the old mock seed threads — real
+                   Postgres threads (Phase 3) aren't resolvable here yet.
+                   Notifications itself is a later migration phase; until
+                   then a real thread subscription just doesn't get a title
+                   in this list rather than crashing on removed local state. */
                 const t = threadById(k.slice(7));
-                const mine = state.newThreads.find((x) => x.id === k.slice(7));
-                const title = t ? t.title : mine ? mine.title : null;
-                return title ? `<a class="tag tag-outline" href="#/forum/${k.slice(7)}">${esc(title.slice(0, 46))}${title.length > 46 ? '…' : ''}</a>` : '';
+                return t ? `<a class="tag tag-outline" href="#/forum/${k.slice(7)}">${esc(t.title.slice(0, 46))}${t.title.length > 46 ? '…' : ''}</a>` : '';
               }))}
               ${section('Repository sub-topics', repoSubs.map((k) => {
                 const s = subById(k.slice(5));
