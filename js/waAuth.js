@@ -64,7 +64,7 @@ export const SUPABASE_CONFIG = {
   /* Public anon key — safe in frontend code, distinct from the service
      role key which must never leave server-side environment variables.
      Supabase dashboard → Project Settings → API. */
-  anonKey: '',
+  anonKey: 'sb_publishable_K6Sv_hrNXzSdn0gbCyXzYg_uEZoSqju',
 };
 
 export const isConfigured = () => Boolean(WA_CONFIG.clientId);
