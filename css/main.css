@@ -347,26 +347,6 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 }
 .rail-out:hover { color: var(--amber-bright); }
 
-/* Prototype-only device for demonstrating per-site permission checks without
-   real multi-user auth. Deliberately styled as a test tool, not a feature:
-   dashed border, muted, visually distinct from the rest of the rail. */
-.rail-preview {
-  margin-top: var(--s4); padding-top: var(--s4);
-  border-top: 1px dashed rgba(247,244,237,0.16);
-}
-.rail-preview label {
-  display: block; font-family: var(--mono); font-size: 9px; font-weight: 500;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: rgba(247,244,237,0.38); margin-bottom: 6px;
-}
-.rail-preview label span { text-transform: none; letter-spacing: 0; cursor: help; }
-.rail-preview select {
-  width: 100%; padding: 6px 8px;
-  background: rgba(247,244,237,0.06); border: 1px dashed rgba(247,244,237,0.24);
-  border-radius: 3px; color: rgba(247,244,237,0.75); font-size: 12px;
-}
-.rail-preview select:focus { outline: 2px solid var(--amber-bright); outline-offset: 1px; }
-
 /* Mobile rail */
 .rail-toggle {
   display: none;

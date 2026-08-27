@@ -39,7 +39,6 @@ const defaults = () => ({
   queenLineOverrides: {},
   breeders: [],
   breederOverrides: {},
-  previewAs: null,
   digest: 'instant',
   currentUserId: null,
   provisionedMembers: [],
@@ -532,23 +531,18 @@ export function setManagedApiaries(memberId, apiaryIds) {
   commit();
 }
 
-/* --- permission preview -----------------------------------------------------
-   This app has exactly one real signed-in identity — everyone who opens it
-   is Web Admin, who can act on every site. To make per-site restrictions
-   demonstrable at all, this lets a tester preview the apiary pages as if
-   signed in as someone else. It only affects the two gated actions below
-   (adding a hive, logging an inspection, and creating a new apiary);
-   authorship of forum posts, listings, and project joins always stays the
-   real signed-in member. There is no real multi-user session here —
-   production would derive this from the actual authenticated member. */
+/* --- permissions -------------------------------------------------------------
+   Used to be checked against a "preview as" identity rather than the real
+   signed-in member — a stand-in for not having real per-member sessions,
+   back when everyone who opened the app was signed in as the same seed
+   Web Admin. Removed now that real Wild Apricot sign-in (Phase 1 of the
+   backend migration) makes currentUser() a genuine, distinct identity per
+   member. */
 
-export function setPreviewAs(memberId) { state.previewAs = memberId || null; commit(); }
-export const previewUser = () => memberById(state.previewAs || currentUser().id);
-
-export const isWebAdmin = (memberId = previewUser().id) => rolesFor(memberId).includes('Web Admin');
+export const isWebAdmin = (memberId = currentUser().id) => rolesFor(memberId).includes('Web Admin');
 
 export function canEditApiary(apiaryId) {
-  const uid = previewUser().id;
+  const uid = currentUser().id;
   if (isWebAdmin(uid)) return true;
   return managersFor(apiaryId).includes(uid);
 }
@@ -561,7 +555,7 @@ export function canEditApiary(apiaryId) {
 
 const REPOSITORY_CONTRIBUTOR_ROLES = ['Web Admin', 'Apiary Manager', 'Operator', 'Breeder', 'Creator'];
 
-export function canContributeRepository(memberId = previewUser().id) {
+export function canContributeRepository(memberId = currentUser().id) {
   return rolesFor(memberId).some((r) => REPOSITORY_CONTRIBUTOR_ROLES.includes(r));
 }
 
