@@ -35,6 +35,9 @@ import { corsHeaders } from '../_shared/cors.ts';
 
 const WA_TOKEN_URL = 'https://oauth.wildapricot.org/auth/token';
 const WA_API_BASE = 'https://api.wildapricot.org/v2.2';
+/* Must match WA_CONFIG.scope in js/waAuth.js — the token request has to
+   echo the same scope used in the initial authorize redirect. */
+const WA_SCOPE = 'contacts_me';
 
 const MEMBERSHIP_LEVEL_TO_ROLES: Record<string, string[]> = {
   // PLACEHOLDER — e.g. 'Full Member': ['Breeder'], 'Committee': ['Web Admin']
@@ -80,7 +83,9 @@ Deno.serve(async (req) => {
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
+        client_id: clientId,
         redirect_uri: redirectUri,
+        scope: WA_SCOPE,
       }),
     });
     if (!tokenRes.ok) {
