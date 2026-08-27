@@ -150,17 +150,18 @@ thread, and both directions link to each other, so the life cycle a member actua
 is: a problem raised in the forum → a project proposed to answer it → members joining
 with what they can contribute.
 
-**Forum** (`#/forum`) — six seeded topics with realistic multi-post discussions. Members
-create topics, subscribe to topics or whole categories, and set email delivery frequency
-(each post / daily digest / weekly digest). Publishing a topic or reply reports how many
-subscribers were notified.
+**Forum** (`#/forum`) — real member discussions now (Phase 3 of the backend migration —
+see "Hosting & backend" below), starting empty rather than the six invented seed
+discussions this used to show. Members create topics, subscribe to topics or whole
+categories, and set email delivery frequency (each post / daily digest / weekly digest).
 
 **Repository** (`#/repository`) — the three tracks from the brief (Foundation → Queen
 Production → Queen Breeding), sixteen sub-topics, each independently subscribable and
-publishable. Sub-topics carry **real association content**: Markdown articles (with an
-article reader at `#/repository/<sub>/<slug>`) and document attachments (PDF, Word,
-Excel, images) served as download links with type and size. Sub-topics with no real
-content yet fall back to a seeded placeholder article, labelled as such. See "Authoring
+publishable — real Postgres rows now (Phase 3), though only for sign-in and subscribing;
+sub-topics still carry **real association content** exactly as before: Markdown articles
+(with an article reader at `#/repository/<sub>/<slug>`) and document attachments (PDF,
+Word, Excel, images) served as download links with type and size. A sub-topic with no
+real content yet shows an honest "no content here yet" empty state. See "Authoring
 repository content" below for how to add material.
 
 **Marketplace** (`#/marketplace`) — queens, nucs, semen and equipment, filterable by
@@ -235,7 +236,10 @@ Repository content is plain files in the repo — no CMS, no build step. To add 
 material:
 
 1. Put files in `content/repository/<sub-topic-id>/` (the ids are in `js/data.js`:
-   `rs-graft`, `rs-nutri`, `rs-vsh`, and so on).
+   `rs-graft`, `rs-nutri`, `rs-vsh`, and so on — also the real, authoritative
+   `repository_sub_topics` table now that Phase 3 of the backend migration has landed;
+   the two are seeded to match exactly, but adding a genuinely new sub-topic beyond the
+   current sixteen means a Web Admin inserting a row there too, not just adding files).
    - **Articles** are Markdown files with a front-matter header:
 
      ```markdown
@@ -306,20 +310,33 @@ the Wild Apricot auth bridge) is **live and verified**: a real Wild Apricot sign
 resolves to a real `members` row over a real Supabase session, RLS-gated.
 
 Phase 2 (marketplace listings — deliberately the simplest entity, done to prove the
-read/write/RLS pattern cheaply before the bigger ones) has its schema and code written
-(`supabase/migrations/20260828000000_marketplace_listings.sql`, `js/store.js`'s
-`loadListings`/`addListing`, `js/views/marketplace.js`) but the migration hasn't been
-applied to the live project yet. This is also the first entity requiring a real Wild
-Apricot sign-in specifically — the old simulated demo sign-in has no Supabase session and
-a non-UUID id, so it gets a clear "needs a real sign-in" message rather than being able to
-browse or post. It also introduces the app's first async route: `js/app.js`'s router now
-supports a `load` function per route, run before the (still-synchronous) view, with a
-loading state, an error panel with retry, and a small cache invalidated on real navigation
-or right after a successful write — the pattern every later phase reuses.
+read/write/RLS pattern cheaply before the bigger ones) is **live and verified**. It
+introduced two things every later phase reuses: every migrated entity requires a real
+Wild Apricot sign-in specifically (the old simulated demo sign-in has no Supabase session
+and a non-UUID id, so it gets a clear "needs a real sign-in" message rather than being
+able to browse or post), and `js/app.js`'s router supports a `load` function per route —
+run before the still-synchronous view, with a loading state, an error panel with retry,
+and a small cache invalidated on real navigation or right after a successful write.
 
-Every other entity (apiaries, hives, inspections, forum, repository, projects,
-notifications) still runs entirely from `js/data.js` mock data + `js/store.js`'s
-localStorage patches, unchanged, until its own phase comes up.
+Phase 3 (forum + repository metadata + subscriptions) has its schema and code written
+(`supabase/migrations/20260829000000_forum_repository_subscriptions.sql`, `js/store.js`'s
+`loadForumThreads`/`loadThread`/`addThread`/`addPost`/`loadRepository`/`loadSubTopic`/
+`loadMySubscriptions`/`toggleSub`, `js/views/forum.js`, `js/views/repository.js`) but not
+yet applied to the live project. Two different purge decisions in this one phase, worth
+remembering: the forum's six seed discussions don't carry over (invented conversations by
+fake seed members, same reasoning as Phase 2's listings), but the repository's three
+tracks and ~16 sub-topic ids (`rs-graft`, `rs-vsh`, etc.) **do** carry over intact — those
+ids are load-bearing, referenced by real Markdown articles and documents already
+committed under `content/repository/`, which this phase doesn't touch at all (article
+content stays exactly as file-based as before). One real, deliberate product change: a
+thread's "N watching" is a real aggregate count now (via a `subscriber_count`/
+`subscriber_counts` RPC), but the old "Members watching" avatar list is gone — individual
+subscriber identity isn't broadly visible under this schema's RLS (self-only, on
+purpose), only the aggregate is.
+
+Every other entity (apiaries, hives, inspections, projects, notifications) still runs
+entirely from `js/data.js` mock data + `js/store.js`'s localStorage patches, unchanged,
+until its own phase comes up.
 
 ## Wiring up the real integrations
 
@@ -370,20 +387,25 @@ seed/demo roster plus anyone provisioned via the *old* client-side path (kept fo
 backward compatibility until this view itself migrates to Postgres in a later phase). A
 member who signs in for the first time via the new Phase-1 auth bridge resolves
 correctly for their own session (`currentUser`, roles, contact details) but won't yet
-appear as a row in this directory or in the "Preview access as" list unless they also
-happen to match an existing seed member by email — a known, temporary gap that closes
-once the members directory itself moves to Postgres.
+appear as a row in this directory unless they also happen to match an existing seed
+member by email — a known, temporary gap that closes once the members directory itself
+moves to Postgres. (See `BUGS.md` for the related "Wild Apricot ID: undefined" issue on
+a real member's own detail page.)
 
 **Notification email** — every point that would send mail currently calls `toast()` with
 the message and recipient count. Those call sites are the integration points: forum
-topic publish, forum reply, repository contribution. Subscriptions are already stored as
-stable keys (`thread:<id>`, `repo:<id>`, `cat:<id>`) ready to become subscription rows.
+topic publish, forum reply, repository contribution. Subscriptions are real
+`subscriptions` rows now (Phase 3), keyed the same way they always displayed
+(`thread:<id>`, `repo:<id>`, `cat:<id>`) — notifications themselves are still simulated,
+a later migration phase.
 
-**Persistence** — `js/store.js` still writes most entities to `localStorage` behind a
-small interface (`commit`, `toggleSub`, `addThread`, `addPost`). Identity
-(`loadSignedInMember`, `signOut`) and marketplace listings (`loadListings`, `addListing`)
-now read/write real Supabase state instead; every other entity's functions in this module
-are next, one migration phase at a time.
+**Persistence** — `js/store.js` still writes some entities to `localStorage` behind a
+small interface (`commit`, `addProject`, `joinProject`). Identity (`loadSignedInMember`,
+`signOut`), marketplace listings (`loadListings`, `addListing`), and forum/repository/
+subscriptions (`loadForumThreads`, `loadThread`, `addThread`, `addPost`, `loadRepository`,
+`loadSubTopic`, `loadMySubscriptions`, `toggleSub`) now read/write real Supabase state
+instead; every other entity's functions in this module are next, one migration phase at
+a time.
 
 **Data** — `js/data.js` exports plain arrays and lookup helpers, each tagged `[PERMANENT]`
 (pure reference/formatting code that survives the migration) or `[SEED — Phase N]` (mock

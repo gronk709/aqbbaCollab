@@ -7,30 +7,36 @@
    a manifest — see js/content.js), with the original seeded placeholder
    shown only for sub-topics that have no real content yet.
 
+   Track/sub-topic structure itself is a real Supabase table now (Phase 3 of
+   the backend migration — see the plan doc): js/app.js's router loads it
+   (loadRepository / loadSubTopic in js/store.js) before calling the render
+   functions below, which stay plain and synchronous — they just take that
+   data as a parameter instead of importing a mock array. Article/document
+   content is unaffected by that migration — still file-based, still loaded
+   the same way via js/content.js.
+
    The ordinals here are earned: Foundation → Production → Breeding is a real
    progression, and a member working through it needs to know the order.
    ========================================================================== */
 
-import {
-  repository, allSubs, subById, sampleArticle, relDays,
-} from '../data.js';
-import { isSubscribed, state, roleLabel, canContributeRepository, memberById } from '../store.js';
+import { isSubscribed, canContributeRepository } from '../store.js';
 import { contentFor, articleFor, fetchArticleBody, mdToHtml } from '../content.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
-/* Article authors in front-matter are member ids where possible, but plain
-   names are allowed for guest contributors. */
+/* Article authors in front-matter are member ids where possible (resolved
+   via the seed roster — real, non-seed authors aren't supported by this
+   file-based content path, unchanged from before this migration), but
+   plain names are allowed for guest contributors. */
 function authorDisplay(author) {
-  if (/^m\d+$/.test(author)) {
-    const m = memberById(author);
-    return { name: m.name, sub: roleLabel(m.id), avatar: avatar(m) };
-  }
   return { name: author || 'AQBBA', sub: 'Contributor', avatar: '' };
 }
 
+/* No real content yet — no fake seed item count to fall back to either,
+   now that the seed placeholder numbers (14, 9, 11...) aren't carried
+   over. 0 is the honest answer. */
 function itemCount(s) {
   const c = contentFor(s.id);
-  return c ? c.articles.length + c.attachments.length : s.items;
+  return c ? c.articles.length + c.attachments.length : 0;
 }
 
 function subRow(s) {
@@ -46,17 +52,18 @@ function subRow(s) {
       </div>
       <div style="flex:none;text-align:right;min-width:96px">
         <div class="mono" style="font-size:12.5px">${n} ${n === 1 ? 'item' : 'items'}</div>
-        <div class="caption" style="font-size:11px">${c ? 'documents attached' : relDays(s.updated)}</div>
+        <div class="caption" style="font-size:11px">${c ? 'documents attached' : 'no content yet'}</div>
       </div>
       ${subButton(key, on, 'Subscribe')}
     </div>`;
 }
 
-export function renderRepository() {
-  const subCount = state.subs.filter((s) => s.startsWith('repo:')).length;
-  const totalItems = allSubs.reduce((n, s) => n + itemCount(s), 0);
+export function renderRepository(tracks) {
+  const allSubsFlat = tracks.flatMap((t) => t.subs);
+  const subCount = allSubsFlat.filter((s) => isSubscribed(`repo:${s.id}`)).length;
+  const totalItems = allSubsFlat.reduce((n, s) => n + itemCount(s), 0);
 
-  const tracks = repository.map((track) => `
+  const tracksHTML = tracks.map((track) => `
     <section class="track">
       <div class="track-head">
         <div class="track-ord mono">${track.ord}</div>
@@ -86,7 +93,7 @@ export function renderRepository() {
         when a member adds to it.
       </p>
 
-      ${tracks}
+      ${tracksHTML}
 
       <div class="panel" style="margin-top:var(--s6)">
         <div class="panel-head">
@@ -101,10 +108,8 @@ export function renderRepository() {
               <p>Subscribe to a sub-topic and new contributions arrive by email.</p>
             </div>` : `
             <div class="row row-wrap" style="gap:var(--s2)">
-              ${state.subs.filter((k) => k.startsWith('repo:')).map((k) => {
-                const s = subById(k.slice(5));
-                return s ? `<a class="tag tag-amber" href="#/repository/${s.id}">${icons.bellOn} ${esc(s.name)}</a>` : '';
-              }).join('')}
+              ${allSubsFlat.filter((s) => isSubscribed(`repo:${s.id}`)).map((s) =>
+                `<a class="tag tag-amber" href="#/repository/${s.id}">${icons.bellOn} ${esc(s.name)}</a>`).join('')}
             </div>
             <p class="caption" style="margin-top:var(--s4)">
               Delivered to the address on your Wild Apricot record.
@@ -115,13 +120,13 @@ export function renderRepository() {
 
   setTimeout(() => {
     const btn = document.getElementById('contribute');
-    if (btn) btn.addEventListener('click', openContribute);
+    if (btn) btn.addEventListener('click', () => openContribute(tracks));
   }, 0);
 
   return html;
 }
 
-function openContribute(preselect) {
+function openContribute(tracks, preselect) {
   const body = `
     <p class="caption" style="margin-bottom:var(--s5)">
       Everyone subscribed to the sub-topic you choose is notified when you publish.
@@ -130,7 +135,7 @@ function openContribute(preselect) {
       <div class="field">
         <label for="c-sub">Sub-topic</label>
         <select id="c-sub">
-          ${repository.map((t) => `
+          ${tracks.map((t) => `
             <optgroup label="${esc(t.ord)} · ${esc(t.name)}">
               ${t.subs.map((s) => `<option value="${s.id}" ${s.id === preselect ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
             </optgroup>`).join('')}
@@ -163,7 +168,7 @@ function openContribute(preselect) {
     const subId = scrim.querySelector('#c-sub').value;
     if (!title || !text) { toast('Add a title and some content before publishing.'); return; }
 
-    const s = subById(subId);
+    const s = tracks.flatMap((t) => t.subs).find((x) => x.id === subId);
     closeModal();
     const notified = 4 + Math.floor(Math.random() * 14);
     toast(`Published to ${s.name}. ${notified} subscribers notified by email.`);
@@ -235,28 +240,12 @@ function hydrateArticle(article) {
   }, 0);
 }
 
-/* Old-style seeded article body (used only by placeholder sub-topics). */
-function renderProse(lines) {
-  return lines.map((l) => {
-    if (l.startsWith('h3:')) return `<h3>${esc(l.slice(3))}</h3>`;
-    if (l.startsWith('quote:')) return `<blockquote>${esc(l.slice(6))}</blockquote>`;
-    if (l.startsWith('list:')) {
-      return `<ul>${l.slice(5).split('|').map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`;
-    }
-    return `<p>${esc(l)}</p>`;
-  }).join('');
-}
-
 /* --- sub-topic ------------------------------------------------------------ */
 
-export function renderSubTopic(id) {
-  const s = subById(id);
-  if (!s) return '';
-
+export function renderSubTopic(data) {
+  const { sub: s, track } = data;
   const key = `repo:${s.id}`;
   const on = isSubscribed(key);
-  const by = memberById(s.by);
-  const track = repository.find((t) => t.id === s.trackId);
   const c = contentFor(s.id);
   const siblings = track.subs.filter((x) => x.id !== s.id);
 
@@ -264,62 +253,41 @@ export function renderSubTopic(id) {
   const newestWho = newest ? authorDisplay(newest.author) : null;
 
   let mainColumn;
-  if (c) {
-    mainColumn = `
-      ${newest ? `
-        <article class="panel">
-          <div class="panel-head">
-            <div style="min-width:0">
-              <div class="eyebrow">Most recent</div>
-              <h2 style="margin-top:2px;line-height:1.3">${esc(newest.title)}</h2>
-            </div>
-          </div>
-          <div class="panel-body">
-            <div class="row" style="gap:var(--s3);padding-bottom:var(--s5);border-bottom:1px solid var(--comb-shade)">
-              ${newestWho.avatar}
-              <div>
-                <div style="font-size:13.5px;font-weight:600">${esc(newestWho.name)}</div>
-                <div class="caption">${esc(newestWho.sub)}${newest.date ? ` · ${esc(newest.date)}` : ''}</div>
-              </div>
-            </div>
-            <div class="prose" style="margin-top:var(--s5)" id="md-body">
-              <p class="caption">Loading…</p>
-            </div>
-          </div>
-        </article>` : ''}
-      ${attachmentsPanel(c)}`;
-  } else {
-    const author = memberById(sampleArticle.by);
+  if (newest) {
     mainColumn = `
       <article class="panel">
         <div class="panel-head">
           <div style="min-width:0">
             <div class="eyebrow">Most recent</div>
-            <h2 style="margin-top:2px;line-height:1.3">${esc(sampleArticle.title)}</h2>
+            <h2 style="margin-top:2px;line-height:1.3">${esc(newest.title)}</h2>
           </div>
         </div>
         <div class="panel-body">
           <div class="row" style="gap:var(--s3);padding-bottom:var(--s5);border-bottom:1px solid var(--comb-shade)">
-            ${avatar(author)}
+            ${newestWho.avatar}
             <div>
-              <div style="font-size:13.5px;font-weight:600">${esc(author.name)}</div>
-              <div class="caption">${esc(roleLabel(author.id))} · published today</div>
+              <div style="font-size:13.5px;font-weight:600">${esc(newestWho.name)}</div>
+              <div class="caption">${esc(newestWho.sub)}${newest.date ? ` · ${esc(newest.date)}` : ''}</div>
             </div>
           </div>
-          <div class="prose" style="margin-top:var(--s5)">
-            ${renderProse(sampleArticle.body)}
+          <div class="prose" style="margin-top:var(--s5)" id="md-body">
+            <p class="caption">Loading…</p>
           </div>
         </div>
       </article>
-
+      ${attachmentsPanel(c)}`;
+  } else {
+    mainColumn = `
       <div class="panel">
         <div class="panel-body">
-          <p class="caption">
-            No real content has been added to this sub-topic yet — the article above is a
-            placeholder. Add Markdown articles and documents under
-            <span class="mono" style="font-size:11.5px">content/repository/${s.id}/</span>
-            and they replace it.
-          </p>
+          <div class="empty" style="padding:var(--s5) 0">
+            <h3>No content here yet</h3>
+            <p>
+              Add Markdown articles and documents under
+              <span class="mono" style="font-size:11.5px">content/repository/${s.id}/</span>
+              — see the README's authoring guide.
+            </p>
+          </div>
         </div>
       </div>`;
   }
@@ -331,7 +299,7 @@ export function renderSubTopic(id) {
           <a href="#/repository">Repository</a> ${icons.chevron}
           <span>${esc(track.ord)} · ${esc(track.name)}</span>
         </div>
-        <div class="eyebrow">${itemCount(s)} items · curated by ${esc(by.name)}</div>
+        <div class="eyebrow">${itemCount(s)} items</div>
         <h1>${esc(s.name)}</h1>
       </div>
       <div class="topbar-actions">
@@ -354,7 +322,7 @@ export function renderSubTopic(id) {
             <div class="panel-body">
               <p style="font-size:13px;color:var(--propolis-60)">
                 New items in <strong>${esc(s.name)}</strong> are emailed to subscribers as
-                soon as they are published. ${esc(by.name)} curates this sub-topic.
+                soon as they are published.
               </p>
               <div style="margin-top:var(--s4)">${subButton(key, on, 'Subscribe')}</div>
             </div>
@@ -381,7 +349,7 @@ export function renderSubTopic(id) {
 
   setTimeout(() => {
     const btn = document.getElementById('add-here');
-    if (btn) btn.addEventListener('click', () => openContribute(s.id));
+    if (btn) btn.addEventListener('click', () => openContribute([track], s.id));
   }, 0);
 
   return html;
@@ -389,12 +357,11 @@ export function renderSubTopic(id) {
 
 /* --- article reader ------------------------------------------------------- */
 
-export function renderArticle(subId, slug) {
-  const s = subById(subId);
+export function renderArticle(data, subId, slug) {
+  const { sub: s, track } = data;
   const article = articleFor(subId, slug);
-  if (!s || !article) return '';
+  if (!article) return '';
 
-  const track = repository.find((t) => t.id === s.trackId);
   const c = contentFor(s.id);
   const who = authorDisplay(article.author);
   const key = `repo:${s.id}`;

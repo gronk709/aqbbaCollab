@@ -500,16 +500,15 @@ export const projectById = (id) => projects.find((p) => p.id === id);
 export const projectForThread = (threadId) => projects.find((p) => p.linkedThread === threadId);
 
 /* --------------------------------------------------------------------------
-   [SEED — Phase 3] Forum. Member-created topics with subscribe + notify.
+   [SEED — Phase 3, partially superseded] Forum. Member-created topics with
+   subscribe + notify. js/views/forum.js itself moved to real Supabase rows
+   in Phase 3 (see the plan doc) and no longer reads this array — it's kept
+   only because js/views/projects.js (a project's "became a thread" link)
+   and js/views/notifications.js (title lookup for an old-style
+   subscription) still reference these seed threads by id, and neither of
+   those views has migrated yet. forumCategories/categoryName had no such
+   remaining reader and were removed outright.
    -------------------------------------------------------------------------- */
-
-export const forumCategories = [
-  { id: 'fc-field',  name: 'Field practice' },
-  { id: 'fc-assess', name: 'Assessment & assays' },
-  { id: 'fc-genet',  name: 'Genetics & lines' },
-  { id: 'fc-gear',   name: 'Equipment' },
-  { id: 'fc-admin',  name: 'Association' },
-];
 
 export const threads = [
   {
@@ -586,13 +585,17 @@ export const threads = [
 ];
 
 export const threadById = (id) => threads.find((t) => t.id === id);
-export const categoryName = (id) => (forumCategories.find((c) => c.id === id) || {}).name || '';
 
 /* --------------------------------------------------------------------------
-   [SEED — Phase 3] Repository. Three tracks — a genuine progression, so
-   ordinals carry meaning. Only the subscribable track/sub-topic metadata
-   below moves to Postgres — article/document content stays exactly as-is,
-   flat Markdown under content/repository/ loaded via js/content.js.
+   [SEED — Phase 3, partially superseded] Repository. Three tracks — a
+   genuine progression, so ordinals carry meaning. js/views/repository.js
+   itself now reads the equivalent real Postgres rows (see the Phase 3
+   migration and js/store.js's loadRepository/loadSubTopic) — this array is
+   kept only because js/views/notifications.js still resolves a `repo:`
+   subscription's title through subById, and happens to still get correct
+   answers since the real rows were seeded with these exact same ids/names.
+   Article/document content was never affected either way — always
+   file-based, under content/repository/, loaded via js/content.js.
    -------------------------------------------------------------------------- */
 
 export const repository = [
@@ -650,28 +653,6 @@ export const repository = [
 
 export const allSubs = repository.flatMap((t) => t.subs.map((s) => ({ ...s, track: t.name, trackId: t.id })));
 export const subById = (id) => allSubs.find((s) => s.id === id);
-
-/* [SEED — Phase 3] Fallback sample article, shown when a sub-topic has no
-   real content in content/repository/ yet. */
-export const sampleArticle = {
-  title: 'Scoring partial removals in the freeze-killed brood assay',
-  by: 'm9', at: 0, track: 'Queen Breeding', sub: 'Assessment methods',
-  body: [
-    'A freeze-killed brood assay asks a simple question: given a patch of dead sealed brood, how much of it will the colony remove? The answer is a proxy for the hygienic behaviour that underlies varroa sensitive hygiene, and the appeal of the method is that it needs nothing more exotic than liquid nitrogen and patience.',
-    'The complication is that removal is not binary. At the 24-hour count you will find cells fully cleaned, cells untouched, and a third category that causes most of the disagreement between operators: cells that have been uncapped, sometimes chewed at the margin, with the dead pupa still in place.',
-    'h3:Why partials are not simply half a removal',
-    'It is tempting to score a partial as 0.5 and move on. Resist it. Uncapping and removal are separable behaviours with different thresholds, and a colony that uncaps readily but does not complete removal is telling you something specific — usually that detection is working and the follow-through is not.',
-    'For varroa work the distinction matters more than it does for general hygiene screening, because mite reproduction is disrupted by uncapping alone. A colony that uncaps and recaps without removing the pupa may still suppress mite reproduction effectively. Collapsing that behaviour into a single removal percentage hides it.',
-    'h3:The recommended scoring',
-    'Record three numbers for each assay: cells fully removed, cells uncapped but not removed, and cells untouched. Report the headline figure as full removals over total cells, and carry the partial count alongside it rather than folded into it.',
-    'quote:If your protocol produces a single number, you have already thrown away the most interesting part of the result.',
-    'This costs nothing at the point of counting and preserves information you cannot reconstruct later. Members running the assay for program submission should use the three-column form in the resources list below.',
-    'h3:Sources of variation to control',
-    'Beyond scoring, three procedural choices account for most of the between-operator spread:',
-    'list:Exposure time under liquid nitrogen — standardise at ten seconds for a 55mm section|The interval between freezing and counting — 24 hours, not "the next day"|Whether the frame is returned to its original position and orientation',
-    'Operators who lock these three down and record partials separately report between-operator agreement inside five percentage points, which is tight enough to select on.',
-  ],
-};
 
 /* --------------------------------------------------------------------------
    Marketplace. Listings themselves migrated to Postgres in Phase 2 — see

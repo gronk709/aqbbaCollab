@@ -1,59 +1,61 @@
 /* ==========================================================================
    Forum. Members create topics, subscribe, and are notified by email when
    new posts land. The email step is shown on screen in this prototype.
+
+   Phase 3 of the backend migration (see the plan doc): threads, posts, and
+   subscriptions are real Supabase rows now. js/app.js's router loads this
+   page's data (loadForumThreads / loadThread in js/store.js) before calling
+   the render functions below, which stay plain and synchronous — they just
+   take that data as a parameter instead of importing mock arrays.
    ========================================================================== */
 
+import { relDays, projectForThread } from '../data.js';
 import {
-  threads, threadById, forumCategories, categoryName,
-  members, relDays, relHours, projectForThread,
-} from '../data.js';
-import {
-  isSubscribed, addThread, addPost, postsFor, memberThreads, state, roleLabel,
-  memberById, currentUser,
+  isSubscribed, addThread, addPost, state, currentUser,
 } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
-/* Member-authored threads sit alongside the seeded ones. */
-function allThreads() {
-  const mine = memberThreads().map((t) => ({
-    ...t,
-    excerpt: t.body.slice(0, 190),
-    posts: [{ by: t.author, at: 0, body: t.body }],
-  }));
-  return [...mine, ...threads];
-}
+const roleLabelFrom = (roles) => (roles && roles.length ? roles.join(' & ') : '—');
 
 function threadCard(t) {
-  const author = memberById(t.author);
   const key = `thread:${t.id}`;
   const on = isSubscribed(key);
-  const replyCount = t.replies + postsFor(t.id).length;
   const project = projectForThread(t.id);
 
   return `
     <a class="thread ${t.pinned ? 'thread-pinned' : ''}" href="#/forum/${t.id}">
       <div class="thread-top">
-        <span class="tag tag-outline">${esc(categoryName(t.category) || t.categoryName || 'General')}</span>
+        <span class="tag tag-outline">${esc(t.category?.name || 'General')}</span>
         ${t.pinned ? `<span class="tag tag-amber">${icons.pin} Pinned</span>` : ''}
         ${on ? `<span class="tag tag-green">${icons.bellOn} Subscribed</span>` : ''}
         ${project ? `<span class="tag tag-blue">${icons.beaker} Became ${project.code}</span>` : ''}
       </div>
       <h3>${esc(t.title)}</h3>
-      <p class="thread-excerpt">${esc(t.excerpt)}</p>
+      <p class="thread-excerpt">${esc(t.body.slice(0, 190))}</p>
       <div class="thread-foot">
-        ${avatar(author)}
-        <span><strong style="color:var(--propolis);font-weight:600">${esc(author.name)}</strong> · ${relDays(t.created)}</span>
+        ${avatar(t.author)}
+        <span><strong style="color:var(--propolis);font-weight:600">${esc(t.author.name)}</strong> · ${relDays(daysAgo(t.created_at))}</span>
         <span class="spacer"></span>
-        <span class="mono">${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}</span>
+        <span class="mono">${t.replyCount} ${t.replyCount === 1 ? 'reply' : 'replies'}</span>
         <span class="mono">${t.watchers} watching</span>
       </div>
     </a>`;
 }
 
-export function renderForum() {
-  const list = allThreads();
-  const pinned = list.filter((t) => t.pinned);
-  const rest = list.filter((t) => !t.pinned);
+/* created_at is a real Postgres timestamp now, not the old seed data's
+   day-offset-from-today number relDays expects. */
+function daysAgo(isoTimestamp) {
+  const then = new Date(isoTimestamp);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  then.setHours(0, 0, 0, 0);
+  return Math.round((then - today) / 86400000);
+}
+
+export function renderForum(data) {
+  const { categories, threads } = data;
+  const pinned = threads.filter((t) => t.pinned);
+  const rest = threads.filter((t) => !t.pinned);
   const subCount = state.subs.filter((s) => s.startsWith('thread:')).length;
 
   const html = `
@@ -73,17 +75,21 @@ export function renderForum() {
           <div class="panel-head">
             <h2>All topics</h2>
             <span class="spacer"></span>
-            <span class="caption mono">${list.length}</span>
+            <span class="caption mono">${threads.length}</span>
           </div>
-          <div>${[...pinned, ...rest].map(threadCard).join('')}</div>
+          <div>${threads.length ? [...pinned, ...rest].map(threadCard).join('') : `
+            <div class="empty" style="padding:var(--s6) 0">
+              <h3>No topics yet</h3>
+              <p>Be the first to start a discussion.</p>
+            </div>`}</div>
         </div>
 
         <div class="stack">
           <div class="panel">
             <div class="panel-head"><h2>Categories</h2></div>
             <div class="panel-body panel-body-flush">
-              ${forumCategories.map((c) => {
-                const n = list.filter((t) => t.category === c.id).length;
+              ${categories.map((c) => {
+                const n = threads.filter((t) => t.category?.id === c.id).length;
                 return `
                   <div class="sub">
                     <div class="sub-title">
@@ -101,8 +107,8 @@ export function renderForum() {
             <div class="panel-body">
               <p style="font-size:13px;color:var(--propolis-60)">
                 You are subscribed to ${subCount} ${subCount === 1 ? 'topic' : 'topics'}.
-                New posts are emailed to <span class="mono" style="font-size:12px">${esc(currentUser().wa)}</span>
-                on file with Wild Apricot.
+                New posts are emailed to <span class="mono" style="font-size:12px">${esc(currentUser().email || '')}</span>
+                on file.
               </p>
               <div class="field" style="margin-top:var(--s4)">
                 <label for="digest">Delivery</label>
@@ -121,13 +127,13 @@ export function renderForum() {
       </div>
     </div>`;
 
-  setTimeout(bindForum, 0);
+  setTimeout(() => bindForum(categories), 0);
   return html;
 }
 
-function bindForum() {
+function bindForum(categories) {
   const btn = document.getElementById('new-topic');
-  if (btn) btn.addEventListener('click', openComposer);
+  if (btn) btn.addEventListener('click', () => openComposer(categories));
 
   const digest = document.getElementById('digest');
   if (digest) digest.addEventListener('change', (e) => {
@@ -137,7 +143,7 @@ function bindForum() {
   });
 }
 
-function openComposer() {
+function openComposer(categories) {
   const body = `
     <p class="caption" style="margin-bottom:var(--s5)">
       Subscribers to the category you choose are notified as soon as you publish.
@@ -150,7 +156,7 @@ function openComposer() {
       <div class="field">
         <label for="t-cat">Category</label>
         <select id="t-cat">
-          ${forumCategories.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+          ${categories.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
         </select>
       </div>
       <div class="field">
@@ -164,10 +170,11 @@ function openComposer() {
     <button class="btn btn-primary" id="publish">Publish topic</button>`;
 
   const scrim = modal({ title: 'New topic', body, actions });
+  const publishBtn = scrim.querySelector('#publish');
 
-  scrim.querySelector('#publish').addEventListener('click', () => {
+  publishBtn.addEventListener('click', async () => {
     const title = scrim.querySelector('#t-title').value.trim();
-    const cat = scrim.querySelector('#t-cat').value;
+    const categoryId = scrim.querySelector('#t-cat').value;
     const text = scrim.querySelector('#t-body').value.trim();
 
     if (!title || !text) {
@@ -175,47 +182,52 @@ function openComposer() {
       return;
     }
 
-    const catName = categoryName(cat);
-    const t = addThread({ title, category: cat, categoryName: catName, body: text });
-    closeModal();
+    publishBtn.disabled = true;
+    publishBtn.textContent = 'Publishing…';
+    let t;
+    try {
+      t = await addThread({ title, categoryId, body: text });
+    } catch (err) {
+      toast(`Couldn't publish the topic: ${err.message}`);
+      publishBtn.disabled = false;
+      publishBtn.textContent = 'Publish topic';
+      return;
+    }
 
-    /* How many members would this actually email? */
-    const notified = 3 + Math.floor(Math.random() * 9);
-    toast(`Published to ${catName}. ${notified} subscribers notified by email.`);
+    closeModal();
+    const catName = categories.find((c) => c.id === categoryId)?.name || 'the category';
+    toast(`Published to ${catName}.`);
+    window.__aqbba_invalidateData();
     location.hash = `#/forum/${t.id}`;
   });
 }
 
 /* --- single thread -------------------------------------------------------- */
 
-export function renderThread(id) {
-  const t = allThreads().find((x) => x.id === id);
-  if (!t) return '';
-
+export function renderThread(data) {
+  const { thread: t, posts, watchers } = data;
   const key = `thread:${t.id}`;
   const on = isSubscribed(key);
-  const author = memberById(t.author);
-  const posts = [...t.posts, ...postsFor(t.id)];
 
-  const postHTML = posts.map((p) => {
-    const who = memberById(p.by);
+  const allPosts = [{ author: t.author, created_at: t.created_at, body: t.body }, ...posts];
+
+  const postHTML = allPosts.map((p) => {
     const paras = p.body.split('\n\n').map((x) => `<p>${esc(x)}</p>`).join('');
     return `
       <article class="post">
-        ${avatar(who)}
+        ${avatar(p.author)}
         <div>
           <div class="post-who">
-            <strong>${esc(who.name)}</strong>
-            <span class="caption">${esc(roleLabel(who.id))}</span>
+            <strong>${esc(p.author.name)}</strong>
+            <span class="caption">${esc(roleLabelFrom(p.author.roles))}</span>
             <span class="spacer"></span>
-            <span class="caption mono">${p.at === 0 ? 'just now' : relDays(p.at)}</span>
+            <span class="caption mono">${relDays(daysAgo(p.created_at))}</span>
           </div>
           <div class="post-body">${paras}</div>
         </div>
       </article>`;
   }).join('');
 
-  const watchers = members.slice(0, Math.min(6, t.watchers));
   const project = projectForThread(t.id);
 
   const html = `
@@ -223,7 +235,7 @@ export function renderThread(id) {
       <div style="width:100%">
         <div class="crumb">
           <a href="#/forum">Forum</a> ${icons.chevron}
-          <span>${esc(categoryName(t.category) || t.categoryName || 'General')}</span>
+          <span>${esc(t.category?.name || 'General')}</span>
         </div>
         <h1 style="font-size:clamp(1.375rem,2.4vw,1.75rem);max-width:34ch">${esc(t.title)}</h1>
       </div>
@@ -242,9 +254,7 @@ export function renderThread(id) {
           <div style="padding:var(--s5);border-top:1px solid var(--comb-shade);background:var(--comb)">
             <div class="field">
               <label for="reply">Add a reply</label>
-              <textarea id="reply" placeholder="${t.watchers > 1
-                ? `Reply to ${esc(author.name.split(' ')[0])} and the ${t.watchers - 1} other members watching.`
-                : `Reply to ${esc(author.name.split(' ')[0])}.`}"></textarea>
+              <textarea id="reply" placeholder="Reply to ${esc(t.author.name.split(' ')[0])}."></textarea>
             </div>
             <div class="row">
               <p class="caption" style="flex:1">
@@ -260,19 +270,19 @@ export function renderThread(id) {
             <div class="panel-head"><h2>Topic</h2></div>
             <div class="panel-body">
               <div class="row" style="gap:var(--s3)">
-                ${avatar(author)}
+                ${avatar(t.author)}
                 <div>
-                  <div style="font-size:13.5px;font-weight:600">${esc(author.name)}</div>
-                  <div class="caption">Opened ${relDays(t.created)}</div>
+                  <div style="font-size:13.5px;font-weight:600">${esc(t.author.name)}</div>
+                  <div class="caption">Opened ${relDays(daysAgo(t.created_at))}</div>
                 </div>
               </div>
               <div class="row" style="justify-content:space-between;margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
                 <span style="font-size:13px">Replies</span>
-                <span class="mono" style="font-size:13px">${posts.length - 1}</span>
+                <span class="mono" style="font-size:13px">${posts.length}</span>
               </div>
               <div class="row" style="justify-content:space-between;margin-top:var(--s2)">
                 <span style="font-size:13px">Watching</span>
-                <span class="mono" style="font-size:13px">${t.watchers}</span>
+                <span class="mono" style="font-size:13px">${watchers}</span>
               </div>
             </div>
           </div>
@@ -293,19 +303,6 @@ export function renderThread(id) {
                 </a>
               </div>
             </div>` : ''}
-
-          <div class="panel">
-            <div class="panel-head"><h2>Members watching</h2></div>
-            <div class="panel-body">
-              <div class="row row-wrap" style="gap:var(--s2)">
-                ${watchers.map((m) => `<span title="${esc(m.name)}">${avatar(m)}</span>`).join('')}
-                ${t.watchers > watchers.length ? `<span class="caption mono">+${t.watchers - watchers.length}</span>` : ''}
-              </div>
-              <p class="caption" style="margin-top:var(--s4)">
-                Everyone here is emailed when a new reply is posted.
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </div>`;
@@ -313,16 +310,22 @@ export function renderThread(id) {
   setTimeout(() => {
     const btn = document.getElementById('post-reply');
     if (!btn) return;
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const box = document.getElementById('reply');
       const text = box.value.trim();
       if (!text) { toast('Write something before posting.'); return; }
-      addPost(t.id, text);
-      if (!isSubscribed(key)) state.subs.push(key);
-      const others = Math.max(0, t.watchers - 1);
-      toast(others
-        ? `Reply posted. ${others} watching ${others === 1 ? 'member' : 'members'} notified.`
-        : 'Reply posted.');
+      btn.disabled = true;
+      btn.textContent = 'Posting…';
+      try {
+        await addPost(t.id, text);
+      } catch (err) {
+        toast(`Couldn't post the reply: ${err.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Post reply';
+        return;
+      }
+      toast('Reply posted.');
+      window.__aqbba_invalidateData();
       window.__aqbba_render();
     });
   }, 0);

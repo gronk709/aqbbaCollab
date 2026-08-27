@@ -4,26 +4,20 @@
    ========================================================================== */
 
 import {
-  threads, allSubs, notifications, projects, apiaries, inspections, queenLines,
+  notifications, projects, apiaries, inspections, queenLines,
   members as seedMembers, currentUser as seedCurrentUser,
 } from './data.js';
 import { getSupabase } from './supabaseClient.js';
 
 const KEY = 'aqbba.session.v1';
 
-const seedSubs = () => {
-  const set = new Set();
-  threads.filter((t) => t.subscribed).forEach((t) => set.add(`thread:${t.id}`));
-  allSubs.filter((s) => s.subscribed).forEach((s) => set.add(`repo:${s.id}`));
-  return [...set];
-};
-
 const defaults = () => ({
   signedIn: false,
-  subs: seedSubs(),
+  /* Loaded fresh from Supabase (loadMySubscriptions) whenever the forum or
+     repository is visited — not seeded from anywhere locally, unlike
+     before real subscriptions existed. */
+  subs: [],
   read: notifications.filter((n) => !n.unread).map((n) => n.id),
-  newThreads: [],
-  newPosts: {},
   newProjects: [],
   projectJoins: [],
   projectParticipants: {},
@@ -160,35 +154,76 @@ export function signIn() {
   commit();
 }
 
-/* --- subscriptions ------------------------------------------------------- */
+/* --- subscriptions ---------------------------------------------------------
+   Phase 3 of the backend migration (see the plan doc) — real rows in the
+   `subscriptions` table now, replacing the local 'thread:t1'-style keys
+   this app always displayed with. isSubscribed still reads the same
+   state.subs array of "type:id" keys synchronously, unchanged — only
+   where that array comes from is different: loadMySubscriptions()
+   (called by the forum/repository route loaders) replaces it with this
+   member's real subscription rows, and toggleSub is now async, writing
+   through to Postgres before updating it locally. */
 
 export const isSubscribed = (key) => state.subs.includes(key);
 
-export function toggleSub(key) {
-  const i = state.subs.indexOf(key);
-  if (i === -1) state.subs.push(key); else state.subs.splice(i, 1);
+export async function loadMySubscriptions() {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('subscribable_type, subscribable_id')
+    .eq('member_id', me.id);
+  if (error) throw error;
+  state.subs = data.map((s) => `${s.subscribable_type}:${s.subscribable_id}`);
+  commit();
+}
+
+export async function toggleSub(key) {
+  const me = requireRealMember();
+  const [type, id] = key.split(':');
+  const supabase = await getSupabase();
+  if (state.subs.includes(key)) {
+    const { error } = await supabase.from('subscriptions').delete()
+      .eq('member_id', me.id).eq('subscribable_type', type).eq('subscribable_id', id);
+    if (error) throw error;
+    state.subs = state.subs.filter((s) => s !== key);
+  } else {
+    const { error } = await supabase.from('subscriptions')
+      .insert({ member_id: me.id, subscribable_type: type, subscribable_id: id });
+    if (error) throw error;
+    state.subs.push(key);
+  }
   commit();
   return state.subs.includes(key);
+}
+
+/* Aggregate subscriber counts for a batch of same-type ids in one round
+   trip (the subscriber_counts RPC — see the migration) — e.g. every
+   thread on the forum index at once, rather than one query per thread.
+   Missing ids (nobody subscribed) just don't come back as rows, so this
+   fills those in as 0 for a plain lookup object. */
+export async function subscriberCounts(type, ids) {
+  if (!ids.length) return {};
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.rpc('subscriber_counts', { p_type: type, p_ids: ids });
+  if (error) throw error;
+  const counts = Object.fromEntries(ids.map((id) => [id, 0]));
+  data.forEach((row) => { counts[row.subscribable_id] = Number(row.cnt); });
+  return counts;
 }
 
 /* --- notifications ------------------------------------------------------- */
 
 export function feed() {
-  const generated = [
-    ...state.newThreads.map((t) => ({
-      id: `gn-${t.id}`, kind: 'thread', at: t.at, source: t.categoryName, by: currentUser().id,
-      text: `You created the topic “${t.title}”. Subscribers have been notified.`, to: `#/forum/${t.id}`,
-    })),
-    /* A "your listing is live" echo used to be generated here from
-       state.newListings, same pattern as the thread one above — removed
-       now that marketplace listings are real Supabase rows, not local
-       session state. Notifications move to Postgres in their own later
-       phase; rebuilding this specific echo against real data belongs
-       there; see the plan doc for the phase ordering rationale (feed
-       aggregates activity from every migrated entity, so it's migrated
-       last, once, rather than partially rebuilt each phase). */
-  ];
-  return [...generated, ...notifications]
+  /* "You created the topic X" / "Your listing is live" echoes used to be
+     generated here from local newThreads/newListings session state — both
+     removed now that threads and listings are real Supabase rows.
+     Notifications move to Postgres in their own later phase; rebuilding
+     these echoes against real data belongs there — see the plan doc for
+     the phase ordering rationale (feed aggregates activity from every
+     migrated entity, so it's migrated last, once, rather than partially
+     rebuilt after each phase). */
+  return [...notifications]
     .map((n) => ({ ...n, unread: !state.read.includes(n.id) }))
     .sort((a, b) => b.at - a.at);
 }
@@ -204,26 +239,143 @@ export function markRead(id) {
   if (!state.read.includes(id)) { state.read.push(id); commit(); }
 }
 
-/* --- member-authored content -------------------------------------------- */
+/* --- forum -------------------------------------------------------------
+   Phase 3 of the backend migration (see the plan doc). Like marketplace
+   listings in Phase 2, every function here requires a real Wild Apricot
+   sign-in (requireRealMember, defined below) — and like marketplace, the
+   six old seed discussions aren't carried over (fake seed authors, no
+   real `members` row), so the forum starts empty.
 
-export function addThread({ title, category, categoryName, body }) {
-  const t = {
-    id: `ut-${Date.now()}`, title, category, categoryName, body,
-    author: currentUser().id, at: 0, created: 0, replies: 0, watchers: 1,
+   Author info (name/initials/roles) is embedded directly in these queries
+   rather than resolved via memberById/roleLabel — those only know about
+   the seed roster plus whichever single member is currently signed in
+   (state.remoteMember), not an arbitrary real author of someone else's
+   post, since the members directory itself hasn't moved to Postgres yet. */
+
+const MEMBER_DISPLAY_FIELDS = 'id, name, initials, member_roles!member_id(role_name)';
+
+function withRoles(m) {
+  return m ? { ...m, roles: (m.member_roles || []).map((r) => r.role_name) } : m;
+}
+
+export async function loadForumThreads() {
+  requireRealMember();
+  const supabase = await getSupabase();
+
+  const [, { data: categories, error: catErr }, { data: threads, error: threadErr }] = await Promise.all([
+    loadMySubscriptions(),
+    supabase.from('forum_categories').select('id, name').order('sort_order'),
+    supabase.from('forum_threads')
+      .select(`id, title, body, pinned, created_at, category:forum_categories(id, name), author:members(${MEMBER_DISPLAY_FIELDS}), forum_posts(count)`)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false }),
+  ]);
+  if (catErr) throw catErr;
+  if (threadErr) throw threadErr;
+
+  const counts = await subscriberCounts('thread', threads.map((t) => t.id));
+  return {
+    categories,
+    threads: threads.map((t) => ({
+      ...t,
+      author: withRoles(t.author),
+      replyCount: t.forum_posts[0]?.count ?? 0,
+      watchers: counts[t.id] ?? 0,
+    })),
   };
-  state.newThreads.unshift(t);
-  state.subs.push(`thread:${t.id}`);
-  commit();
-  return t;
 }
 
-export function addPost(threadId, body) {
-  if (!state.newPosts[threadId]) state.newPosts[threadId] = [];
-  state.newPosts[threadId].push({ by: currentUser().id, at: 0, body });
-  commit();
+export async function loadThread(id) {
+  requireRealMember();
+  const supabase = await getSupabase();
+  await loadMySubscriptions();
+
+  const { data: thread, error: threadErr } = await supabase
+    .from('forum_threads')
+    .select(`id, title, body, pinned, created_at, category:forum_categories(id, name), author:members(${MEMBER_DISPLAY_FIELDS})`)
+    .eq('id', id)
+    .single();
+  if (threadErr) throw threadErr;
+
+  const { data: posts, error: postsErr } = await supabase
+    .from('forum_posts')
+    .select(`id, body, created_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
+    .eq('thread_id', id)
+    .order('created_at', { ascending: true });
+  if (postsErr) throw postsErr;
+
+  const watchers = (await subscriberCounts('thread', [id]))[id] ?? 0;
+
+  return {
+    thread: { ...thread, author: withRoles(thread.author) },
+    posts: posts.map((p) => ({ ...p, author: withRoles(p.author) })),
+    watchers,
+  };
 }
 
-export const postsFor = (threadId) => state.newPosts[threadId] || [];
+export async function addThread({ title, categoryId, body }) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('forum_threads')
+    .insert({ category_id: categoryId, author_id: me.id, title, body })
+    .select('id')
+    .single();
+  if (error) throw error;
+  await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'thread', subscribable_id: data.id });
+  return data;
+}
+
+export async function addPost(threadId, body) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('forum_posts').insert({ thread_id: threadId, author_id: me.id, body });
+  if (error) throw error;
+  if (!isSubscribed(`thread:${threadId}`)) {
+    await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'thread', subscribable_id: threadId });
+    state.subs.push(`thread:${threadId}`);
+    commit();
+  }
+}
+
+/* --- repository --------------------------------------------------------
+   Also Phase 3, but unlike the forum, the track/sub-topic structure is
+   seeded (not purged) — see the migration's header comment for why: real
+   Markdown content on disk already depends on these exact sub-topic ids. */
+
+export async function loadRepository() {
+  requireRealMember();
+  const supabase = await getSupabase();
+  await loadMySubscriptions();
+  const { data: tracks, error: trackErr } = await supabase
+    .from('repository_tracks')
+    .select('id, ord, name, blurb, repository_sub_topics(id, name, summary)')
+    .order('sort_order')
+    .order('sort_order', { foreignTable: 'repository_sub_topics' });
+  if (trackErr) throw trackErr;
+  return tracks.map((t) => ({ ...t, subs: t.repository_sub_topics }));
+}
+
+export async function loadSubTopic(id) {
+  requireRealMember();
+  const supabase = await getSupabase();
+  await loadMySubscriptions();
+  const { data: sub, error } = await supabase
+    .from('repository_sub_topics')
+    .select('id, name, summary, track:repository_tracks(id, ord, name, blurb)')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+
+  const { data: siblingSubs, error: sibErr } = await supabase
+    .from('repository_sub_topics')
+    .select('id, name, summary')
+    .eq('track_id', sub.track.id)
+    .order('sort_order');
+  if (sibErr) throw sibErr;
+
+  return { sub: { id: sub.id, name: sub.name, summary: sub.summary }, track: { ...sub.track, subs: siblingSubs } };
+}
 
 /* --- marketplace -----------------------------------------------------------
    The first entity migrated to real Postgres tables (Phase 2 — see the
@@ -264,8 +416,6 @@ export async function addListing({ kind, title, price, unit, qty, detail }) {
   if (error) throw error;
   return data;
 }
-
-export const memberThreads = () => state.newThreads;
 
 /* --- projects -------------------------------------------------------------
    A project is joined, not subscribed to: joining records what the member
