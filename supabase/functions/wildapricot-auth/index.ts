@@ -32,7 +32,7 @@
    (js/views/managers.js) instead.
    -------------------------------------------------------------------------- */
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { corsHeadersFor } from '../_shared/cors.ts';
 
 const WA_TOKEN_URL = 'https://oauth.wildapricot.org/auth/token';
 const WA_API_BASE = 'https://api.wildapricot.org/v2.2';
@@ -42,15 +42,12 @@ const WA_SCOPE = 'contacts_me';
 
 const DEFAULT_ROLES = ['Member'];
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
-}
-
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const cors = corsHeadersFor(req.headers.get('origin'));
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
 
   let payload: { code?: string; redirectUri?: string };
