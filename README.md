@@ -301,15 +301,27 @@ real usage says otherwise. Setup, once you're ready to move off `serve.py`:
 real Postgres tables with Row Level Security, entity by entity — see
 `/root/.claude/plans/zazzy-swinging-scone.md` for the full phased plan (identity first,
 then marketplace, forum/repository, queen lines/breeders, apiaries/hives/inspections,
-projects, notifications, then a final cleanup pass). Phase 1 (identity — `members`,
-`member_roles`, `apiary_managers`, contact details, and the Wild Apricot auth bridge) has
-its schema and code written (`supabase/migrations/`, the extended Edge Function, and the
-`js/waAuth.js`/`js/store.js` client wiring) but **not yet applied to a live Supabase
-project or deployed** — that, plus a real Wild Apricot sign-in test against a Vercel
-preview deployment, is the checkpoint before merging this phase. Every other entity
-(apiaries, hives, inspections, forum, repository, marketplace, projects, notifications)
-still runs entirely from `js/data.js` mock data + `js/store.js`'s localStorage patches,
-unchanged, until its own phase comes up.
+projects, notifications, then a final cleanup pass).
+
+Phase 1 (identity — `members`, `member_roles`, `apiary_managers`, contact details, and
+the Wild Apricot auth bridge) is **live and verified**: a real Wild Apricot sign-in
+resolves to a real `members` row over a real Supabase session, RLS-gated.
+
+Phase 2 (marketplace listings — deliberately the simplest entity, done to prove the
+read/write/RLS pattern cheaply before the bigger ones) has its schema and code written
+(`supabase/migrations/20260828000000_marketplace_listings.sql`, `js/store.js`'s
+`loadListings`/`addListing`, `js/views/marketplace.js`) but the migration hasn't been
+applied to the live project yet. This is also the first entity requiring a real Wild
+Apricot sign-in specifically — the old simulated demo sign-in has no Supabase session and
+a non-UUID id, so it gets a clear "needs a real sign-in" message rather than being able to
+browse or post. It also introduces the app's first async route: `js/app.js`'s router now
+supports a `load` function per route, run before the (still-synchronous) view, with a
+loading state, an error panel with retry, and a small cache invalidated on real navigation
+or right after a successful write — the pattern every later phase reuses.
+
+Every other entity (apiaries, hives, inspections, forum, repository, projects,
+notifications) still runs entirely from `js/data.js` mock data + `js/store.js`'s
+localStorage patches, unchanged, until its own phase comes up.
 
 ## Wiring up the real integrations
 
@@ -369,10 +381,11 @@ the message and recipient count. Those call sites are the integration points: fo
 topic publish, forum reply, repository contribution. Subscriptions are already stored as
 stable keys (`thread:<id>`, `repo:<id>`, `cat:<id>`) ready to become subscription rows.
 
-**Persistence** — `js/store.js` still writes everything except identity to `localStorage`
-behind a small interface (`commit`, `toggleSub`, `addThread`, `addPost`, `addListing`).
-Identity (`loadSignedInMember`, `signOut`) now reads/writes real Supabase state instead;
-every other entity's functions in this module are next, one migration phase at a time.
+**Persistence** — `js/store.js` still writes most entities to `localStorage` behind a
+small interface (`commit`, `toggleSub`, `addThread`, `addPost`). Identity
+(`loadSignedInMember`, `signOut`) and marketplace listings (`loadListings`, `addListing`)
+now read/write real Supabase state instead; every other entity's functions in this module
+are next, one migration phase at a time.
 
 **Data** — `js/data.js` exports plain arrays and lookup helpers, each tagged `[PERMANENT]`
 (pure reference/formatting code that survives the migration) or `[SEED — Phase N]` (mock

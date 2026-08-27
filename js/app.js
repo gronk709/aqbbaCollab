@@ -5,7 +5,7 @@
 import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
   roleLabel, previewUser, setPreviewAs, currentUser, allMembers, loadSignedInMember,
-  isWebAdmin,
+  isWebAdmin, loadListings,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
@@ -57,7 +57,12 @@ const ROUTES = [
      "rs-graft/some-article" whole as a sub-topic id. */
   { test: /^#\/repository\/([^/]+)\/(.+)$/, view: renderArticle },
   { test: /^#\/repository\/(.+)$/,     view: renderSubTopic },
-  { test: /^#\/marketplace\/?$/,       view: renderMarketplace },
+  /* The one async route so far (Phase 2 — marketplace listings are real
+     Supabase rows now). `load` fetches the data render() awaits before
+     calling the still-synchronous view below with it — see render()'s own
+     comment for how the loading/error states and caching around this
+     work. */
+  { test: /^#\/marketplace\/?$/,       view: renderMarketplace, load: loadListings },
   { test: /^#\/notifications\/?$/,     view: renderNotifications },
 ];
 
@@ -109,7 +114,55 @@ function shellHTML(inner) {
     </div>`;
 }
 
-function render() {
+/* Routes with a `load` need their data fetched before the (still-
+   synchronous) view can render anything meaningful — so render() is
+   async for those, and does three things in order: paint a loading state
+   immediately (no blank flash), await the load into routeDataCache
+   (skipped if already cached — see the hashchange listener below, which
+   is what actually invalidates this on real navigation), then paint the
+   real view or an error panel. renderGen guards against a slow fetch
+   finishing after a newer render() has already started (e.g. the member
+   navigated away while it was in flight) — without it, the stale
+   response could overwrite whatever's on screen by then. */
+let renderGen = 0;
+const routeDataCache = new Map();
+
+/* Views that mutate server data (e.g. marketplace's "Publish listing")
+   call this after a successful write so the next render re-fetches
+   instead of showing stale cached data. One shared cache, so this is
+   just "forget everything" rather than tracking per-route keys — fine
+   while there's only a handful of async routes. */
+window.__aqbba_invalidateData = () => routeDataCache.clear();
+
+function loadingPanel() {
+  return `<div class="wrap"><div class="panel"><div class="empty"><h3>Loading…</h3></div></div></div>`;
+}
+
+function errorPanel(err) {
+  return `
+    <div class="wrap">
+      <div class="panel">
+        <div class="empty">
+          <h3>Couldn't load this page</h3>
+          <p>${esc(err && err.message ? err.message : 'Something went wrong.')}</p>
+          <button class="btn btn-primary" data-retry>Try again</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+const notFoundPanel = () => `
+  <div class="wrap">
+    <div class="empty">
+      <h3>That page isn't here</h3>
+      <p>The link may be out of date. Projects is a good place to pick up from.</p>
+      <a class="btn btn-primary" href="#/">Go to projects</a>
+    </div>
+  </div>`;
+
+async function render() {
+  const myGen = ++renderGen;
+
   if (!state.signedIn) {
     app.innerHTML = renderGate();
     bindGlobal();
@@ -117,22 +170,33 @@ function render() {
   }
 
   const hash = location.hash || '#/';
-  let inner = '';
+  let matched = null;
   for (const r of ROUTES) {
     const m = hash.match(r.test);
-    if (m) { inner = r.view(m[1], m[2]); break; }
-  }
-  if (!inner) {
-    inner = `
-      <div class="wrap">
-        <div class="empty">
-          <h3>That page isn't here</h3>
-          <p>The link may be out of date. Projects is a good place to pick up from.</p>
-          <a class="btn btn-primary" href="#/">Go to projects</a>
-        </div>
-      </div>`;
+    if (m) { matched = { r, m }; break; }
   }
 
+  if (matched && matched.r.load) {
+    if (!routeDataCache.has(matched.r)) {
+      app.innerHTML = shellHTML(loadingPanel());
+      bindGlobal();
+      try {
+        routeDataCache.set(matched.r, await matched.r.load(matched.m[1], matched.m[2]));
+      } catch (err) {
+        if (myGen !== renderGen) return;
+        app.innerHTML = shellHTML(errorPanel(err));
+        bindGlobal();
+        return;
+      }
+    }
+    if (myGen !== renderGen) return;
+    app.innerHTML = shellHTML(matched.r.view(routeDataCache.get(matched.r), matched.m[1], matched.m[2]));
+    bindGlobal();
+    document.body.classList.remove('rail-open');
+    return;
+  }
+
+  const inner = matched ? matched.r.view(matched.m[1], matched.m[2]) : notFoundPanel();
   app.innerHTML = shellHTML(inner);
   bindGlobal();
   document.body.classList.remove('rail-open');
@@ -149,6 +213,9 @@ function bindGlobal() {
 
   const out = app.querySelector('[data-signout]');
   if (out) out.addEventListener('click', async () => { await signOut(); location.hash = '#/'; render(); });
+
+  const retry = app.querySelector('[data-retry]');
+  if (retry) retry.addEventListener('click', () => { routeDataCache.clear(); render(); });
 
   const preview = app.querySelector('#preview-as');
   if (preview) preview.addEventListener('change', (e) => {
@@ -190,6 +257,11 @@ function refreshBadge() {
 /* --- boot ---------------------------------------------------------------- */
 
 window.addEventListener('hashchange', () => {
+  /* A real navigation, as opposed to a same-page re-render (filter clicks,
+     sign-out, etc.) — refetch async routes' data rather than reusing
+     whatever was last cached, so revisiting a page picks up anything
+     other members changed meanwhile. */
+  routeDataCache.clear();
   render();
   const main = document.getElementById('main');
   if (main) main.scrollIntoView({ block: 'start' });

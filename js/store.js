@@ -24,7 +24,6 @@ const defaults = () => ({
   read: notifications.filter((n) => !n.unread).map((n) => n.id),
   newThreads: [],
   newPosts: {},
-  newListings: [],
   newProjects: [],
   projectJoins: [],
   projectParticipants: {},
@@ -181,10 +180,14 @@ export function feed() {
       id: `gn-${t.id}`, kind: 'thread', at: t.at, source: t.categoryName, by: currentUser().id,
       text: `You created the topic “${t.title}”. Subscribers have been notified.`, to: `#/forum/${t.id}`,
     })),
-    ...state.newListings.map((l) => ({
-      id: `gl-${l.id}`, kind: 'market', at: l.at, source: 'Marketplace', by: currentUser().id,
-      text: `Your listing “${l.title}” is live.`, to: '#/marketplace',
-    })),
+    /* A "your listing is live" echo used to be generated here from
+       state.newListings, same pattern as the thread one above — removed
+       now that marketplace listings are real Supabase rows, not local
+       session state. Notifications move to Postgres in their own later
+       phase; rebuilding this specific echo against real data belongs
+       there; see the plan doc for the phase ordering rationale (feed
+       aggregates activity from every migrated entity, so it's migrated
+       last, once, rather than partially rebuilt each phase). */
   ];
   return [...generated, ...notifications]
     .map((n) => ({ ...n, unread: !state.read.includes(n.id) }))
@@ -223,11 +226,44 @@ export function addPost(threadId, body) {
 
 export const postsFor = (threadId) => state.newPosts[threadId] || [];
 
-export function addListing(listing) {
-  const l = { ...listing, id: `ul-${Date.now()}`, at: 0, posted: 0, seller: currentUser().id };
-  state.newListings.unshift(l);
-  commit();
-  return l;
+/* --- marketplace -----------------------------------------------------------
+   The first entity migrated to real Postgres tables (Phase 2 — see the
+   plan doc) — deliberately the simplest one, to prove the read/write/RLS
+   pattern before the bigger entities. Both functions require a real
+   Wild Apricot sign-in (state.remoteMember): the simulated demo identity
+   (seedCurrentUser) has a fake, non-UUID id that no real `members` row
+   matches, and has no Supabase session at all, so RLS would reject it —
+   checked explicitly here for a clear error rather than a raw Postgres
+   one. */
+
+function requireRealMember() {
+  if (!state.remoteMember) {
+    throw new Error('This needs a real Wild Apricot sign-in — the demo sign-in can\'t be used here yet.');
+  }
+  return state.remoteMember;
+}
+
+export async function loadListings() {
+  requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('marketplace_listings')
+    .select('id, kind, title, price, unit, qty, detail, state, created_at, seller:members(id, name, initials)')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function addListing({ kind, title, price, unit, qty, detail }) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('marketplace_listings')
+    .insert({ seller_id: me.id, kind, title, price, unit, qty, detail, state: me.state || null })
+    .select('id, kind, title, price, unit, qty, detail, state, created_at, seller:members(id, name, initials)')
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export const memberThreads = () => state.newThreads;
