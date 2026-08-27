@@ -2,23 +2,23 @@
    Application shell + hash router.
    ========================================================================== */
 
-import { currentUser, members } from './data.js';
 import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
-  roleLabel, previewUser, setPreviewAs,
+  roleLabel, previewUser, setPreviewAs, currentUser, allMembers, signInAsWildApricotMember,
+  isWebAdmin,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderApiaries, renderApiary } from './views/apiaries.js';
-import { renderManager } from './views/managers.js';
+import { renderManager, renderMembers } from './views/managers.js';
 import { renderProjects, renderProject } from './views/projects.js';
 import { renderForum, renderThread } from './views/forum.js';
 import { renderRepository, renderSubTopic, renderArticle } from './views/repository.js';
 import { renderMarketplace } from './views/marketplace.js';
 import { renderNotifications } from './views/notifications.js';
 import { loadContent } from './content.js';
-import { isWildApricotCallback, consumeWildApricotCallback } from './waAuth.js';
+import { isWildApricotCallback, consumeWildApricotCallback, completeWildApricotLogin } from './waAuth.js';
 
 const app = document.getElementById('app');
 
@@ -35,12 +35,14 @@ const NAV = [
   { path: '#/marketplace', label: 'Marketplace',  icon: 'tag' },
   { group: 'You' },
   { path: '#/notifications', label: 'Notifications', icon: 'bell', badge: unreadCount },
+  { path: '#/members',     label: 'Members',      icon: 'user', adminOnly: true },
 ];
 
 const ROUTES = [
   { test: /^#\/?$/,                    view: renderProjects },
   { test: /^#\/apiaries\/?$/,          view: renderApiaries },
   { test: /^#\/apiaries\/(.+)$/,       view: renderApiary },
+  { test: /^#\/members\/?$/,           view: renderMembers },
   { test: /^#\/managers\/(.+)$/,       view: renderManager },
   { test: /^#\/projects\/?$/,          view: renderProjects },
   /* The dashboard is a topic area of the VSH program (PRJ-00), not a page in
@@ -60,8 +62,10 @@ const ROUTES = [
 ];
 
 function shellHTML(inner) {
+  const me = currentUser();
+  const canManageMembers = isWebAdmin(me.id);
   const hash = location.hash || '#/';
-  const nav = NAV.map((item) => {
+  const nav = NAV.filter((item) => !item.adminOnly || canManageMembers).map((item) => {
     if (item.group) return `<div class="rail-group"><span>${item.group}</span></div>`;
     const active = hash.startsWith(item.path) || (item.home && /^#\/?$/.test(hash));
     const n = item.badge ? item.badge() : 0;
@@ -85,18 +89,18 @@ function shellHTML(inner) {
         <nav>${nav}</nav>
         <div class="rail-foot">
           <div class="rail-who">
-            ${avatar(currentUser)}
+            ${avatar(me)}
             <div>
-              <strong>${esc(currentUser.name)}</strong>
-              <span>${esc(roleLabel(currentUser.id))}</span>
+              <strong>${esc(me.name)}</strong>
+              <span>${esc(roleLabel(me.id))}</span>
             </div>
           </div>
           <button class="rail-out" data-signout>Sign out</button>
 
           <div class="rail-preview">
-            <label for="preview-as">Preview apiary access as <span title="Testing only — doesn't change who posts, joins or lists things as you.">(prototype)</span></label>
+            <label for="preview-as">Preview access as <span title="Testing only — doesn't change who posts to the forum, joins projects, or lists items in the marketplace as you.">(prototype)</span></label>
             <select id="preview-as">
-              ${members.map((m) => `<option value="${m.id}" ${previewUser().id === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
+              ${allMembers().map((m) => `<option value="${m.id}" ${previewUser().id === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
             </select>
           </div>
         </div>
@@ -149,7 +153,7 @@ function bindGlobal() {
   const preview = app.querySelector('#preview-as');
   if (preview) preview.addEventListener('change', (e) => {
     setPreviewAs(e.target.value);
-    toast(`Previewing apiary access as ${previewUser().name}.`);
+    toast(`Previewing access as ${previewUser().name}.`);
     render();
   });
 
@@ -166,7 +170,7 @@ function bindGlobal() {
       });
       const what = btn.dataset.subLabel || 'this topic';
       toast(now
-        ? `Subscribed to ${what}. New posts will go to ${currentUser.name.split(' ')[0].toLowerCase()}@…, matching your digest setting.`
+        ? `Subscribed to ${what}. New posts will go to ${currentUser().name.split(' ')[0].toLowerCase()}@…, matching your digest setting.`
         : `Unsubscribed from ${what}. No further email.`);
       refreshBadge();
     });
@@ -199,16 +203,23 @@ window.__aqbba_render = render;
 
 /* Wild Apricot redirects back with a real page load and ?code=/?error= in
    the query string, not the hash — so this has to run once at boot, ahead
-   of the hash router, regardless of sign-in state. There is deliberately no
-   path here that signs the member in: that needs the server-side token
-   exchange described in js/waAuth.js, which doesn't exist yet. This only
-   reports what happened and leaves the gate showing. */
+   of the hash router, regardless of sign-in state. completeWildApricotLogin
+   calls the server-side token exchange (js/waAuth.js); its result is handed
+   to signInAsWildApricotMember, which resolves it to a member (matching by
+   email, or auto-provisioning a minimal record on first sign-in) and makes
+   currentUser() resolve to them from here on. */
 if (isWildApricotCallback()) {
   const result = consumeWildApricotCallback();
   if (result.error) {
     toast(`Wild Apricot sign-in failed: ${result.error}`);
   } else {
-    toast('Wild Apricot returned a valid authorization code — sign-in can\'t complete until the server-side exchange exists. See js/waAuth.js.');
+    try {
+      const member = await completeWildApricotLogin(result.code);
+      signInAsWildApricotMember(member);
+      toast(`Welcome, ${member.name.split(' ')[0]}.`);
+    } catch (err) {
+      toast(`Wild Apricot sign-in failed: ${err.message}`);
+    }
   }
 }
 

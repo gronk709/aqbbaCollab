@@ -1,19 +1,21 @@
 /* ==========================================================================
-   Wild Apricot OAuth — groundwork only.
+   Wild Apricot OAuth.
 
    This module builds and consumes the parts of the authorization-code flow
    that are safe to run in a browser: the redirect to Wild Apricot's login,
-   and parsing what it sends back. It deliberately does NOT exchange the
-   returned code for a token — that step requires the application's client
-   secret, which must never reach a browser, so it has to run on a server
-   that doesn't exist yet (see README → "Wiring up the real integrations").
+   parsing what it sends back, and — once SUPABASE_CONFIG and WA_CONFIG.
+   clientId below are filled in — calling the server-side piece that
+   exchanges the code for a token. That exchange itself needs the
+   application's client secret, which must never reach a browser, so it
+   runs in a Supabase Edge Function instead: see
+   supabase/functions/wildapricot-auth/index.ts.
 
    Until WA_CONFIG.clientId is filled in below, everything here stays
    dormant and js/views/gate.js keeps using its simulated sign-in — nothing
    about the current demo changes on its own.
 
    --------------------------------------------------------------------------
-   Setup checklist (do this in the Wild Apricot admin panel first):
+   Setup checklist:
 
    1. Sign in to the AQBBA Wild Apricot site as Administrator.
    2. Settings → find "API" (older admin: Settings → Global settings → API;
@@ -30,25 +32,44 @@
         once real hosting exists — a localhost URI only works for you,
         testing locally; production needs the real deployed URL added here
         (WA allows multiple redirect URIs per application).
-   4. Copy the Client ID (public — fine to put in this file) and Client
-      Secret (never put this in frontend code — it belongs only in the
-      future server-side token exchange).
+   4. Copy the Client ID (public — fine to put in this file, WA_CONFIG.
+      clientId below) and Client Secret (never put this in frontend code or
+      this repo — set it as a Supabase secret instead, see step 6).
+   5. Fill in SUPABASE_CONFIG below with the project's URL and anon key
+      (Supabase dashboard → Project Settings → API — both are public/safe
+      in frontend code, unlike the service role key).
+   6. Deploy the Edge Function and set its secrets:
+        supabase functions deploy wildapricot-auth
+        supabase secrets set WA_CLIENT_ID=<client id> WA_CLIENT_SECRET=<client secret>
    -------------------------------------------------------------------------- */
 
 export const WA_CONFIG = {
   /* Fill in after completing the setup checklist above. */
-  clientId: '',
+  clientId: 'AQBBACollab',
   /* Must exactly match a redirect URI registered on the WA application.
      window.location.origin means "wherever this is actually running" —
      fine for now, but pin this to a real URL once hosting is chosen, since
      it must be in WA's allow-list before login will work. */
   redirectUri: `${window.location.origin}/`,
-  authorizeUrl: 'https://oauth.wildapricot.org/auth/login',
+  /* This is AQBBA's own Wild Apricot site (custom domain), not a shared WA
+     host — per WA's docs, the authorize/login step happens on the
+     association's own site; only the later token exchange (see
+     supabase/functions/wildapricot-auth) uses the shared oauth.wildapricot.org
+     host. Update this if the custom domain ever changes. */
+  authorizeUrl: 'https://aqbba.org.au/sys/login/OAuthLogin',
   /* "contacts_me" scopes the token to the logged-in member's own record —
      the right scope for member self-service. Broader scopes (e.g. "contacts"
      for reading the full directory) would need explaining to members during
      consent and aren't needed for anything built so far. */
   scope: 'contacts_me',
+};
+
+export const SUPABASE_CONFIG = {
+  url: 'https://dtzegdvjgzmlhtjlzzyp.supabase.co',
+  /* Public anon key — safe in frontend code, distinct from the service
+     role key which must never leave server-side environment variables.
+     Supabase dashboard → Project Settings → API. */
+  anonKey: 'sb_publishable_K6Sv_hrNXzSdn0gbCyXzYg_uEZoSqju',
 };
 
 export const isConfigured = () => Boolean(WA_CONFIG.clientId);
@@ -71,7 +92,6 @@ export function startWildApricotLogin() {
   sessionStorage.setItem(STATE_KEY, state);
 
   const url = new URL(WA_CONFIG.authorizeUrl);
-  url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', WA_CONFIG.clientId);
   url.searchParams.set('redirect_uri', WA_CONFIG.redirectUri);
   url.searchParams.set('scope', WA_CONFIG.scope);
@@ -111,30 +131,32 @@ export function consumeWildApricotCallback() {
   return { code };
 }
 
-/* --------------------------------------------------------------------------
-   Deliberately not implemented here: exchanging `code` for an access token.
-   That's a server-side call —
+/* Exchanges `code` for a signed-in member's identity by calling the
+   Supabase Edge Function that holds the client secret — see
+   supabase/functions/wildapricot-auth/index.ts for what actually happens
+   server-side (token exchange, then fetching the member's own Wild Apricot
+   contact record). Throws if SUPABASE_CONFIG isn't filled in yet, or if the
+   function call itself fails; js/app.js's boot-time caller catches this and
+   toasts the failure rather than leaving the page stuck.
 
-     POST https://oauth.wildapricot.org/auth/token
-     Authorization: Basic base64(client_id:client_secret)
-     Content-Type: application/x-www-form-urlencoded
-     grant_type=authorization_code&code=<code>&redirect_uri=<redirectUri>
+   Returns { waContactId, name, email, membershipLevel, roles } — the shape
+   js/store.js's signInAsWildApricotMember expects. */
+export async function completeWildApricotLogin(code) {
+  if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.anonKey) {
+    throw new Error('SUPABASE_CONFIG is not set — see the setup checklist at the top of js/waAuth.js.');
+  }
 
-   — followed by, using the returned access_token:
+  const res = await fetch(`${SUPABASE_CONFIG.url}/functions/v1/wildapricot-auth`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${SUPABASE_CONFIG.anonKey}`,
+      apikey: SUPABASE_CONFIG.anonKey,
+    },
+    body: JSON.stringify({ code, redirectUri: WA_CONFIG.redirectUri }),
+  });
 
-     GET https://api.wildapricot.org/v2.2/accounts/{accountId}/contacts/me
-
-   to fetch the signed-in member's own contact record. Once hosting exists,
-   that pair of calls lives in one server endpoint (e.g. an API route), and
-   completeWildApricotLogin(code) below is what would call it:
-
-   export async function completeWildApricotLogin(code) {
-     const res = await fetch('/api/auth/wildapricot', {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ code, redirectUri: WA_CONFIG.redirectUri }),
-     });
-     if (!res.ok) throw new Error('Sign-in failed.');
-     return res.json(); // the member record store.js's signIn() would use
-   }
-   -------------------------------------------------------------------------- */
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'Sign-in failed.');
+  return body;
+}

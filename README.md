@@ -40,24 +40,60 @@ there is no top-level Dashboard nav item any more.
 
 **Research dashboard** (`#/projects/p0/dashboard`) — a topic area of PRJ-00, reached from
 the program's summary page and breadcrumbed back to it. Program-wide figures, then a card
-per research apiary showing location, coordinates, program stage (initialising /
-assessment / maintenance), manager, hive count, mean VSH, hives in treatment and hives
-treatment-free for three or more seasons. Below that: the honeycomb hive grid, a colony
-status breakdown, upcoming and recently completed inspections, and the contributing
-breeders with their queen lines.
+per research apiary showing location, coordinates, apiary status (Establishing /
+Assessment / Maintenance / Re-queening), manager, hive count, mean VSH, hives being
+treated and hives treatment-free for three or more seasons. Below that: the honeycomb
+hive grid, a colony status breakdown (hive status is its own separate field — Thriving /
+Good / Average / Poor / Treating, recorded per hive and updatable via Log Inspection),
+upcoming and recently completed inspections, and the contributing breeders with their
+queen lines — the program's other two editable records, Web Admin only:
+
+- **Queen lines** — name, breeder, generation, mean VSH, and a note. Hives reference a
+  line by an internal code (`hive.line`), same reasoning as hive ids, but that code is
+  never shown or entered anywhere — members only see and edit the line's name, which can
+  change over time, while the code stays fixed and is generated automatically
+  (`js/store.js`'s `addQueenLine`/`lineByCode`/`allQueenLines`).
+- **Breeders** — a queen line's breeder is either an existing member, or a standalone
+  breeder record (name, state, note) for someone contributing a line who isn't a
+  registered platform member. Standalone breeders have no login and no roles; they exist
+  purely to be credited on a line (`addBreeder`/`breederById` in `js/store.js`), since this
+  app has no general "Add Member" feature — membership is meant to come from Wild Apricot,
+  not be created here.
+
+Every apiary and hive field is editable after creation, not just status — **Edit apiary**
+(on the apiary's own page) covers name, region, coordinates, year established, status,
+manager and dominant flora; **Edit** on a selected hive's readout covers everything set
+at registration (status, queen line, queen ID, queen marking, hive configuration, UBEEO/
+Harbo results, treatment-free seasons, comments) except the hive ID itself, which stays
+fixed once assigned since inspections and other records refer to it. Both are stored the
+same way as role/contact overrides — `updateApiary` / `updateHive` in `js/store.js` —
+merged on top of the seed or member-added record whenever it's read, and gated by the
+same manager/Web Admin permission as adding a hive or logging an inspection at that site.
 
 **Apiary records** (`#/apiaries`) — a comparison table across sites, then per-apiary: the
 full hive grid, queen lines present with site performance measured against each line's
 program mean, the complete inspection schedule, site detail, and which research projects
 are currently running there. This is also where the program's own data gets maintained:
 **Add apiary** registers a new research site, **Add hive** registers a new hive at a site
-(the hive ID is assigned automatically), and **Log inspection** records a completed or
-scheduled inspection. These three are meaningfully different from the member-facing
-composers elsewhere (forum, marketplace, repository) — they alter the program's research
-data rather than adding social content, so in a production build they'd want to be
-restricted to apiary managers and the research coordinator rather than open to any member.
-The prototype doesn't enforce that distinction since there's only one signed-in user to
-test with, but it's a real access-control decision for later, not an oversight.
+(the hive ID and the queen's own ID are both entered at registration, validated for
+uniqueness against every existing hive — the queen's breeding line, a separate field, is
+picked from a dropdown), and **Log inspection** records a completed or scheduled
+inspection against one, several, or all of an apiary's hives. Inspections are
+hive-level, not just an apiary headcount: the form's Apiary field is itself a picker
+(scoped to whichever sites the signed-in member can edit), its Hives field is a checklist
+of that apiary's actual hives with an "All hives" toggle, and an optional Status field
+updates every selected hive's status the moment the inspection is saved — so an inspection
+is how a hive's status changes after it's first registered, not just a log entry (see
+`setHiveStatus` / `addInspection` in `js/store.js`). Inspection type is one of three
+categories — Assessment, Maintenance, Biosecurity — rather than a specific assay name;
+older, more specific seed inspections keep that detail in their notes instead. These
+maintenance flows are meaningfully different from the member-facing composers elsewhere
+(forum, marketplace, repository) — they alter the program's research data rather than
+adding social content, so they're access-gated: adding a new apiary is Web Admin only,
+and adding a hive or logging an inspection at an existing site requires Web Admin or that
+site's manager grant (see "Roles & apiary access" below). The prototype enforces this
+today via the **"Preview access as"** selector, since there's only one real signed-in
+user to test with otherwise.
 
 **Manager details** (`#/managers/:id`) — phone, email and postal address for whoever is
 listed as an apiary's manager. Phone and email are mandatory once a record is saved
@@ -71,21 +107,39 @@ way, since who runs a given site is whoever `apiary.manager` names, not a fixed 
 
 **Roles & apiary access** — also on the manager details page. A member can hold several
 roles at once (e.g. a Breeder who is also an Apiary Manager), edited from a fixed list
-(`roleOptions` in `js/data.js`, which includes "Operator" alongside the original roles).
-Holding the "Apiary Manager" title is not itself a permission — actual edit access to a
-site (adding a hive, logging an inspection, and creating new apiaries) is a separate
-grant, checked per apiary. A member with that grant for Barrowfield cannot touch
-Oradale's data unless separately granted there too; the Research Coordinator can always
-edit every site. Editing roles and grants is itself restricted to the Coordinator.
+(`roleOptions` in `js/data.js`), each carrying a short description shown next to its
+checkbox in the roles editor:
 
-This app has exactly one real signed-in identity, so the restriction above would never
-actually trigger in testing — everyone who opens it is the Coordinator. To make it
-demonstrable, the rail has a **"Preview apiary access as"** selector, clearly marked
-`(prototype)`. It only affects the three gated actions (add hive, log inspection, add
-apiary) — authorship of forum posts, listings and project joins always stays the real
-signed-in member. This selector has no production equivalent; a real deployment derives
-permissions from the actual authenticated Wild Apricot member, and this whole mechanism
-(`previewUser`/`setPreviewAs` in `js/store.js`) should be deleted once that's wired up.
+- **Web Admin** — superuser; full access everywhere, including every apiary and every
+  member's roles/access grants.
+- **Apiary Manager** — complete CRUD privileges for the apiary they manage.
+- **Operator** — assists the Apiary Manager with inspections and data updates; change
+  and update privileges only, no create or delete.
+- **Breeder** — change and update privileges only. Replaces the old Breeder — Level 1/2/3,
+  Instrumental Insem., and Laboratory — Assays roles, which have been retired.
+- **Member** — read-only on apiary data and the repository; full forum access (publish,
+  subscribe, notifications) and can list items in the Marketplace.
+- **Creator** — everything Member has, plus the ability to contribute repository content.
+
+Holding the "Apiary Manager" title is not itself a site-level permission — actual edit
+access to a specific site (adding a hive, logging an inspection) is a separate grant,
+checked per apiary via `canEditApiary` in `js/store.js`. A member with that grant for
+Barrowfield cannot touch Oradale's data unless separately granted there too; Web Admin
+can always edit every site, and creating a brand-new apiary is Web Admin only.
+Repository contribution (`canContributeRepository` in `js/store.js`) is gated by role
+instead — to the four operational roles above plus Creator — so a plain Member sees the
+repository read-only, with no Contribute button. Editing roles and grants themselves is
+restricted to Web Admin.
+
+This app has exactly one real signed-in identity, so these restrictions would never
+actually trigger in testing — everyone who opens it is Web Admin. To make them
+demonstrable, the rail has a **"Preview access as"** selector, clearly marked
+`(prototype)`. It affects the apiary actions above (add hive, log inspection, add
+apiary) and the repository's Contribute button — authorship of forum posts, listings and
+project joins always stays the real signed-in member. This selector has no production
+equivalent; a real deployment derives permissions from the actual authenticated Wild
+Apricot member, and this whole mechanism (`previewUser`/`setPreviewAs` in `js/store.js`)
+should be deleted once that's wired up.
 
 **Projects** (`#/projects`) — coordinated research initiatives, distinct from apiaries: a
 project is a question with a method attached, and can span apiaries, run at one, or wait
@@ -120,9 +174,10 @@ would have emailed, with unread state, plus a summary of everything the member f
 ## The honeycomb grid
 
 The dashboard renders all ~100 hives in an apiary as one interlocking honeycomb field.
-Each hexagon is a real hive record; click it to read that hive's five assessment data
-points (VSH score, mite load, brood frames, temperament, last inspection) plus its queen
-line, contributing breeder, and queen marking.
+Each hexagon is a real hive record; click it to read that hive's four assessment data
+points (VSH/UBEEO score, mite load/Harbo assay result, hive configuration, last
+inspection) plus its queen line, its own queen ID, contributing breeder, queen marking,
+and any comments recorded when the hive was registered.
 
 Cell colours quote the **international queen-marking colour code** — the one colour
 system every queen breeder already reads fluently — rather than an arbitrary palette.
@@ -242,34 +297,58 @@ real usage says otherwise. Setup, once you're ready to move off `serve.py`:
    Settings → Environment Variables (not committed to the repo — that's what
    `.env.example` documents instead of real values).
 
-Nothing in the app depends on this yet — it still runs entirely from `serve.py` with mock
-data. This section exists so the decision is written down and the next session (or
-person) doesn't have to re-derive it.
+The app's own data (members, apiaries, hives, etc.) still runs entirely from `serve.py`
+with mock data — nothing depends on Supabase for that yet. The one piece that does now is
+sign-in: `supabase/functions/wildapricot-auth` is a real Edge Function (see "Wiring up
+the real integrations" below) that needs an actual Supabase project to deploy to.
 
 ## Wiring up the real integrations
 
-**Wild Apricot** — the client-side half of the OAuth flow is built (`js/waAuth.js`); the
-server-side half is not, because it needs a client secret, which can't live in a browser.
-See that file's header comment for the full setup checklist and exactly which two calls
-the server side needs to make. In short:
+**Wild Apricot** — live and confirmed working end-to-end (real login → real member signed
+in). `js/waAuth.js` handles the browser-safe parts (the redirect to Wild Apricot's login,
+parsing the callback) and calls the part that can't run in a browser — exchanging the code
+for a token, which needs the application's client secret — via a Supabase Edge Function,
+`supabase/functions/wildapricot-auth/index.ts`, that does the token exchange and fetches
+the signed-in member's own contact record. See `js/waAuth.js`'s header comment for the
+full setup checklist.
 
-1. In the Wild Apricot admin, create an Authorized Application (contact-level access, not
-   the account-wide API key) and note its Client ID and Client Secret.
-2. Fill in `WA_CONFIG.clientId` in `js/waAuth.js` — the ID is not sensitive. The Client
-   Secret goes nowhere near this repo; it belongs only in Vercel's environment variables
-   (`WA_CLIENT_SECRET` in `.env.example`).
-3. Add a Supabase Edge Function (see "Hosting & backend" above) that does the token
-   exchange and calls `/contacts/me`, and have `js/waAuth.js`'s
-   `completeWildApricotLogin(code)` (sketched but commented out at the bottom of that
-   file) call it. Map the returned contact's membership level to the roles in
-   `js/data.js`.
+Two Wild Apricot API details worth remembering if this ever needs debugging again: the
+login/authorize redirect goes to AQBBA's *own* Wild Apricot site
+(`https://aqbba.org.au/sys/login/OAuthLogin`), not a shared host, and only takes exactly
+four query params (`client_id`, `redirect_uri`, `scope`, `state` — no `response_type`);
+the token exchange afterward *is* a shared host (`oauth.wildapricot.org/auth/token`) and
+needs `client_id` and `scope` in the POST body in addition to the Basic-auth header, not
+just `grant_type`/`code`/`redirect_uri`. Both were wrong on the first real test and had to
+be corrected against Wild Apricot's own API docs.
 
-Until then, `WA_CONFIG.clientId` stays empty and the gate's "Continue with Wild Apricot"
-button keeps using the simulated sign-in it always has — filling in the client ID is what
-switches it over to a real (but not yet completable) redirect, which is why the button's
-caption changes automatically once it's set. The interface reads the signed-in member
-from a single exported `currentUser` in `js/store.js`, so nothing else in the app needs
-to change once real sign-in lands.
+Roles are deliberately **not** derived from anything in Wild Apricot — Membership Level
+there is a fee tier (e.g. Individual vs. Student, unrelated to what someone should be able
+to do on this site), and Groups are general-purpose org bundling that doesn't map cleanly
+onto this site's roles either, and would silently couple whatever WA groups are used for
+to access control here. So every real sign-in provisions with the plain `Member` role
+(`DEFAULT_ROLES` in the Edge Function) and an admin assigns real roles afterward via the
+roles editor — a deliberate action instead of an implicit one.
+
+The gate's "Continue with Wild Apricot" button automatically uses the real redirect once
+`WA_CONFIG.clientId` is set (its caption changes to match); before that it stays on the
+simulated sign-in the prototype always had.
+
+`currentUser` is genuinely session state now (`js/store.js`), not the constant it used to
+be — it resolves to whichever member last signed in, by whichever path (simulated or
+real). A real Wild Apricot contact who signs in is matched to an existing member by
+email; if none matches, `signInAsWildApricotMember` auto-provisions a minimal record on
+the spot (name, email, the default `Member` role, no site/manager grants) so they can use
+the site immediately — an admin adjusts their access afterward via the roles editor, same
+as any other member.
+
+**Members directory** (`#/members`, Web Admin only) — every member (seed/demo plus
+anyone who's signed in via real Wild Apricot), their roles, whether contact details are
+on file, and a "Source" column distinguishing an actual Wild Apricot sign-in from this
+prototype's seed/demo roster — the intended cross-check against drift between the two
+systems (a lapsed member who still holds a role here, or a current member with none).
+Each row links to that member's page (`#/managers/:id`) where roles/contact are edited.
+Not in the main nav for anyone else, and the route itself checks `isWebAdmin` too, not
+just the nav link, so it can't be reached by typing the URL either.
 
 **Notification email** — every point that would send mail currently calls `toast()` with
 the message and recipient count. Those call sites are the integration points: forum

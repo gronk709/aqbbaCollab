@@ -12,9 +12,9 @@
    ========================================================================== */
 
 import {
-  repository, allSubs, subById, memberById, sampleArticle, relDays, currentUser,
+  repository, allSubs, subById, sampleArticle, relDays,
 } from '../data.js';
-import { isSubscribed, state, roleLabel } from '../store.js';
+import { isSubscribed, state, roleLabel, canContributeRepository, memberById } from '../store.js';
 import { contentFor, articleFor, fetchArticleBody, mdToHtml } from '../content.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
@@ -75,7 +75,7 @@ export function renderRepository() {
         <h1>Repository</h1>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-primary btn-sm" id="contribute">${icons.pen} Contribute</button>
+        ${canContributeRepository() ? `<button class="btn btn-primary btn-sm" id="contribute">${icons.pen} Contribute</button>` : ''}
       </div>
     </div>
 
@@ -336,7 +336,7 @@ export function renderSubTopic(id) {
       </div>
       <div class="topbar-actions">
         ${subButton(key, on, 'Subscribe')}
-        <button class="btn btn-primary btn-sm" id="add-here">${icons.plus} Add item</button>
+        ${canContributeRepository() ? `<button class="btn btn-primary btn-sm" id="add-here">${icons.plus} Add item</button>` : ''}
       </div>
     </div>
 
