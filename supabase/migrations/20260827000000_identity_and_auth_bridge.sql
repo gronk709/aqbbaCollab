@@ -370,7 +370,7 @@ begin
   on conflict (id) do nothing;
 
   insert into public.member_contact_details (member_id, email)
-  values (pete_id, 'pete@augfront.com')
+  values (pete_id, 'contact@oddacres.io')
   on conflict (member_id) do nothing;
 
   insert into public.member_roles (member_id, role_name)
