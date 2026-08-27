@@ -131,15 +131,13 @@ instead — to the four operational roles above plus Creator — so a plain Memb
 repository read-only, with no Contribute button. Editing roles and grants themselves is
 restricted to Web Admin.
 
-This app has exactly one real signed-in identity, so these restrictions would never
-actually trigger in testing — everyone who opens it is Web Admin. To make them
-demonstrable, the rail has a **"Preview access as"** selector, clearly marked
-`(prototype)`. It affects the apiary actions above (add hive, log inspection, add
-apiary) and the repository's Contribute button — authorship of forum posts, listings and
-project joins always stays the real signed-in member. This selector has no production
-equivalent; a real deployment derives permissions from the actual authenticated Wild
-Apricot member, and this whole mechanism (`previewUser`/`setPreviewAs` in `js/store.js`)
-should be deleted once that's wired up.
+These checks run against the real signed-in member (`currentUser()`) now that Wild
+Apricot sign-in is real. Earlier in the prototype, before that existed, everyone who
+opened the app was signed in as the same seed Web Admin, so a rail selector let a tester
+"preview" the apiary/repository checks as if signed in as someone else — clearly marked
+`(prototype)`, never affecting authorship of forum posts, listings, or project joins. It
+has since been removed (`previewUser`/`setPreviewAs` in `js/store.js`, the rail's
+"Preview access as" selector) now that a real per-member identity makes it redundant.
 
 **Projects** (`#/projects`) — coordinated research initiatives, distinct from apiaries: a
 project is a question with a method attached, and can span apiaries, run at one, or wait

@@ -4,7 +4,7 @@
 
 import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
-  roleLabel, previewUser, setPreviewAs, currentUser, allMembers, loadSignedInMember,
+  roleLabel, currentUser, loadSignedInMember,
   isWebAdmin, loadListings,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
@@ -101,13 +101,6 @@ function shellHTML(inner) {
             </div>
           </div>
           <button class="rail-out" data-signout>Sign out</button>
-
-          <div class="rail-preview">
-            <label for="preview-as">Preview access as <span title="Testing only — doesn't change who posts to the forum, joins projects, or lists items in the marketplace as you.">(prototype)</span></label>
-            <select id="preview-as">
-              ${allMembers().map((m) => `<option value="${m.id}" ${previewUser().id === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
-            </select>
-          </div>
         </div>
       </aside>
       <main class="main" id="main">${inner}</main>
@@ -217,12 +210,6 @@ function bindGlobal() {
   const retry = app.querySelector('[data-retry]');
   if (retry) retry.addEventListener('click', () => { routeDataCache.clear(); render(); });
 
-  const preview = app.querySelector('#preview-as');
-  if (preview) preview.addEventListener('change', (e) => {
-    setPreviewAs(e.target.value);
-    toast(`Previewing access as ${previewUser().name}.`);
-    render();
-  });
 
   /* Subscribe buttons work identically wherever they appear. A page may show
      more than one control for the same subscription, so update them all. */
