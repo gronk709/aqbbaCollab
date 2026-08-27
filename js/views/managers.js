@@ -24,8 +24,13 @@ import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
 /* Members directory — lets Web Admin see everyone who has access at a
    glance, and cross-check who actually signed in via real Wild Apricot
-   sign-in (state.provisionedMembers) against this prototype's seed/demo
-   roster, which is otherwise indistinguishable in the rest of the app. */
+   sign-in against this prototype's seed/demo roster, which is otherwise
+   indistinguishable in the rest of the app. Real Wild Apricot identity is
+   state.remoteMember (Phase 1 of the backend migration) — this directory
+   itself hasn't moved to Postgres yet, so a member who's only ever signed
+   in for real (never part of the original seed roster) shows up here as
+   one extra row alongside it, sourced from their real member/member_roles
+   rows rather than js/data.js. */
 export function renderMembers() {
   const canManage = isWebAdmin(currentUser().id);
   if (!canManage) {
@@ -44,11 +49,10 @@ export function renderMembers() {
   }
 
   const members = allMembers().slice().sort((a, b) => a.name.localeCompare(b.name));
-  const provisionedIds = new Set(state.provisionedMembers.map((m) => m.id));
 
   const rows = members.map((m) => {
     const roles = rolesFor(m.id);
-    const viaWA = provisionedIds.has(m.id);
+    const viaWA = state.remoteMember?.id === m.id;
     return `
       <tr>
         <td>
