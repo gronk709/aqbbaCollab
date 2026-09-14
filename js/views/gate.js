@@ -95,12 +95,15 @@ export function renderGate() {
 
           <div class="gate-hint">
             <strong>Prototype.</strong> ${isConfigured() ? `
-              Wild Apricot login redirects for real, but can't complete sign-in yet — the
-              server-side piece that exchanges the result for a session doesn't exist.
-              Use the form below to continue testing as <code>${esc(members[0].name)}</code>.
+              "Continue with Wild Apricot" is fully wired to real sign-in. Every real
+              member provisions with the plain Member role — roles are deliberately not
+              derived from Wild Apricot Membership Level or Groups, since neither maps
+              cleanly onto this site's roles. An admin assigns real roles afterward via
+              the roles editor. The form below still signs you in as
+              <code>${esc(members[0].name)}</code> for quick testing without a real login.
             ` : `
               Wild Apricot is not connected yet, so any details in the form below sign you
-              in as <code>${esc(members[0].name)}</code> — Research Coordinator, full
+              in as <code>${esc(members[0].name)}</code> — Web Admin, full
               access.
             `}
             Notification emails are shown on screen instead of being sent.

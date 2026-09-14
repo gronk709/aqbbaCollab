@@ -7,13 +7,14 @@
    ========================================================================== */
 
 import {
-  stageLabels, statusLabels, memberById, members, queenLines,
-  lineByCode, tally, vshAverage, relDays, fmtDateLong,
-  projects, projectStatusLabels, inspectionKinds, queenColours, temperamentOptions,
+  stageLabels, statusLabels,
+  tally, vshAverage, relDays, fmtDateLong,
+  projects, projectStatusLabels, inspectionKinds, queenColours,
 } from '../data.js';
 import {
   allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
-  addApiary, addHive, addInspection, roleLabel, isCoordinator, canEditApiary,
+  addApiary, addHive, addInspection, roleLabel, isWebAdmin, canEditApiary, updateApiary, updateHive,
+  allQueenLines, lineByCode, breederById, memberById, allMembers,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -23,7 +24,7 @@ import { renderComb, renderReadout, bindComb } from './comb.js';
 const projectsForApiary = (apiaryId) =>
   [...memberProjects(), ...projects].filter((p) => p.sites.includes(apiaryId));
 
-const stageVariant = { initialising: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green' };
+const stageVariant = { establishing: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green', requeening: 'tag-red' };
 
 export function renderApiaries() {
   const apiaries = allApiaries();
@@ -42,8 +43,8 @@ export function renderApiaries() {
         <td><a href="#/managers/${mgr.id}">${esc(mgr.name)}</a></td>
         <td class="mono">${ap.hives}</td>
         <td class="mono">${vshAverage(ap.hiveRecords)}%</td>
-        <td class="mono">${t.treatment || 0}</td>
-        <td class="mono">${t.critical || 0}</td>
+        <td class="mono">${t.treating || 0}</td>
+        <td class="mono">${t.poor || 0}</td>
         <td>${ap.established}</td>
       </tr>`;
   }).join('');
@@ -55,7 +56,7 @@ export function renderApiaries() {
         <h1>Research apiaries</h1>
       </div>
       <div class="topbar-actions">
-        ${isCoordinator() ? `<button class="btn btn-primary btn-sm" id="new-apiary">${icons.plus} Add apiary</button>` : ''}
+        ${isWebAdmin() ? `<button class="btn btn-primary btn-sm" id="new-apiary">${icons.plus} Add apiary</button>` : ''}
       </div>
     </div>
 
@@ -106,8 +107,8 @@ export function renderApiaries() {
 
 function openApiaryForm() {
   const stageOptions = Object.entries(stageLabels)
-    .map(([v, label]) => `<option value="${v}" ${v === 'initialising' ? 'selected' : ''}>${label}</option>`).join('');
-  const managerOptions = members.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+    .map(([v, label]) => `<option value="${v}" ${v === 'establishing' ? 'selected' : ''}>${label}</option>`).join('');
+  const managerOptions = allMembers().map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
 
   const body = `
     <form id="apiary-form">
@@ -198,10 +199,9 @@ export function renderApiary(id) {
     const scored = set.filter((h) => h.vsh != null);
     const mean = scored.length ? Math.round(scored.reduce((s, h) => s + h.vsh, 0) / scored.length) : 0;
     const delta = mean - line.vshMean;
-    const b = memberById(line.breeder);
+    const b = breederById(line.breeder);
     return `
       <tr>
-        <td class="mono">${line.code}</td>
         <td>${esc(line.name)}</td>
         <td>${esc(b.name)}</td>
         <td class="mono">${set.length}</td>
@@ -214,6 +214,9 @@ export function renderApiary(id) {
 
   const inspRows = insp.map((i) => {
     const by = memberById(i.by);
+    const hiveList = hives.length && hives.every((h) => i.hiveIds.includes(h.id))
+      ? 'All Hives'
+      : i.hiveIds.join(', ');
     return `
       <li>
         <div class="line" style="cursor:default">
@@ -223,7 +226,7 @@ export function renderApiary(id) {
           </div>
           <div class="line-body">
             <strong>${esc(i.kind)}</strong>
-            <span>${i.hives} hives · ${esc(by.name)}</span>
+            <span>${esc(hiveList)} · ${esc(by.name)}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
             <p class="caption" style="margin-top:3px">${esc(i.note)}</p>
           </div>
           <div class="line-meta">
@@ -247,6 +250,7 @@ export function renderApiary(id) {
       </div>
       <div class="topbar-actions">
         <span class="tag ${stageVariant[ap.stage]}">${stageLabels[ap.stage]}</span>
+        ${canEdit ? `<button class="btn btn-ghost btn-sm" id="edit-apiary">${icons.pen} Edit apiary</button>` : ''}
       </div>
     </div>
 
@@ -280,7 +284,7 @@ export function renderApiary(id) {
             <div class="tbl-scroll">
               <table class="tbl">
                 <thead>
-                  <tr><th>Code</th><th>Line</th><th>Breeder</th><th>Hives</th><th>Site VSH</th><th>vs line mean</th></tr>
+                  <tr><th>Line</th><th>Breeder</th><th>Hives</th><th>Site VSH</th><th>vs line mean</th></tr>
                 </thead>
                 <tbody>${lineRows}</tbody>
               </table>
@@ -375,7 +379,7 @@ export function renderApiary(id) {
 
   setTimeout(() => {
     const root = document.getElementById('main');
-    if (root && hives.length) bindComb(root, hives);
+    if (root && hives.length) bindComb(root, hives, canEdit ? { onEditHive: openHiveEditForm } : {});
 
     ['new-hive', 'empty-hive'].forEach((elId) => {
       const btn = document.getElementById(elId);
@@ -384,9 +388,178 @@ export function renderApiary(id) {
 
     const instBtn = document.getElementById('new-inspection');
     if (instBtn) instBtn.addEventListener('click', () => openInspectionForm(ap));
+
+    const apEditBtn = document.getElementById('edit-apiary');
+    if (apEditBtn) apEditBtn.addEventListener('click', () => openApiaryEditForm(ap));
   }, 0);
 
   return html;
+}
+
+function openApiaryEditForm(ap) {
+  const stageOptions = Object.entries(stageLabels)
+    .map(([v, label]) => `<option value="${v}" ${v === ap.stage ? 'selected' : ''}>${label}</option>`).join('');
+  const managerOptions = allMembers().map((m) =>
+    `<option value="${m.id}" ${m.id === ap.manager ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+
+  const body = `
+    <form id="apiary-edit-form">
+      <div class="field">
+        <label for="ae-name">Site name</label>
+        <input id="ae-name" required value="${esc(ap.name)}">
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="ae-region">Region</label>
+          <input id="ae-region" required value="${esc(ap.region)}">
+        </div>
+        <div class="field" style="flex:1">
+          <label for="ae-established">Year established</label>
+          <input id="ae-established" type="number" value="${ap.established}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="ae-coords">Coordinates (optional)</label>
+        <input id="ae-coords" value="${esc(ap.coords || '')}">
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="ae-stage">Status</label>
+          <select id="ae-stage">${stageOptions}</select>
+        </div>
+        <div class="field" style="flex:1">
+          <label for="ae-manager">Manager</label>
+          <select id="ae-manager">${managerOptions}</select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="ae-flora">Dominant flora</label>
+        <input id="ae-flora" value="${esc(ap.flora || '')}">
+      </div>
+      <div class="field">
+        <label for="ae-brief">Brief</label>
+        <textarea id="ae-brief" required>${esc(ap.brief)}</textarea>
+      </div>
+    </form>`;
+
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-apiary">Save changes</button>`;
+
+  const scrim = modal({ title: `Edit apiary — ${ap.name}`, body, actions });
+
+  scrim.querySelector('#save-apiary').addEventListener('click', () => {
+    const name = scrim.querySelector('#ae-name').value.trim();
+    const region = scrim.querySelector('#ae-region').value.trim();
+    const brief = scrim.querySelector('#ae-brief').value.trim();
+    if (!name || !region || !brief) {
+      toast('Site name, region and brief are all required.');
+      return;
+    }
+
+    updateApiary(ap.id, {
+      name, region, brief,
+      coords: scrim.querySelector('#ae-coords').value.trim(),
+      flora: scrim.querySelector('#ae-flora').value.trim(),
+      stage: scrim.querySelector('#ae-stage').value,
+      manager: scrim.querySelector('#ae-manager').value,
+      established: Number(scrim.querySelector('#ae-established').value) || ap.established,
+    });
+    closeModal();
+    toast(`${name} updated.`);
+    window.__aqbba_render();
+  });
+}
+
+function openHiveEditForm(hive) {
+  const lineOptions = allQueenLines().map((l) =>
+    `<option value="${l.code}" ${l.code === hive.line ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
+  const colourOptions = queenColours.map((c) =>
+    `<option value="${c}" ${c === hive.queenColour ? 'selected' : ''}>${c}</option>`).join('');
+  const statusOptions = Object.entries(statusLabels).map(([v, label]) =>
+    `<option value="${v}" ${v === hive.status ? 'selected' : ''}>${label}</option>`).join('');
+
+  const body = `
+    <p class="caption" style="margin-bottom:var(--s5)">
+      Hive ID <strong class="mono">${esc(hive.id)}</strong> is fixed once registered.
+    </p>
+    <form id="hive-edit-form">
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="he-status">Status</label>
+          <select id="he-status">${statusOptions}</select>
+        </div>
+        <div class="field" style="flex:1">
+          <label for="he-line">Queen Line</label>
+          <select id="he-line">${lineOptions}</select>
+        </div>
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="he-queen-id">Queen ID</label>
+          <input id="he-queen-id" type="text" placeholder="optional" value="${esc(hive.queenId || '')}">
+        </div>
+        <div class="field" style="flex:1">
+          <label for="he-colour">Queen marked</label>
+          <select id="he-colour">${colourOptions}</select>
+        </div>
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="he-year">Queen year</label>
+          <input id="he-year" type="number" value="${hive.queenYear}">
+        </div>
+        <div class="field" style="flex:1">
+          <label for="he-frames">Hive Configuration</label>
+          <input id="he-frames" type="text" placeholder="optional" value="${esc(hive.broodFrames || '')}">
+        </div>
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="he-vsh">UBEEO score, if known</label>
+          <input id="he-vsh" type="number" min="0" max="100" placeholder="optional" value="${hive.vsh ?? ''}">
+        </div>
+        <div class="field" style="flex:1">
+          <label for="he-mite">Harbo Assay Result, if known</label>
+          <input id="he-mite" type="number" min="0" step="0.1" placeholder="optional" value="${hive.miteLoad ?? ''}">
+        </div>
+      </div>
+      <div class="field">
+        <label for="he-tf">Treatment-free seasons</label>
+        <input id="he-tf" type="number" min="0" value="${hive.treatmentFree || 0}">
+      </div>
+      <div class="field">
+        <label for="he-comment">Comments</label>
+        <textarea id="he-comment" maxlength="200" placeholder="optional, up to 200 characters">${esc(hive.comment || '')}</textarea>
+      </div>
+    </form>`;
+
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-hive">Save changes</button>`;
+
+  const scrim = modal({ title: `Edit hive — ${hive.id}`, body, actions });
+
+  scrim.querySelector('#save-hive').addEventListener('click', () => {
+    const vshRaw = scrim.querySelector('#he-vsh').value;
+    const miteRaw = scrim.querySelector('#he-mite').value;
+
+    updateHive(hive.id, {
+      status: scrim.querySelector('#he-status').value,
+      line: scrim.querySelector('#he-line').value,
+      queenId: scrim.querySelector('#he-queen-id').value.trim(),
+      queenColour: scrim.querySelector('#he-colour').value,
+      queenYear: Number(scrim.querySelector('#he-year').value) || hive.queenYear,
+      broodFrames: scrim.querySelector('#he-frames').value.trim(),
+      vsh: vshRaw ? Number(vshRaw) : null,
+      miteLoad: miteRaw ? Number(miteRaw) : null,
+      treatmentFree: Number(scrim.querySelector('#he-tf').value) || 0,
+      comment: scrim.querySelector('#he-comment').value.trim().slice(0, 200),
+    });
+    closeModal();
+    toast(`${hive.id} updated.`);
+    window.__aqbba_render();
+  });
 }
 
 function todayStr() {
@@ -394,25 +567,31 @@ function todayStr() {
 }
 
 function openHiveForm(ap) {
-  const lineOptions = queenLines.map((l) => `<option value="${l.code}">${l.code} · ${esc(l.name)}</option>`).join('');
+  const lineOptions = allQueenLines().map((l) => `<option value="${l.code}">${esc(l.name)}</option>`).join('');
   const colourOptions = queenColours.map((c) => `<option value="${c}">${c}</option>`).join('');
   const statusOptions = Object.entries(statusLabels).map(([v, label]) =>
     `<option value="${v}" ${v === 'thriving' ? 'selected' : ''}>${label}</option>`).join('');
-  const temperOptions = temperamentOptions.map((t) => `<option value="${t}">${t}</option>`).join('');
 
   const body = `
-    <p class="caption" style="margin-bottom:var(--s5)">
-      The hive ID is assigned automatically from ${ap.code} and the next available number.
-    </p>
     <form id="hive-form">
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         <div class="field" style="flex:1">
-          <label for="h-line">Queen line</label>
-          <select id="h-line">${lineOptions}</select>
+          <label for="h-id">Hive ID</label>
+          <input id="h-id" type="text" placeholder="e.g. ${ap.code}-105">
         </div>
         <div class="field" style="flex:1">
           <label for="h-status">Status</label>
           <select id="h-status">${statusOptions}</select>
+        </div>
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="h-line">Queen Line</label>
+          <select id="h-line">${lineOptions}</select>
+        </div>
+        <div class="field" style="flex:1">
+          <label for="h-queen-id">Queen ID</label>
+          <input id="h-queen-id" type="text" placeholder="optional">
         </div>
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
@@ -425,29 +604,27 @@ function openHiveForm(ap) {
           <input id="h-year" type="number" value="${new Date().getFullYear()}">
         </div>
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
-          <label for="h-frames">Brood frames</label>
-          <input id="h-frames" type="number" min="0" placeholder="optional">
-        </div>
-        <div class="field" style="flex:1">
-          <label for="h-temper">Temperament</label>
-          <select id="h-temper">${temperOptions}</select>
-        </div>
+      <div class="field">
+        <label for="h-frames">Hive Configuration</label>
+        <input id="h-frames" type="text" placeholder="optional">
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         <div class="field" style="flex:1">
-          <label for="h-vsh">VSH score, if known</label>
+          <label for="h-vsh">UBEEO score, if known</label>
           <input id="h-vsh" type="number" min="0" max="100" placeholder="optional">
         </div>
         <div class="field" style="flex:1">
-          <label for="h-mite">Mite load, if known</label>
+          <label for="h-mite">Harbo Assay Result, if known</label>
           <input id="h-mite" type="number" min="0" step="0.1" placeholder="optional">
         </div>
       </div>
       <div class="field">
         <label for="h-tf">Treatment-free seasons</label>
         <input id="h-tf" type="number" min="0" value="0">
+      </div>
+      <div class="field">
+        <label for="h-comment">Comments</label>
+        <textarea id="h-comment" maxlength="200" placeholder="optional, up to 200 characters"></textarea>
       </div>
     </form>`;
 
@@ -458,20 +635,33 @@ function openHiveForm(ap) {
   const scrim = modal({ title: `Add a hive at ${ap.name}`, body, actions });
 
   scrim.querySelector('#pub-hive').addEventListener('click', () => {
+    const hiveId = scrim.querySelector('#h-id').value.trim();
+    if (!hiveId) {
+      toast('Enter a hive ID.');
+      return;
+    }
+    const taken = new Set(allApiaries().flatMap((a) => a.hiveRecords.map((h) => h.id)));
+    if (taken.has(hiveId)) {
+      toast(`Hive ID "${hiveId}" is already in use — pick a different one.`);
+      return;
+    }
+
     const vshRaw = scrim.querySelector('#h-vsh').value;
     const miteRaw = scrim.querySelector('#h-mite').value;
     const framesRaw = scrim.querySelector('#h-frames').value;
 
     const record = addHive(ap.id, {
+      id: hiveId,
       line: scrim.querySelector('#h-line').value,
+      queenId: scrim.querySelector('#h-queen-id').value.trim(),
       status: scrim.querySelector('#h-status').value,
       queenColour: scrim.querySelector('#h-colour').value,
       queenYear: Number(scrim.querySelector('#h-year').value) || new Date().getFullYear(),
-      broodFrames: framesRaw ? Number(framesRaw) : 0,
-      temper: scrim.querySelector('#h-temper').value,
+      broodFrames: framesRaw.trim(),
       vsh: vshRaw ? Number(vshRaw) : null,
       miteLoad: miteRaw ? Number(miteRaw) : null,
       treatmentFree: Number(scrim.querySelector('#h-tf').value) || 0,
+      comment: scrim.querySelector('#h-comment').value.trim().slice(0, 200),
     });
     closeModal();
     toast(`${record.id} added to ${ap.name}.`);
@@ -479,26 +669,71 @@ function openHiveForm(ap) {
   });
 }
 
+/* Checkbox list of a single apiary's hives, plus an "All hives" toggle that
+   checks/unchecks every hive below it — re-rendered whenever the Apiary
+   field changes, since which hives are selectable depends on the site. */
+function renderHiveChecklist(apiaryId) {
+  const hives = allApiaryById(apiaryId)?.hiveRecords || [];
+  if (!hives.length) return `<p class="caption">This apiary has no hives registered yet.</p>`;
+
+  const rows = hives.map((h) => `
+    <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:4px">
+      <input type="checkbox" value="${h.id}" class="i-hive-check">
+      <span class="mono">${h.id}</span>
+    </label>`).join('');
+
+  return `
+    <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--comb-shade)">
+      <input type="checkbox" id="i-hive-all"> All hives (${hives.length})
+    </label>
+    <div style="max-height:180px;overflow-y:auto">${rows}</div>`;
+}
+
+function bindHiveChecklist(scrim) {
+  const all = scrim.querySelector('#i-hive-all');
+  if (!all) return;
+  const checks = () => [...scrim.querySelectorAll('.i-hive-check')];
+  all.addEventListener('change', () => checks().forEach((c) => { c.checked = all.checked; }));
+  checks().forEach((c) => c.addEventListener('change', () => {
+    all.checked = checks().every((x) => x.checked);
+  }));
+}
+
 function openInspectionForm(ap) {
+  const editableApiaries = allApiaries().filter((a) => canEditApiary(a.id));
+  const apiaryOptions = editableApiaries.map((a) =>
+    `<option value="${a.id}" ${a.id === ap.id ? 'selected' : ''}>${esc(a.name)} (${a.code})</option>`).join('');
   const kindOptions = inspectionKinds.map((k) => `<option>${esc(k)}</option>`).join('');
-  const memberOptions = members.map((m) =>
+  const statusOptions = `<option value="">No change</option>` +
+    Object.entries(statusLabels).map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
+  const memberOptions = allMembers().map((m) =>
     `<option value="${m.id}" ${m.id === ap.manager ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
 
   const body = `
     <form id="insp-form">
-      <div class="field">
-        <label for="i-kind">Inspection type</label>
-        <select id="i-kind">${kindOptions}</select>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="i-apiary">Apiary</label>
+          <select id="i-apiary">${apiaryOptions}</select>
+        </div>
+        <div class="field" style="flex:1">
+          <label for="i-kind">Inspection type</label>
+          <select id="i-kind">${kindOptions}</select>
+        </div>
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="i-status">Status</label>
+          <select id="i-status">${statusOptions}</select>
+        </div>
         <div class="field" style="flex:1">
           <label for="i-date">Date</label>
           <input id="i-date" type="date" value="${todayStr()}">
         </div>
-        <div class="field" style="flex:1">
-          <label for="i-hives">Hives inspected</label>
-          <input id="i-hives" type="number" min="1" value="1">
-        </div>
+      </div>
+      <div class="field">
+        <label>Hives</label>
+        <div id="i-hives-wrap">${renderHiveChecklist(ap.id)}</div>
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         <div class="field" style="flex:1">
@@ -506,7 +741,7 @@ function openInspectionForm(ap) {
           <select id="i-by">${memberOptions}</select>
         </div>
         <div class="field" style="flex:1">
-          <label style="display:block;margin-bottom:8px">Status</label>
+          <label style="display:block;margin-bottom:8px">Completion</label>
           <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0">
             <input type="checkbox" id="i-done" checked> Already completed
           </label>
@@ -522,27 +757,34 @@ function openInspectionForm(ap) {
     <button class="btn btn-ghost" data-close>Cancel</button>
     <button class="btn btn-primary" id="pub-inspection">Log inspection</button>`;
 
-  const scrim = modal({ title: `Log an inspection — ${ap.name}`, body, actions });
+  const scrim = modal({ title: `Log an inspection`, body, actions });
+  bindHiveChecklist(scrim);
+
+  scrim.querySelector('#i-apiary').addEventListener('change', (e) => {
+    scrim.querySelector('#i-hives-wrap').innerHTML = renderHiveChecklist(e.target.value);
+    bindHiveChecklist(scrim);
+  });
 
   scrim.querySelector('#pub-inspection').addEventListener('click', () => {
     const dateStr = scrim.querySelector('#i-date').value;
-    const hivesCount = Number(scrim.querySelector('#i-hives').value);
-    if (!dateStr || !hivesCount) {
-      toast('Add a date and how many hives were inspected.');
+    const hiveIds = [...scrim.querySelectorAll('.i-hive-check:checked')].map((c) => c.value);
+    if (!dateStr || !hiveIds.length) {
+      toast('Add a date and select at least one hive.');
       return;
     }
 
     addInspection({
-      apiary: ap.id,
+      apiary: scrim.querySelector('#i-apiary').value,
       kind: scrim.querySelector('#i-kind').value,
       by: scrim.querySelector('#i-by').value,
-      hivesCount,
+      hiveIds,
+      status: scrim.querySelector('#i-status').value || null,
       note: scrim.querySelector('#i-note').value.trim(),
       dateStr,
       done: scrim.querySelector('#i-done').checked,
     });
     closeModal();
-    toast('Inspection logged.');
+    toast(`Inspection logged for ${hiveIds.length} hive${hiveIds.length > 1 ? 's' : ''}.`);
     window.__aqbba_render();
   });
 }

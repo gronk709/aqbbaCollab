@@ -1,9 +1,24 @@
 /* ==========================================================================
    Mock data store. Deterministic: a seeded generator means hive records are
    identical on every reload, so a hive you inspected is the same hive later.
-   Replace this module with API calls when the backend lands.
+
+   This module is mid-migration to a real Supabase/Postgres backend (see
+   /root/.claude/plans/zazzy-swinging-scone.md for the full plan, or the
+   README's backend-migration section). Every export below is tagged:
+
+     [PERMANENT] — pure reference/formatting code: vocabularies, labels, and
+       pure functions with no member/entity data in them. These survive the
+       migration and keep being imported by views after their entity moves
+       to Postgres.
+
+     [SEED — Phase N] — mock content standing in for a real table, deleted
+       once that table exists and views read from Supabase instead. N is
+       the migration-plan phase that removes it. Until then, nothing here
+       changes: seed content keeps working exactly as it does today.
    ========================================================================== */
 
+/* [SEED — Phase 5] RNG helpers, used only to fabricate hive records below.
+   Dead code the moment hives are real rows — real hives don't need a seed. */
 /* Mulberry32 — small, fast, seeded. */
 function seeded(seed) {
   return function () {
@@ -19,38 +34,53 @@ const between = (rng, lo, hi) => lo + rng() * (hi - lo);
 const intBetween = (rng, lo, hi) => Math.floor(between(rng, lo, hi + 1));
 
 /* --------------------------------------------------------------------------
-   Members. The signed-in user is Pete; the rest populate activity.
+   [SEED — Phase 1] Members. The signed-in user is Pete; the rest populate
+   activity. Replaced by the real `members`/`member_roles` tables — Pete
+   Czeti's Web Admin row survives the migration too, just as a seeded
+   Postgres row instead of array index 0.
    -------------------------------------------------------------------------- */
 
 export const members = [
-  { id: 'm1',  name: 'Pete Czeti',        initials: 'PC', roles: ['Research Coordinator'], state: 'NSW', since: 2019, wa: 'WA-40118' },
-  { id: 'm2',  name: 'Marguerite Ellery', initials: 'ME', roles: ['Breeder — Level 3'],    state: 'VIC', since: 2016, wa: 'WA-38402' },
+  { id: 'm1',  name: 'Pete Czeti',        initials: 'PC', roles: ['Web Admin'],            state: 'NSW', since: 2019, wa: 'WA-40118' },
+  { id: 'm2',  name: 'Marguerite Ellery', initials: 'ME', roles: ['Breeder'],               state: 'VIC', since: 2016, wa: 'WA-38402' },
   { id: 'm3',  name: 'Douglas Harnett',   initials: 'DH', roles: ['Apiary Manager'],       state: 'NSW', since: 2014, wa: 'WA-31877',
     phone: '0417 552 908', email: 'd.harnett@example.com', address: '56 Ironbark Lane, Barrowfield NSW 2795' },
-  { id: 'm4',  name: 'Ani Rahmawati',     initials: 'AR', roles: ['Breeder — Level 2', 'Apiary Manager'], state: 'QLD', since: 2021, wa: 'WA-44903',
+  { id: 'm4',  name: 'Ani Rahmawati',     initials: 'AR', roles: ['Breeder', 'Apiary Manager'], state: 'QLD', since: 2021, wa: 'WA-44903',
     phone: '0433 771 240', email: 'ani.rahmawati@example.com', address: '18 Sunflower Court, Oradale QLD 4350' },
   { id: 'm5',  name: 'Trevor Bowe',       initials: 'TB', roles: ['Apiary Manager'],       state: 'TAS', since: 2011, wa: 'WA-29014',
     phone: '0400 182 664', email: 'trevor.bowe@example.com', address: '142 Tambo Crossing Road, Tambo Crossing TAS 3893' },
-  { id: 'm6',  name: 'Hélène Marchetti',  initials: 'HM', roles: ['Instrumental Insem.'],  state: 'SA',  since: 2018, wa: 'WA-39550' },
-  { id: 'm7',  name: 'Sam Okonkwo',       initials: 'SO', roles: ['Breeder — Level 3'],    state: 'WA',  since: 2015, wa: 'WA-33260' },
-  { id: 'm8',  name: 'Bridget Naylor',    initials: 'BN', roles: ['Breeder — Level 1'],    state: 'VIC', since: 2023, wa: 'WA-47712' },
-  { id: 'm9',  name: 'Kenji Watanabe',    initials: 'KW', roles: ['Laboratory — Assays'],  state: 'NSW', since: 2020, wa: 'WA-42881' },
-  { id: 'm10', name: 'Fiona Delacourt',   initials: 'FD', roles: ['Breeder — Level 2'],    state: 'QLD', since: 2017, wa: 'WA-36104' },
+  { id: 'm6',  name: 'Hélène Marchetti',  initials: 'HM', roles: ['Breeder'],               state: 'SA',  since: 2018, wa: 'WA-39550' },
+  { id: 'm7',  name: 'Sam Okonkwo',       initials: 'SO', roles: ['Breeder'],               state: 'WA',  since: 2015, wa: 'WA-33260' },
+  { id: 'm8',  name: 'Bridget Naylor',    initials: 'BN', roles: ['Breeder'],               state: 'VIC', since: 2023, wa: 'WA-47712' },
+  { id: 'm9',  name: 'Kenji Watanabe',    initials: 'KW', roles: ['Breeder'],               state: 'NSW', since: 2020, wa: 'WA-42881' },
+  { id: 'm10', name: 'Fiona Delacourt',   initials: 'FD', roles: ['Breeder'],               state: 'QLD', since: 2017, wa: 'WA-36104' },
 ];
 
-/* Canonical role list for the roles-editor. A member can hold any number of
-   these at once — e.g. a Breeder who is also the Apiary Manager for a site. */
+/* [PERMANENT] Canonical role list for the roles-editor — becomes the seed
+   data for the `role_options` table (Phase 1), not deleted by it. A member
+   can hold any number of these at once — e.g. a Breeder who is also the
+   Apiary Manager for a site. Each entry carries a description shown next to
+   its checkbox in the editor (see openRolesForm in js/views/managers.js)
+   and, for the operational roles, read by the permission checks in
+   js/store.js (isWebAdmin, canContributeRepository). */
 export const roleOptions = [
-  'Research Coordinator', 'Apiary Manager', 'Operator',
-  'Breeder — Level 1', 'Breeder — Level 2', 'Breeder — Level 3',
-  'Instrumental Insem.', 'Laboratory — Assays',
+  { name: 'Web Admin', description: 'Superuser. Full access to every apiary, member record, and role/access grant.' },
+  { name: 'Apiary Manager', description: 'Complete CRUD privileges for the apiary they manage.' },
+  { name: 'Operator', description: 'Assists the Apiary Manager in the conduct of inspections and data updates. Has change and update privileges but cannot create or delete.' },
+  { name: 'Breeder', description: 'Has change and update privileges only.' },
+  { name: 'Member', description: 'Read-only access to apiary data and the information repository. Full forum access — publish, subscribe, and notifications — and can add Marketplace listings.' },
+  { name: 'Creator', description: 'Everything a Member has, plus the ability to add content to the information repository.' },
 ];
 
+/* [SEED — Phase 1] currentUser/memberById go away with the members array
+   above — js/store.js's currentUser()/memberById() already wrap these and
+   are the real call sites every view uses; once members live in Postgres
+   those wrappers query Supabase instead and these two exports are deleted. */
 export const currentUser = members[0];
 export const memberById = (id) => members.find((m) => m.id === id) || members[0];
 
 /* --------------------------------------------------------------------------
-   Queen lines. Each traces to a contributing breeder.
+   [SEED — Phase 4] Queen lines. Each traces to a contributing breeder.
    -------------------------------------------------------------------------- */
 
 export const queenLines = [
@@ -63,10 +93,12 @@ export const queenLines = [
   { code: 'CVE-17', name: 'Coalvale 17',     breeder: 'm6', gen: 8, vshMean: 85, note: 'II-maintained closed population. Narrow genetic base.' },
 ];
 
+/* [SEED — Phase 4] */
 export const lineByCode = (code) => queenLines.find((l) => l.code === code);
 
 /* --------------------------------------------------------------------------
-   Research apiaries. Three sites at different program stages.
+   [SEED — Phase 5] Research apiaries. Three sites at different program
+   stages.
    -------------------------------------------------------------------------- */
 
 const apiarySeeds = [
@@ -87,52 +119,59 @@ const apiarySeeds = [
   {
     id: 'ap-oradale', name: 'Oradale', code: 'ORA',
     region: 'Darling Downs, QLD', coords: '27.9012° S, 151.6144° E',
-    stage: 'initialising', manager: 'm4', established: 2026, hives: 96, seed: 1907,
+    stage: 'establishing', manager: 'm4', established: 2026, hives: 96, seed: 1907,
     flora: 'Spotted gum, brigalow, cultivated sunflower',
     brief: 'Site commissioned March 2026. Nucs drawn from Tambo and Kellyanne stock; baseline mite counts still in progress.',
   },
 ];
 
+/* [PERMANENT] Apiary status — editable after creation via updateApiary
+   (js/store.js), not just set once at registration. Stays as the display
+   vocabulary for `apiaries.stage` once that column is a real Postgres enum. */
 export const stageLabels = {
-  initialising: 'Initialising',
+  establishing: 'Establishing',
   assessment:   'Assessment',
   maintenance:  'Maintenance',
+  requeening:   'Re-queening',
 };
 
+/* [SEED — Phase 5] Only used to fabricate seed hive statuses below. */
 const statusPool = {
-  maintenance:  ['thriving', 'thriving', 'thriving', 'thriving', 'watch', 'thriving', 'thriving', 'dormant', 'watch', 'thriving'],
-  assessment:   ['thriving', 'thriving', 'watch', 'treatment', 'thriving', 'watch', 'thriving', 'treatment', 'critical', 'thriving'],
-  initialising: ['thriving', 'watch', 'watch', 'treatment', 'thriving', 'dormant', 'watch', 'thriving', 'treatment', 'watch'],
+  maintenance:  ['thriving', 'thriving', 'good', 'thriving', 'good', 'thriving', 'average', 'thriving', 'good', 'thriving'],
+  assessment:   ['thriving', 'good', 'average', 'poor', 'thriving', 'good', 'treating', 'average', 'good', 'thriving'],
+  establishing: ['average', 'poor', 'good', 'treating', 'average', 'thriving', 'poor', 'average', 'good', 'average'],
+  requeening:   ['poor', 'treating', 'average', 'poor', 'treating', 'average', 'good', 'poor', 'treating', 'average'],
 };
 
+/* [PERMANENT] Display vocabulary for `hives.status`. */
 export const statusLabels = {
-  thriving:  'Thriving',
-  watch:     'Under watch',
-  treatment: 'In treatment',
-  critical:  'Critical',
-  dormant:   'Dormant / requeening',
+  thriving: 'Thriving',
+  good:     'Good',
+  average:  'Average',
+  poor:     'Poor',
+  treating: 'Treating',
 };
 
+/* [PERMANENT] */
 export const statusNote = {
-  thriving:  'Meeting all assessment thresholds.',
-  watch:     'One metric outside threshold. Re-check at next inspection.',
-  treatment: 'Under miticide treatment. Excluded from selection data this cycle.',
-  critical:  'Mite load above intervention threshold. Manager notified.',
-  dormant:   'Queenless or requeening. No data collected this cycle.',
+  thriving: 'Meeting all assessment thresholds.',
+  good:     'Slightly below thriving benchmarks but stable.',
+  average:  'Within normal range. No action required.',
+  poor:     'Multiple metrics below threshold. Re-check at next inspection.',
+  treating: 'Under active treatment. Excluded from selection data this cycle.',
 };
 
+/* [PERMANENT] */
 export const queenColours = ['white', 'yellow', 'red', 'green', 'blue'];
-/* Weighted pool for seed generation — Calm appears twice on purpose so it's
-   drawn more often. For a form dropdown, use temperamentOptions instead. */
-const tempers = ['Calm', 'Calm', 'Steady', 'Steady', 'Runny', 'Defensive'];
-export const temperamentOptions = ['Calm', 'Steady', 'Runny', 'Defensive'];
 
-/* Each hive carries the five data points the assessment protocol requires:
-   VSH score, mite load, brood frames, temperament, and last inspection. */
+/* [SEED — Phase 5] Each fabricated hive carries the four data points the
+   assessment protocol requires: VSH score, mite load, hive configuration,
+   and last inspection. Real hives get these from actual inspection data
+   instead of a seeded RNG. */
 function buildHives(ap) {
   const rng = seeded(ap.seed);
   const pool = statusPool[ap.stage];
-  const lines = ap.stage === 'initialising'
+  const lines = ap.stage === 'establishing'
     ? ['TMB-22', 'KLN-03', 'ORA-08']
     : ap.stage === 'assessment'
       ? ['BRW-14', 'TMB-22', 'KLN-03', 'MRN-05', 'ORA-08']
@@ -141,13 +180,12 @@ function buildHives(ap) {
   return Array.from({ length: ap.hives }, (_, i) => {
     const status = pool[Math.floor(rng() * pool.length)];
     const line = pick(rng, lines);
-    const treatmentFree = status !== 'treatment' && ap.stage !== 'initialising'
+    const treatmentFree = status !== 'treating' && ap.stage !== 'establishing'
       ? intBetween(rng, 1, 5)
-      : status === 'treatment' ? 0 : intBetween(rng, 0, 1);
+      : status === 'treating' ? 0 : intBetween(rng, 0, 1);
 
     const baseVsh = lineByCode(line).vshMean;
-    const vsh = status === 'dormant' ? null
-      : Math.max(28, Math.min(97, Math.round(baseVsh + between(rng, -14, 12))));
+    const vsh = Math.max(28, Math.min(97, Math.round(baseVsh + between(rng, -14, 12))));
 
     return {
       id: `${ap.code}-${String(i + 1).padStart(3, '0')}`,
@@ -157,25 +195,27 @@ function buildHives(ap) {
       queenColour: queenColours[(ap.established + Math.floor(rng() * 2)) % 5],
       queenYear: 2026 - intBetween(rng, 0, 2),
       vsh,
-      miteLoad: status === 'dormant' ? null : Number(between(rng, 0.1, status === 'critical' ? 8.4 : 3.6).toFixed(1)),
-      broodFrames: status === 'dormant' ? 0 : intBetween(rng, 3, 11),
-      temper: pick(rng, tempers),
+      miteLoad: Number(between(rng, 0.1, status === 'poor' ? 8.4 : 3.6).toFixed(1)),
+      broodFrames: intBetween(rng, 3, 11),
       lastSeen: intBetween(rng, 1, 34),
       treatmentFree,
     };
   });
 }
 
-/* managers: who may add hives / log inspections at this site, beyond the
-   Research Coordinator, who always can. Defaults to just the primary
+/* [SEED — Phase 5] managers: who may add hives / log inspections at this
+   site, beyond Web Admin, who always can. Defaults to just the primary
    manager; the roles editor can grant additional members access per site. */
 export const apiaries = apiarySeeds.map((ap) => ({ ...ap, hiveRecords: buildHives(ap), managers: [ap.manager] }));
 export const apiaryById = (id) => apiaries.find((a) => a.id === id);
 
+/* [PERMANENT] Pure aggregation over whatever hive array is passed in —
+   keeps working unchanged once that array comes from Supabase. */
 export function tally(hives) {
   return hives.reduce((acc, h) => { acc[h.status] = (acc[h.status] || 0) + 1; return acc; }, {});
 }
 
+/* [PERMANENT] */
 export function vshAverage(hives) {
   const scored = hives.filter((h) => h.vsh != null);
   if (!scored.length) return 0;
@@ -183,20 +223,18 @@ export function vshAverage(hives) {
 }
 
 /* --------------------------------------------------------------------------
-   Inspections. Dates are relative to today so the dashboard never goes stale.
+   [SEED — Phase 5, except inspectionKinds] Inspections. Hive-level: each
+   inspection names the specific hives it covers (one, a subset, or all of a
+   site) rather than just a headcount, and can update those hives' status
+   (see setHiveStatus in js/store.js). Dates are relative to today so the
+   dashboard never goes stale.
    -------------------------------------------------------------------------- */
 
-export const inspectionKinds = [
-  'Freeze-killed brood assay',
-  'Alcohol wash — mite count',
-  'Brood pattern assessment',
-  'Recapping count',
-  'Queen mating check',
-  'Nuc build assessment',
-  'Full frame audit',
-  'Drone congregation survey',
-];
+/* [PERMANENT] */
+export const inspectionKinds = ['Assessment', 'Maintenance', 'Biosecurity'];
 
+/* [SEED — Phase 5] Only used to compute the fabricated inspection dates
+   below relative to today; real inspections just store a real date. */
 function shiftDays(days) {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -204,20 +242,27 @@ function shiftDays(days) {
   return d;
 }
 
+/* hiveIds are a deterministic slice of each apiary's seed hives — close
+   enough to the original headcounts for demo data, no need to match them
+   exactly. The retired, more specific assay names are folded into the note
+   so that detail isn't lost now that kind is just the coarse category. */
+const hivesAt = (apiaryId, n) => apiaryById(apiaryId).hiveRecords.slice(0, n).map((h) => h.id);
+
 const inspectionPlan = [
-  { apiary: 'ap-barrow',  offset: -6, kind: 'Freeze-killed brood assay',  by: 'm3', hives: 24, done: true,  note: 'Recapping above 60% in 19 of 24. BRW-14 leading.' },
-  { apiary: 'ap-tambo',   offset: -4, kind: 'Alcohol wash — mite count',  by: 'm5', hives: 30, done: true,  note: 'Site mean 1.4 mites/100 bees. No intervention required.' },
-  { apiary: 'ap-oradale', offset: -3, kind: 'Nuc build assessment',       by: 'm4', hives: 40, done: true,  note: '6 nucs failed to build. Requeening scheduled.' },
-  { apiary: 'ap-barrow',  offset: -1, kind: 'Brood pattern assessment',   by: 'm9', hives: 18, done: true,  note: 'Two hives with spotty pattern flagged for follow-up.' },
-  { apiary: 'ap-tambo',   offset: 2,  kind: 'Recapping count',            by: 'm5', hives: 32, done: false, note: 'Ninth-generation cohort. Full cohort measure.' },
-  { apiary: 'ap-oradale', offset: 3,  kind: 'Alcohol wash — mite count',  by: 'm4', hives: 48, done: false, note: 'Baseline established for the new site.' },
-  { apiary: 'ap-barrow',  offset: 6,  kind: 'Queen mating check',         by: 'm3', hives: 12, done: false, note: 'Second round of II queens from Coalvale semen.' },
-  { apiary: 'ap-tambo',   offset: 9,  kind: 'Full frame audit',           by: 'm5', hives: 104, done: false, note: 'Pre-season audit across the whole site.' },
-  { apiary: 'ap-oradale', offset: 13, kind: 'Brood pattern assessment',   by: 'm10', hives: 26, done: false, note: 'First assessment on Oradale-mated queens.' },
+  { apiary: 'ap-barrow',  offset: -6, kind: 'Assessment',  by: 'm3',  hiveIds: hivesAt('ap-barrow', 24),  done: true,  note: 'Freeze-killed brood assay. Recapping above 60% in 19 of 24. BRW-14 leading.' },
+  { apiary: 'ap-tambo',   offset: -4, kind: 'Assessment',  by: 'm5',  hiveIds: hivesAt('ap-tambo', 30),   done: true,  note: 'Alcohol wash — mite count. Site mean 1.4 mites/100 bees. No intervention required.' },
+  { apiary: 'ap-oradale', offset: -3, kind: 'Assessment',  by: 'm4',  hiveIds: hivesAt('ap-oradale', 40), done: true,  note: 'Nuc build assessment. 6 nucs failed to build. Requeening scheduled.' },
+  { apiary: 'ap-barrow',  offset: -1, kind: 'Assessment',  by: 'm9',  hiveIds: hivesAt('ap-barrow', 18),  done: true,  note: 'Brood pattern assessment. Two hives with spotty pattern flagged for follow-up.' },
+  { apiary: 'ap-tambo',   offset: 2,  kind: 'Assessment',  by: 'm5',  hiveIds: hivesAt('ap-tambo', 32),   done: false, note: 'Recapping count. Ninth-generation cohort. Full cohort measure.' },
+  { apiary: 'ap-oradale', offset: 3,  kind: 'Assessment',  by: 'm4',  hiveIds: hivesAt('ap-oradale', 48), done: false, note: 'Alcohol wash — mite count. Baseline established for the new site.' },
+  { apiary: 'ap-barrow',  offset: 6,  kind: 'Maintenance', by: 'm3',  hiveIds: hivesAt('ap-barrow', 12),  done: false, note: 'Queen mating check. Second round of II queens from Coalvale semen.' },
+  { apiary: 'ap-tambo',   offset: 9,  kind: 'Maintenance', by: 'm5',  hiveIds: hivesAt('ap-tambo', 104),  done: false, note: 'Full frame audit. Pre-season audit across the whole site.' },
+  { apiary: 'ap-oradale', offset: 13, kind: 'Assessment',  by: 'm10', hiveIds: hivesAt('ap-oradale', 26), done: false, note: 'Brood pattern assessment. First assessment on Oradale-mated queens.' },
 ];
 
 export const inspections = inspectionPlan.map((p, i) => ({
   id: `insp-${i}`,
+  status: null,
   ...p,
   date: shiftDays(p.offset),
 }));
@@ -226,6 +271,7 @@ export const recentInspections   = inspections.filter((i) => i.done).sort((a, b)
 export const upcomingInspections = inspections.filter((i) => !i.done).sort((a, b) => a.date - b.date);
 
 /* --------------------------------------------------------------------------
+   [SEED — Phase 6, except projectStatusLabels]
    Projects. Coordinated research initiatives that can span apiaries, or run
    openly across whatever member sites choose to take part. A project is not
    the same thing as an apiary: an apiary is a place, a project is a question
@@ -237,6 +283,7 @@ export const upcomingInspections = inspections.filter((i) => !i.done).sort((a, b
    project to answer it, other members join with what they can contribute.
    -------------------------------------------------------------------------- */
 
+/* [PERMANENT] */
 export const projectStatusLabels = {
   recruiting: 'Recruiting',
   active: 'Active',
@@ -453,16 +500,15 @@ export const projectById = (id) => projects.find((p) => p.id === id);
 export const projectForThread = (threadId) => projects.find((p) => p.linkedThread === threadId);
 
 /* --------------------------------------------------------------------------
-   Forum. Member-created topics with subscribe + notify.
+   [SEED — Phase 3, partially superseded] Forum. Member-created topics with
+   subscribe + notify. js/views/forum.js itself moved to real Supabase rows
+   in Phase 3 (see the plan doc) and no longer reads this array — it's kept
+   only because js/views/projects.js (a project's "became a thread" link)
+   and js/views/notifications.js (title lookup for an old-style
+   subscription) still reference these seed threads by id, and neither of
+   those views has migrated yet. forumCategories/categoryName had no such
+   remaining reader and were removed outright.
    -------------------------------------------------------------------------- */
-
-export const forumCategories = [
-  { id: 'fc-field',  name: 'Field practice' },
-  { id: 'fc-assess', name: 'Assessment & assays' },
-  { id: 'fc-genet',  name: 'Genetics & lines' },
-  { id: 'fc-gear',   name: 'Equipment' },
-  { id: 'fc-admin',  name: 'Association' },
-];
 
 export const threads = [
   {
@@ -539,10 +585,17 @@ export const threads = [
 ];
 
 export const threadById = (id) => threads.find((t) => t.id === id);
-export const categoryName = (id) => (forumCategories.find((c) => c.id === id) || {}).name || '';
 
 /* --------------------------------------------------------------------------
-   Repository. Three tracks — a genuine progression, so ordinals carry meaning.
+   [SEED — Phase 3, partially superseded] Repository. Three tracks — a
+   genuine progression, so ordinals carry meaning. js/views/repository.js
+   itself now reads the equivalent real Postgres rows (see the Phase 3
+   migration and js/store.js's loadRepository/loadSubTopic) — this array is
+   kept only because js/views/notifications.js still resolves a `repo:`
+   subscription's title through subById, and happens to still get correct
+   answers since the real rows were seeded with these exact same ids/names.
+   Article/document content was never affected either way — always
+   file-based, under content/repository/, loaded via js/content.js.
    -------------------------------------------------------------------------- */
 
 export const repository = [
@@ -601,65 +654,23 @@ export const repository = [
 export const allSubs = repository.flatMap((t) => t.subs.map((s) => ({ ...s, track: t.name, trackId: t.id })));
 export const subById = (id) => allSubs.find((s) => s.id === id);
 
-/* A representative article, shown when a sub-topic is opened. */
-export const sampleArticle = {
-  title: 'Scoring partial removals in the freeze-killed brood assay',
-  by: 'm9', at: 0, track: 'Queen Breeding', sub: 'Assessment methods',
-  body: [
-    'A freeze-killed brood assay asks a simple question: given a patch of dead sealed brood, how much of it will the colony remove? The answer is a proxy for the hygienic behaviour that underlies varroa sensitive hygiene, and the appeal of the method is that it needs nothing more exotic than liquid nitrogen and patience.',
-    'The complication is that removal is not binary. At the 24-hour count you will find cells fully cleaned, cells untouched, and a third category that causes most of the disagreement between operators: cells that have been uncapped, sometimes chewed at the margin, with the dead pupa still in place.',
-    'h3:Why partials are not simply half a removal',
-    'It is tempting to score a partial as 0.5 and move on. Resist it. Uncapping and removal are separable behaviours with different thresholds, and a colony that uncaps readily but does not complete removal is telling you something specific — usually that detection is working and the follow-through is not.',
-    'For varroa work the distinction matters more than it does for general hygiene screening, because mite reproduction is disrupted by uncapping alone. A colony that uncaps and recaps without removing the pupa may still suppress mite reproduction effectively. Collapsing that behaviour into a single removal percentage hides it.',
-    'h3:The recommended scoring',
-    'Record three numbers for each assay: cells fully removed, cells uncapped but not removed, and cells untouched. Report the headline figure as full removals over total cells, and carry the partial count alongside it rather than folded into it.',
-    'quote:If your protocol produces a single number, you have already thrown away the most interesting part of the result.',
-    'This costs nothing at the point of counting and preserves information you cannot reconstruct later. Members running the assay for program submission should use the three-column form in the resources list below.',
-    'h3:Sources of variation to control',
-    'Beyond scoring, three procedural choices account for most of the between-operator spread:',
-    'list:Exposure time under liquid nitrogen — standardise at ten seconds for a 55mm section|The interval between freezing and counting — 24 hours, not "the next day"|Whether the frame is returned to its original position and orientation',
-    'Operators who lock these three down and record partials separately report between-operator agreement inside five percentage points, which is tight enough to select on.',
-  ],
-};
-
 /* --------------------------------------------------------------------------
-   Marketplace.
+   Marketplace. Listings themselves migrated to Postgres in Phase 2 — see
+   js/store.js (loadListings/addListing) and
+   supabase/migrations/20260828000000_marketplace_listings.sql. listingKinds
+   is the one export from this section that survives: the fixed vocabulary
+   used both for the category filter chips and the CHECK constraint on
+   marketplace_listings.kind (kept in sync by hand — 'All' is a UI-only
+   filter value, never a stored kind).
    -------------------------------------------------------------------------- */
 
-export const listings = [
-  { id: 'l1', kind: 'Queens', title: 'Tambo 22 mated queens — ninth generation', price: 78, unit: 'each',
-    seller: 'm5', state: 'TAS', posted: -1, qty: '40 available, December dispatch',
-    detail: 'Open-mated within the Tambo closed population. VSH mean 88% across the parent cohort. Marked and clipped on request.' },
-  { id: 'l2', kind: 'Queens', title: 'Barrowfield 14 breeder queens', price: 240, unit: 'each',
-    seller: 'm2', state: 'VIC', posted: -2, qty: '6 available',
-    detail: 'Instrumentally inseminated, single-drone. Full pedigree and three seasons of assessment data supplied with each queen.' },
-  { id: 'l3', kind: 'Queens', title: 'Kellyanne 3 mated queens', price: 65, unit: 'each',
-    seller: 'm7', state: 'WA', posted: -4, qty: '120 available, staged weekly',
-    detail: 'Calm, broad brood pattern, VSH mean 76%. WA dispatch only — no interstate movement permits held.' },
-  { id: 'l4', kind: 'Semen', title: 'Coalvale 17 semen — collected to order', price: 190, unit: 'per dose',
-    seller: 'm6', state: 'SA', posted: -5, qty: 'By arrangement',
-    detail: 'Eighth-generation closed population, VSH mean 85%. Collected fresh and shipped chilled, or held in liquid nitrogen for scheduled collection.' },
-  { id: 'l5', kind: 'Equipment', title: 'Cell bar frames — cedar, 20-cup', price: 34, unit: 'each',
-    seller: 'm3', state: 'NSW', posted: -6, qty: '50 in stock',
-    detail: 'Western red cedar, three removable bars, sized for Langstroth deep. Cups not included.' },
-  { id: 'l6', kind: 'Equipment', title: 'Poly mini-nuc mating boxes — used, good order', price: 18, unit: 'each',
-    seller: 'm4', state: 'QLD', posted: -8, qty: '80 available',
-    detail: 'Two seasons use. Selling to move to timber for summer heat. Feeders included, frames not.' },
-  { id: 'l7', kind: 'Nucs', title: 'Four-frame nucs — Merrindale 5 queens', price: 210, unit: 'each',
-    seller: 'm10', state: 'QLD', posted: -9, qty: '25 available from January',
-    detail: 'Four frames of brood and stores on a current-season Merrindale queen. Low swarming across three seasons.' },
-  { id: 'l8', kind: 'Equipment', title: 'Instrumental insemination station — Schley 2.0', price: 3400, unit: 'complete',
-    seller: 'm6', state: 'SA', posted: -12, qty: '1 only',
-    detail: 'Full station with CO₂ regulator, stereo microscope, syringes and spare capillaries. Upgrading, not exiting.' },
-  { id: 'l9', kind: 'Queens', title: 'Wandagee 11 mated queens — drought hardy', price: 70, unit: 'each',
-    seller: 'm7', state: 'WA', posted: -14, qty: '60 available',
-    detail: 'Gascoyne-derived stock selected for low water and forage availability. VSH mean 71%.' },
-];
-
+/* [PERMANENT] */
 export const listingKinds = ['All', 'Queens', 'Nucs', 'Semen', 'Equipment'];
 
 /* --------------------------------------------------------------------------
-   Notifications — what the subscription machinery would have delivered.
+   [SEED — Phase 7] Notifications — what the subscription machinery would
+   have delivered. Migrated last since it aggregates activity from the
+   forum/marketplace/repository/projects entities above.
    -------------------------------------------------------------------------- */
 
 export const notifications = [
@@ -678,7 +689,7 @@ export const notifications = [
 ];
 
 /* --------------------------------------------------------------------------
-   Helpers shared across views
+   [PERMANENT] Helpers shared across views
    -------------------------------------------------------------------------- */
 
 export function relDays(offset) {

@@ -2,23 +2,23 @@
    Application shell + hash router.
    ========================================================================== */
 
-import { currentUser, members } from './data.js';
 import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
-  roleLabel, previewUser, setPreviewAs,
+  roleLabel, currentUser, loadSignedInMember,
+  isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderApiaries, renderApiary } from './views/apiaries.js';
-import { renderManager } from './views/managers.js';
+import { renderManager, renderMembers } from './views/managers.js';
 import { renderProjects, renderProject } from './views/projects.js';
 import { renderForum, renderThread } from './views/forum.js';
 import { renderRepository, renderSubTopic, renderArticle } from './views/repository.js';
 import { renderMarketplace } from './views/marketplace.js';
 import { renderNotifications } from './views/notifications.js';
 import { loadContent } from './content.js';
-import { isWildApricotCallback, consumeWildApricotCallback } from './waAuth.js';
+import { isWildApricotCallback, consumeWildApricotCallback, completeWildApricotLogin } from './waAuth.js';
 
 const app = document.getElementById('app');
 
@@ -35,12 +35,14 @@ const NAV = [
   { path: '#/marketplace', label: 'Marketplace',  icon: 'tag' },
   { group: 'You' },
   { path: '#/notifications', label: 'Notifications', icon: 'bell', badge: unreadCount },
+  { path: '#/members',     label: 'Members',      icon: 'user', adminOnly: true },
 ];
 
 const ROUTES = [
   { test: /^#\/?$/,                    view: renderProjects },
   { test: /^#\/apiaries\/?$/,          view: renderApiaries },
   { test: /^#\/apiaries\/(.+)$/,       view: renderApiary },
+  { test: /^#\/members\/?$/,           view: renderMembers },
   { test: /^#\/managers\/(.+)$/,       view: renderManager },
   { test: /^#\/projects\/?$/,          view: renderProjects },
   /* The dashboard is a topic area of the VSH program (PRJ-00), not a page in
@@ -48,20 +50,27 @@ const ROUTES = [
      project route, which would otherwise swallow "p0/dashboard" as an id. */
   { test: /^#\/projects\/p0\/dashboard\/?$/, view: renderDashboard },
   { test: /^#\/projects\/(.+)$/,       view: renderProject },
-  { test: /^#\/forum\/?$/,             view: renderForum },
-  { test: /^#\/forum\/(.+)$/,          view: renderThread },
-  { test: /^#\/repository\/?$/,        view: renderRepository },
+  /* Async routes (Phase 2 marketplace, Phase 3 forum/repository — real
+     Supabase rows now). `load` fetches the data render() awaits before
+     calling the still-synchronous view below with it — see render()'s own
+     comment for how the loading/error states and caching around this
+     work. */
+  { test: /^#\/forum\/?$/,             view: renderForum,    load: loadForumThreads },
+  { test: /^#\/forum\/(.+)$/,          view: renderThread,   load: (id) => loadThread(id) },
+  { test: /^#\/repository\/?$/,        view: renderRepository, load: loadRepository },
   /* Article reader before the sub-topic route, which would otherwise swallow
      "rs-graft/some-article" whole as a sub-topic id. */
-  { test: /^#\/repository\/([^/]+)\/(.+)$/, view: renderArticle },
-  { test: /^#\/repository\/(.+)$/,     view: renderSubTopic },
-  { test: /^#\/marketplace\/?$/,       view: renderMarketplace },
+  { test: /^#\/repository\/([^/]+)\/(.+)$/, view: renderArticle,  load: (subId) => loadSubTopic(subId) },
+  { test: /^#\/repository\/(.+)$/,     view: renderSubTopic, load: (id) => loadSubTopic(id) },
+  { test: /^#\/marketplace\/?$/,       view: renderMarketplace, load: loadListings },
   { test: /^#\/notifications\/?$/,     view: renderNotifications },
 ];
 
 function shellHTML(inner) {
+  const me = currentUser();
+  const canManageMembers = isWebAdmin(me.id);
   const hash = location.hash || '#/';
-  const nav = NAV.map((item) => {
+  const nav = NAV.filter((item) => !item.adminOnly || canManageMembers).map((item) => {
     if (item.group) return `<div class="rail-group"><span>${item.group}</span></div>`;
     const active = hash.startsWith(item.path) || (item.home && /^#\/?$/.test(hash));
     const n = item.badge ? item.badge() : 0;
@@ -85,27 +94,68 @@ function shellHTML(inner) {
         <nav>${nav}</nav>
         <div class="rail-foot">
           <div class="rail-who">
-            ${avatar(currentUser)}
+            ${avatar(me)}
             <div>
-              <strong>${esc(currentUser.name)}</strong>
-              <span>${esc(roleLabel(currentUser.id))}</span>
+              <strong>${esc(me.name)}</strong>
+              <span>${esc(roleLabel(me.id))}</span>
             </div>
           </div>
           <button class="rail-out" data-signout>Sign out</button>
-
-          <div class="rail-preview">
-            <label for="preview-as">Preview apiary access as <span title="Testing only — doesn't change who posts, joins or lists things as you.">(prototype)</span></label>
-            <select id="preview-as">
-              ${members.map((m) => `<option value="${m.id}" ${previewUser().id === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}
-            </select>
-          </div>
         </div>
       </aside>
       <main class="main" id="main">${inner}</main>
     </div>`;
 }
 
-function render() {
+/* Routes with a `load` need their data fetched before the (still-
+   synchronous) view can render anything meaningful — so render() is
+   async for those, and does three things in order: paint a loading state
+   immediately (no blank flash), await the load into routeDataCache
+   (skipped if already cached — see the hashchange listener below, which
+   is what actually invalidates this on real navigation), then paint the
+   real view or an error panel. renderGen guards against a slow fetch
+   finishing after a newer render() has already started (e.g. the member
+   navigated away while it was in flight) — without it, the stale
+   response could overwrite whatever's on screen by then. */
+let renderGen = 0;
+const routeDataCache = new Map();
+
+/* Views that mutate server data (e.g. marketplace's "Publish listing")
+   call this after a successful write so the next render re-fetches
+   instead of showing stale cached data. One shared cache, so this is
+   just "forget everything" rather than tracking per-route keys — fine
+   while there's only a handful of async routes. */
+window.__aqbba_invalidateData = () => routeDataCache.clear();
+
+function loadingPanel() {
+  return `<div class="wrap"><div class="panel"><div class="empty"><h3>Loading…</h3></div></div></div>`;
+}
+
+function errorPanel(err) {
+  return `
+    <div class="wrap">
+      <div class="panel">
+        <div class="empty">
+          <h3>Couldn't load this page</h3>
+          <p>${esc(err && err.message ? err.message : 'Something went wrong.')}</p>
+          <button class="btn btn-primary" data-retry>Try again</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+const notFoundPanel = () => `
+  <div class="wrap">
+    <div class="empty">
+      <h3>That page isn't here</h3>
+      <p>The link may be out of date. Projects is a good place to pick up from.</p>
+      <a class="btn btn-primary" href="#/">Go to projects</a>
+    </div>
+  </div>`;
+
+async function render() {
+  const myGen = ++renderGen;
+
   if (!state.signedIn) {
     app.innerHTML = renderGate();
     bindGlobal();
@@ -113,22 +163,33 @@ function render() {
   }
 
   const hash = location.hash || '#/';
-  let inner = '';
+  let matched = null;
   for (const r of ROUTES) {
     const m = hash.match(r.test);
-    if (m) { inner = r.view(m[1], m[2]); break; }
-  }
-  if (!inner) {
-    inner = `
-      <div class="wrap">
-        <div class="empty">
-          <h3>That page isn't here</h3>
-          <p>The link may be out of date. Projects is a good place to pick up from.</p>
-          <a class="btn btn-primary" href="#/">Go to projects</a>
-        </div>
-      </div>`;
+    if (m) { matched = { r, m }; break; }
   }
 
+  if (matched && matched.r.load) {
+    if (!routeDataCache.has(matched.r)) {
+      app.innerHTML = shellHTML(loadingPanel());
+      bindGlobal();
+      try {
+        routeDataCache.set(matched.r, await matched.r.load(matched.m[1], matched.m[2]));
+      } catch (err) {
+        if (myGen !== renderGen) return;
+        app.innerHTML = shellHTML(errorPanel(err));
+        bindGlobal();
+        return;
+      }
+    }
+    if (myGen !== renderGen) return;
+    app.innerHTML = shellHTML(matched.r.view(routeDataCache.get(matched.r), matched.m[1], matched.m[2]));
+    bindGlobal();
+    document.body.classList.remove('rail-open');
+    return;
+  }
+
+  const inner = matched ? matched.r.view(matched.m[1], matched.m[2]) : notFoundPanel();
   app.innerHTML = shellHTML(inner);
   bindGlobal();
   document.body.classList.remove('rail-open');
@@ -144,29 +205,42 @@ function bindGlobal() {
   if (scrim) scrim.addEventListener('click', () => document.body.classList.remove('rail-open'));
 
   const out = app.querySelector('[data-signout]');
-  if (out) out.addEventListener('click', () => { signOut(); location.hash = '#/'; render(); });
+  if (out) out.addEventListener('click', async () => { await signOut(); location.hash = '#/'; render(); });
 
-  const preview = app.querySelector('#preview-as');
-  if (preview) preview.addEventListener('change', (e) => {
-    setPreviewAs(e.target.value);
-    toast(`Previewing apiary access as ${previewUser().name}.`);
-    render();
-  });
+  const retry = app.querySelector('[data-retry]');
+  if (retry) retry.addEventListener('click', () => { routeDataCache.clear(); render(); });
+
 
   /* Subscribe buttons work identically wherever they appear. A page may show
-     more than one control for the same subscription, so update them all. */
+     more than one control for the same subscription, so update them all.
+     toggleSub writes through to Postgres (Phase 3 — see the plan doc) —
+     this patches the DOM directly on success rather than re-rendering the
+     whole page, since the subscription itself is the only thing that
+     changed; a subscriber *count* elsewhere on the page (e.g. a thread's
+     "N watching") won't reflect this until the next fresh page load, same
+     as every other un-optimistic write in this migration so far. */
   app.querySelectorAll('[data-sub]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const key = btn.dataset.sub;
-      const now = toggleSub(key);
-      app.querySelectorAll(`[data-sub="${key}"]`).forEach((peer) => {
+      const peers = app.querySelectorAll(`[data-sub="${key}"]`);
+      peers.forEach((peer) => { peer.disabled = true; });
+      let now;
+      try {
+        now = await toggleSub(key);
+      } catch (err) {
+        peers.forEach((peer) => { peer.disabled = false; });
+        toast(`Couldn't update subscription: ${err.message}`);
+        return;
+      }
+      peers.forEach((peer) => {
+        peer.disabled = false;
         peer.classList.toggle('is-on', now);
         peer.setAttribute('aria-pressed', String(now));
         peer.innerHTML = `${now ? icons.bellOn : icons.bell}<span>${now ? 'Subscribed' : 'Subscribe'}</span>`;
       });
       const what = btn.dataset.subLabel || 'this topic';
       toast(now
-        ? `Subscribed to ${what}. New posts will go to ${currentUser.name.split(' ')[0].toLowerCase()}@…, matching your digest setting.`
+        ? `Subscribed to ${what}. New posts will go to the email on your member record.`
         : `Unsubscribed from ${what}. No further email.`);
       refreshBadge();
     });
@@ -186,6 +260,11 @@ function refreshBadge() {
 /* --- boot ---------------------------------------------------------------- */
 
 window.addEventListener('hashchange', () => {
+  /* A real navigation, as opposed to a same-page re-render (filter clicks,
+     sign-out, etc.) — refetch async routes' data rather than reusing
+     whatever was last cached, so revisiting a page picks up anything
+     other members changed meanwhile. */
+  routeDataCache.clear();
   render();
   const main = document.getElementById('main');
   if (main) main.scrollIntoView({ block: 'start' });
@@ -199,16 +278,34 @@ window.__aqbba_render = render;
 
 /* Wild Apricot redirects back with a real page load and ?code=/?error= in
    the query string, not the hash — so this has to run once at boot, ahead
-   of the hash router, regardless of sign-in state. There is deliberately no
-   path here that signs the member in: that needs the server-side token
-   exchange described in js/waAuth.js, which doesn't exist yet. This only
-   reports what happened and leaves the gate showing. */
+   of the hash router, regardless of sign-in state. completeWildApricotLogin
+   calls the server-side token exchange (js/waAuth.js) and sets a real
+   Supabase session from its result; loadSignedInMember() (js/store.js) then
+   reads that signed-in member's own row so currentUser() resolves to them
+   from here on. */
 if (isWildApricotCallback()) {
   const result = consumeWildApricotCallback();
   if (result.error) {
     toast(`Wild Apricot sign-in failed: ${result.error}`);
   } else {
-    toast('Wild Apricot returned a valid authorization code — sign-in can\'t complete until the server-side exchange exists. See js/waAuth.js.');
+    try {
+      const { firstName } = await completeWildApricotLogin(result.code);
+      await loadSignedInMember();
+      toast(`Welcome, ${firstName}.`);
+    } catch (err) {
+      toast(`Wild Apricot sign-in failed: ${err.message}`);
+    }
+  }
+} else {
+  /* Not a fresh Wild Apricot redirect — but a previous real sign-in's
+     Supabase session may still be valid (it persists in its own
+     localStorage key across reloads). Best-effort and silent: if this
+     fails (offline, CDN unreachable), the app still boots — it just shows
+     the sign-in gate rather than resuming a session it couldn't check. */
+  try {
+    await loadSignedInMember();
+  } catch (err) {
+    console.warn('Could not check for a persisted Supabase session:', err);
   }
 }
 

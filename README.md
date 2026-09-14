@@ -40,24 +40,60 @@ there is no top-level Dashboard nav item any more.
 
 **Research dashboard** (`#/projects/p0/dashboard`) — a topic area of PRJ-00, reached from
 the program's summary page and breadcrumbed back to it. Program-wide figures, then a card
-per research apiary showing location, coordinates, program stage (initialising /
-assessment / maintenance), manager, hive count, mean VSH, hives in treatment and hives
-treatment-free for three or more seasons. Below that: the honeycomb hive grid, a colony
-status breakdown, upcoming and recently completed inspections, and the contributing
-breeders with their queen lines.
+per research apiary showing location, coordinates, apiary status (Establishing /
+Assessment / Maintenance / Re-queening), manager, hive count, mean VSH, hives being
+treated and hives treatment-free for three or more seasons. Below that: the honeycomb
+hive grid, a colony status breakdown (hive status is its own separate field — Thriving /
+Good / Average / Poor / Treating, recorded per hive and updatable via Log Inspection),
+upcoming and recently completed inspections, and the contributing breeders with their
+queen lines — the program's other two editable records, Web Admin only:
+
+- **Queen lines** — name, breeder, generation, mean VSH, and a note. Hives reference a
+  line by an internal code (`hive.line`), same reasoning as hive ids, but that code is
+  never shown or entered anywhere — members only see and edit the line's name, which can
+  change over time, while the code stays fixed and is generated automatically
+  (`js/store.js`'s `addQueenLine`/`lineByCode`/`allQueenLines`).
+- **Breeders** — a queen line's breeder is either an existing member, or a standalone
+  breeder record (name, state, note) for someone contributing a line who isn't a
+  registered platform member. Standalone breeders have no login and no roles; they exist
+  purely to be credited on a line (`addBreeder`/`breederById` in `js/store.js`), since this
+  app has no general "Add Member" feature — membership is meant to come from Wild Apricot,
+  not be created here.
+
+Every apiary and hive field is editable after creation, not just status — **Edit apiary**
+(on the apiary's own page) covers name, region, coordinates, year established, status,
+manager and dominant flora; **Edit** on a selected hive's readout covers everything set
+at registration (status, queen line, queen ID, queen marking, hive configuration, UBEEO/
+Harbo results, treatment-free seasons, comments) except the hive ID itself, which stays
+fixed once assigned since inspections and other records refer to it. Both are stored the
+same way as role/contact overrides — `updateApiary` / `updateHive` in `js/store.js` —
+merged on top of the seed or member-added record whenever it's read, and gated by the
+same manager/Web Admin permission as adding a hive or logging an inspection at that site.
 
 **Apiary records** (`#/apiaries`) — a comparison table across sites, then per-apiary: the
 full hive grid, queen lines present with site performance measured against each line's
 program mean, the complete inspection schedule, site detail, and which research projects
 are currently running there. This is also where the program's own data gets maintained:
 **Add apiary** registers a new research site, **Add hive** registers a new hive at a site
-(the hive ID is assigned automatically), and **Log inspection** records a completed or
-scheduled inspection. These three are meaningfully different from the member-facing
-composers elsewhere (forum, marketplace, repository) — they alter the program's research
-data rather than adding social content, so in a production build they'd want to be
-restricted to apiary managers and the research coordinator rather than open to any member.
-The prototype doesn't enforce that distinction since there's only one signed-in user to
-test with, but it's a real access-control decision for later, not an oversight.
+(the hive ID and the queen's own ID are both entered at registration, validated for
+uniqueness against every existing hive — the queen's breeding line, a separate field, is
+picked from a dropdown), and **Log inspection** records a completed or scheduled
+inspection against one, several, or all of an apiary's hives. Inspections are
+hive-level, not just an apiary headcount: the form's Apiary field is itself a picker
+(scoped to whichever sites the signed-in member can edit), its Hives field is a checklist
+of that apiary's actual hives with an "All hives" toggle, and an optional Status field
+updates every selected hive's status the moment the inspection is saved — so an inspection
+is how a hive's status changes after it's first registered, not just a log entry (see
+`setHiveStatus` / `addInspection` in `js/store.js`). Inspection type is one of three
+categories — Assessment, Maintenance, Biosecurity — rather than a specific assay name;
+older, more specific seed inspections keep that detail in their notes instead. These
+maintenance flows are meaningfully different from the member-facing composers elsewhere
+(forum, marketplace, repository) — they alter the program's research data rather than
+adding social content, so they're access-gated: adding a new apiary is Web Admin only,
+and adding a hive or logging an inspection at an existing site requires Web Admin or that
+site's manager grant (see "Roles & apiary access" below). The prototype enforces this
+today via the **"Preview access as"** selector, since there's only one real signed-in
+user to test with otherwise.
 
 **Manager details** (`#/managers/:id`) — phone, email and postal address for whoever is
 listed as an apiary's manager. Phone and email are mandatory once a record is saved
@@ -71,21 +107,37 @@ way, since who runs a given site is whoever `apiary.manager` names, not a fixed 
 
 **Roles & apiary access** — also on the manager details page. A member can hold several
 roles at once (e.g. a Breeder who is also an Apiary Manager), edited from a fixed list
-(`roleOptions` in `js/data.js`, which includes "Operator" alongside the original roles).
-Holding the "Apiary Manager" title is not itself a permission — actual edit access to a
-site (adding a hive, logging an inspection, and creating new apiaries) is a separate
-grant, checked per apiary. A member with that grant for Barrowfield cannot touch
-Oradale's data unless separately granted there too; the Research Coordinator can always
-edit every site. Editing roles and grants is itself restricted to the Coordinator.
+(`roleOptions` in `js/data.js`), each carrying a short description shown next to its
+checkbox in the roles editor:
 
-This app has exactly one real signed-in identity, so the restriction above would never
-actually trigger in testing — everyone who opens it is the Coordinator. To make it
-demonstrable, the rail has a **"Preview apiary access as"** selector, clearly marked
-`(prototype)`. It only affects the three gated actions (add hive, log inspection, add
-apiary) — authorship of forum posts, listings and project joins always stays the real
-signed-in member. This selector has no production equivalent; a real deployment derives
-permissions from the actual authenticated Wild Apricot member, and this whole mechanism
-(`previewUser`/`setPreviewAs` in `js/store.js`) should be deleted once that's wired up.
+- **Web Admin** — superuser; full access everywhere, including every apiary and every
+  member's roles/access grants.
+- **Apiary Manager** — complete CRUD privileges for the apiary they manage.
+- **Operator** — assists the Apiary Manager with inspections and data updates; change
+  and update privileges only, no create or delete.
+- **Breeder** — change and update privileges only. Replaces the old Breeder — Level 1/2/3,
+  Instrumental Insem., and Laboratory — Assays roles, which have been retired.
+- **Member** — read-only on apiary data and the repository; full forum access (publish,
+  subscribe, notifications) and can list items in the Marketplace.
+- **Creator** — everything Member has, plus the ability to contribute repository content.
+
+Holding the "Apiary Manager" title is not itself a site-level permission — actual edit
+access to a specific site (adding a hive, logging an inspection) is a separate grant,
+checked per apiary via `canEditApiary` in `js/store.js`. A member with that grant for
+Barrowfield cannot touch Oradale's data unless separately granted there too; Web Admin
+can always edit every site, and creating a brand-new apiary is Web Admin only.
+Repository contribution (`canContributeRepository` in `js/store.js`) is gated by role
+instead — to the four operational roles above plus Creator — so a plain Member sees the
+repository read-only, with no Contribute button. Editing roles and grants themselves is
+restricted to Web Admin.
+
+These checks run against the real signed-in member (`currentUser()`) now that Wild
+Apricot sign-in is real. Earlier in the prototype, before that existed, everyone who
+opened the app was signed in as the same seed Web Admin, so a rail selector let a tester
+"preview" the apiary/repository checks as if signed in as someone else — clearly marked
+`(prototype)`, never affecting authorship of forum posts, listings, or project joins. It
+has since been removed (`previewUser`/`setPreviewAs` in `js/store.js`, the rail's
+"Preview access as" selector) now that a real per-member identity makes it redundant.
 
 **Projects** (`#/projects`) — coordinated research initiatives, distinct from apiaries: a
 project is a question with a method attached, and can span apiaries, run at one, or wait
@@ -98,17 +150,18 @@ thread, and both directions link to each other, so the life cycle a member actua
 is: a problem raised in the forum → a project proposed to answer it → members joining
 with what they can contribute.
 
-**Forum** (`#/forum`) — six seeded topics with realistic multi-post discussions. Members
-create topics, subscribe to topics or whole categories, and set email delivery frequency
-(each post / daily digest / weekly digest). Publishing a topic or reply reports how many
-subscribers were notified.
+**Forum** (`#/forum`) — real member discussions now (Phase 3 of the backend migration —
+see "Hosting & backend" below), starting empty rather than the six invented seed
+discussions this used to show. Members create topics, subscribe to topics or whole
+categories, and set email delivery frequency (each post / daily digest / weekly digest).
 
 **Repository** (`#/repository`) — the three tracks from the brief (Foundation → Queen
 Production → Queen Breeding), sixteen sub-topics, each independently subscribable and
-publishable. Sub-topics carry **real association content**: Markdown articles (with an
-article reader at `#/repository/<sub>/<slug>`) and document attachments (PDF, Word,
-Excel, images) served as download links with type and size. Sub-topics with no real
-content yet fall back to a seeded placeholder article, labelled as such. See "Authoring
+publishable — real Postgres rows now (Phase 3), though only for sign-in and subscribing;
+sub-topics still carry **real association content** exactly as before: Markdown articles
+(with an article reader at `#/repository/<sub>/<slug>`) and document attachments (PDF,
+Word, Excel, images) served as download links with type and size. A sub-topic with no
+real content yet shows an honest "no content here yet" empty state. See "Authoring
 repository content" below for how to add material.
 
 **Marketplace** (`#/marketplace`) — queens, nucs, semen and equipment, filterable by
@@ -120,9 +173,10 @@ would have emailed, with unread state, plus a summary of everything the member f
 ## The honeycomb grid
 
 The dashboard renders all ~100 hives in an apiary as one interlocking honeycomb field.
-Each hexagon is a real hive record; click it to read that hive's five assessment data
-points (VSH score, mite load, brood frames, temperament, last inspection) plus its queen
-line, contributing breeder, and queen marking.
+Each hexagon is a real hive record; click it to read that hive's four assessment data
+points (VSH/UBEEO score, mite load/Harbo assay result, hive configuration, last
+inspection) plus its queen line, its own queen ID, contributing breeder, queen marking,
+and any comments recorded when the hive was registered.
 
 Cell colours quote the **international queen-marking colour code** — the one colour
 system every queen breeder already reads fluently — rather than an arbitrary palette.
@@ -182,7 +236,10 @@ Repository content is plain files in the repo — no CMS, no build step. To add 
 material:
 
 1. Put files in `content/repository/<sub-topic-id>/` (the ids are in `js/data.js`:
-   `rs-graft`, `rs-nutri`, `rs-vsh`, and so on).
+   `rs-graft`, `rs-nutri`, `rs-vsh`, and so on — also the real, authoritative
+   `repository_sub_topics` table now that Phase 3 of the backend migration has landed;
+   the two are seeded to match exactly, but adding a genuinely new sub-topic beyond the
+   current sixteen means a Web Admin inserting a row there too, not just adding files).
    - **Articles** are Markdown files with a front-matter header:
 
      ```markdown
@@ -244,43 +301,115 @@ real usage says otherwise. Setup, once you're ready to move off `serve.py`:
    Settings → Environment Variables (not committed to the repo — that's what
    `.env.example` documents instead of real values).
 
-Nothing in the app depends on this yet — it still runs entirely from `serve.py` with mock
-data. This section exists so the decision is written down and the next session (or
-person) doesn't have to re-derive it.
+**Backend migration, in progress.** The app is moving off mock data + localStorage onto
+real Postgres tables with Row Level Security, entity by entity — see
+`/root/.claude/plans/zazzy-swinging-scone.md` for the full phased plan (identity first,
+then marketplace, forum/repository, queen lines/breeders, apiaries/hives/inspections,
+projects, notifications, then a final cleanup pass).
+
+Phase 1 (identity — `members`, `member_roles`, `apiary_managers`, contact details, and
+the Wild Apricot auth bridge) is **live and verified**: a real Wild Apricot sign-in
+resolves to a real `members` row over a real Supabase session, RLS-gated.
+
+Phase 2 (marketplace listings — deliberately the simplest entity, done to prove the
+read/write/RLS pattern cheaply before the bigger ones) is **live and verified**. It
+introduced two things every later phase reuses: every migrated entity requires a real
+Wild Apricot sign-in specifically (the old simulated demo sign-in has no Supabase session
+and a non-UUID id, so it gets a clear "needs a real sign-in" message rather than being
+able to browse or post), and `js/app.js`'s router supports a `load` function per route —
+run before the still-synchronous view, with a loading state, an error panel with retry,
+and a small cache invalidated on real navigation or right after a successful write.
+
+Phase 3 (forum + repository metadata + subscriptions) has its schema and code written
+(`supabase/migrations/20260829000000_forum_repository_subscriptions.sql`, `js/store.js`'s
+`loadForumThreads`/`loadThread`/`addThread`/`addPost`/`loadRepository`/`loadSubTopic`/
+`loadMySubscriptions`/`toggleSub`, `js/views/forum.js`, `js/views/repository.js`) but not
+yet applied to the live project. Two different purge decisions in this one phase, worth
+remembering: the forum's six seed discussions don't carry over (invented conversations by
+fake seed members, same reasoning as Phase 2's listings), but the repository's three
+tracks and ~16 sub-topic ids (`rs-graft`, `rs-vsh`, etc.) **do** carry over intact — those
+ids are load-bearing, referenced by real Markdown articles and documents already
+committed under `content/repository/`, which this phase doesn't touch at all (article
+content stays exactly as file-based as before). One real, deliberate product change: a
+thread's "N watching" is a real aggregate count now (via a `subscriber_count`/
+`subscriber_counts` RPC), but the old "Members watching" avatar list is gone — individual
+subscriber identity isn't broadly visible under this schema's RLS (self-only, on
+purpose), only the aggregate is.
+
+Every other entity (apiaries, hives, inspections, projects, notifications) still runs
+entirely from `js/data.js` mock data + `js/store.js`'s localStorage patches, unchanged,
+until its own phase comes up.
 
 ## Wiring up the real integrations
 
-**Wild Apricot** — the client-side half of the OAuth flow is built (`js/waAuth.js`); the
-server-side half is not, because it needs a client secret, which can't live in a browser.
-See that file's header comment for the full setup checklist and exactly which two calls
-the server side needs to make. In short:
+**Wild Apricot** — live and confirmed working end-to-end (real login → real member signed
+in). `js/waAuth.js` handles the browser-safe parts (the redirect to Wild Apricot's login,
+parsing the callback) and calls the part that can't run in a browser — exchanging the code
+for a token, which needs the application's client secret — via a Supabase Edge Function,
+`supabase/functions/wildapricot-auth/index.ts`, that does the token exchange and fetches
+the signed-in member's own contact record. See `js/waAuth.js`'s header comment for the
+full setup checklist.
 
-1. In the Wild Apricot admin, create an Authorized Application (contact-level access, not
-   the account-wide API key) and note its Client ID and Client Secret.
-2. Fill in `WA_CONFIG.clientId` in `js/waAuth.js` — the ID is not sensitive. The Client
-   Secret goes nowhere near this repo; it belongs only in Vercel's environment variables
-   (`WA_CLIENT_SECRET` in `.env.example`).
-3. Add a Supabase Edge Function (see "Hosting & backend" above) that does the token
-   exchange and calls `/contacts/me`, and have `js/waAuth.js`'s
-   `completeWildApricotLogin(code)` (sketched but commented out at the bottom of that
-   file) call it. Map the returned contact's membership level to the roles in
-   `js/data.js`.
+Two Wild Apricot API details worth remembering if this ever needs debugging again: the
+login/authorize redirect goes to AQBBA's *own* Wild Apricot site
+(`https://aqbba.org.au/sys/login/OAuthLogin`), not a shared host, and only takes exactly
+four query params (`client_id`, `redirect_uri`, `scope`, `state` — no `response_type`);
+the token exchange afterward *is* a shared host (`oauth.wildapricot.org/auth/token`) and
+needs `client_id` and `scope` in the POST body in addition to the Basic-auth header, not
+just `grant_type`/`code`/`redirect_uri`. Both were wrong on the first real test and had to
+be corrected against Wild Apricot's own API docs.
 
-Until then, `WA_CONFIG.clientId` stays empty and the gate's "Continue with Wild Apricot"
-button keeps using the simulated sign-in it always has — filling in the client ID is what
-switches it over to a real (but not yet completable) redirect, which is why the button's
-caption changes automatically once it's set. The interface reads the signed-in member
-from a single exported `currentUser` in `js/store.js`, so nothing else in the app needs
-to change once real sign-in lands.
+Roles are deliberately **not** derived from anything in Wild Apricot — Membership Level
+there is a fee tier (e.g. Individual vs. Student, unrelated to what someone should be able
+to do on this site), and Groups are general-purpose org bundling that doesn't map cleanly
+onto this site's roles either, and would silently couple whatever WA groups are used for
+to access control here. So every real sign-in provisions with the plain `Member` role
+(`DEFAULT_ROLES` in the Edge Function) and an admin assigns real roles afterward via the
+roles editor — a deliberate action instead of an implicit one.
+
+The gate's "Continue with Wild Apricot" button automatically uses the real redirect once
+`WA_CONFIG.clientId` is set (its caption changes to match); before that it stays on the
+simulated sign-in the prototype always had.
+
+`currentUser` is genuinely session state now (`js/store.js`), not the constant it used to
+be — it resolves to whichever member last signed in, by whichever path. The simulated
+demo path (`signIn`, the gate's plain email/password form) still always resolves to the
+seed `currentUser` (Pete Czeti), kept only as a testing convenience with no production
+equivalent, same as before. A real Wild Apricot sign-in is different now that Phase 1's
+identity migration is written: `completeWildApricotLogin` (`js/waAuth.js`) sets a real
+Supabase Auth session from the Edge Function's tokens, and `loadSignedInMember` (`js/
+store.js`) then reads that member's own row straight from Postgres — the matching,
+auto-provisioning (default `Member` role, no site/manager grants — an admin adjusts
+access afterward via the roles editor, same as any other member), and `auth.users`
+creation all happen server-side in the Edge Function now, against real tables, gated by
+real RLS, instead of client-side against a local array.
+
+**Members directory** (`#/members`, Web Admin only) — for now, still reads the same
+seed/demo roster plus anyone provisioned via the *old* client-side path (kept for
+backward compatibility until this view itself migrates to Postgres in a later phase). A
+member who signs in for the first time via the new Phase-1 auth bridge resolves
+correctly for their own session (`currentUser`, roles, contact details) but won't yet
+appear as a row in this directory unless they also happen to match an existing seed
+member by email — a known, temporary gap that closes once the members directory itself
+moves to Postgres. (See `BUGS.md` for the related "Wild Apricot ID: undefined" issue on
+a real member's own detail page.)
 
 **Notification email** — every point that would send mail currently calls `toast()` with
 the message and recipient count. Those call sites are the integration points: forum
-topic publish, forum reply, repository contribution. Subscriptions are already stored as
-stable keys (`thread:<id>`, `repo:<id>`, `cat:<id>`) ready to become subscription rows.
+topic publish, forum reply, repository contribution. Subscriptions are real
+`subscriptions` rows now (Phase 3), keyed the same way they always displayed
+(`thread:<id>`, `repo:<id>`, `cat:<id>`) — notifications themselves are still simulated,
+a later migration phase.
 
-**Persistence** — `js/store.js` writes to `localStorage` behind a small interface
-(`commit`, `toggleSub`, `addThread`, `addPost`, `addListing`). Swapping it for API calls
-is contained to that module.
+**Persistence** — `js/store.js` still writes some entities to `localStorage` behind a
+small interface (`commit`, `addProject`, `joinProject`). Identity (`loadSignedInMember`,
+`signOut`), marketplace listings (`loadListings`, `addListing`), and forum/repository/
+subscriptions (`loadForumThreads`, `loadThread`, `addThread`, `addPost`, `loadRepository`,
+`loadSubTopic`, `loadMySubscriptions`, `toggleSub`) now read/write real Supabase state
+instead; every other entity's functions in this module are next, one migration phase at
+a time.
 
-**Data** — `js/data.js` exports plain arrays and lookup helpers. Replace the module with
-fetches returning the same shapes.
+**Data** — `js/data.js` exports plain arrays and lookup helpers, each tagged `[PERMANENT]`
+(pure reference/formatting code that survives the migration) or `[SEED — Phase N]` (mock
+content standing in for a real table, deleted in that phase once views read from Supabase
+instead) — see the module's own header comment.

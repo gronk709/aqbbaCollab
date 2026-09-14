@@ -3,8 +3,8 @@
    machinery would have sent. Shown on screen while email delivery is stubbed.
    ========================================================================== */
 
-import { memberById, currentUser, relHours, allSubs, subById, threads, threadById } from '../data.js';
-import { feed, markAllRead, markRead, state, unreadCount } from '../store.js';
+import { relHours, allSubs, subById, threads, threadById } from '../data.js';
+import { feed, markAllRead, markRead, state, unreadCount, memberById, currentUser } from '../store.js';
 import { esc, icons, avatar, toast } from '../ui.js';
 
 const kindMeta = {
@@ -77,10 +77,10 @@ export function renderNotifications() {
             <div class="panel-head"><h2>Delivery</h2></div>
             <div class="panel-body">
               <div class="row" style="gap:var(--s3)">
-                ${avatar(currentUser)}
+                ${avatar(currentUser())}
                 <div style="min-width:0">
-                  <div style="font-size:13.5px;font-weight:600">${esc(currentUser.name)}</div>
-                  <div class="caption mono" style="font-size:11.5px">${esc(currentUser.wa)}</div>
+                  <div style="font-size:13.5px;font-weight:600">${esc(currentUser().name)}</div>
+                  <div class="caption mono" style="font-size:11.5px">${esc(currentUser().wa)}</div>
                 </div>
               </div>
               <div class="field" style="margin-top:var(--s5)">
@@ -106,10 +106,13 @@ export function renderNotifications() {
             </div>
             <div class="panel-body">
               ${section('Forum topics', threadSubs.map((k) => {
+                /* threadById only knows the old mock seed threads — real
+                   Postgres threads (Phase 3) aren't resolvable here yet.
+                   Notifications itself is a later migration phase; until
+                   then a real thread subscription just doesn't get a title
+                   in this list rather than crashing on removed local state. */
                 const t = threadById(k.slice(7));
-                const mine = state.newThreads.find((x) => x.id === k.slice(7));
-                const title = t ? t.title : mine ? mine.title : null;
-                return title ? `<a class="tag tag-outline" href="#/forum/${k.slice(7)}">${esc(title.slice(0, 46))}${title.length > 46 ? '…' : ''}</a>` : '';
+                return t ? `<a class="tag tag-outline" href="#/forum/${k.slice(7)}">${esc(t.title.slice(0, 46))}${t.title.length > 46 ? '…' : ''}</a>` : '';
               }))}
               ${section('Repository sub-topics', repoSubs.map((k) => {
                 const s = subById(k.slice(5));

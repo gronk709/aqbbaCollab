@@ -31,12 +31,14 @@
   --mark-green:  #4A7C4E;
   --mark-blue:   #35618F;
 
-  /* Semantic status */
-  --st-thriving:  var(--mark-green);
-  --st-watch:     var(--mark-yellow);
-  --st-treatment: var(--mark-blue);
-  --st-critical:  var(--mark-red);
-  --st-dormant:   var(--propolis-40);
+  /* Semantic status — a severity gradient (thriving/good/average/poor) plus
+     treating as a separate operational state, not part of the gradient.
+     --st-good is status-only, not part of the queen-marking code above. */
+  --st-thriving: var(--mark-green);
+  --st-good:     #7C9A3E;
+  --st-average:  var(--mark-yellow);
+  --st-poor:     var(--mark-red);
+  --st-treating: var(--mark-blue);
 
   /* Type */
   --display: 'Spectral', Georgia, serif;
@@ -346,26 +348,6 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 }
 .rail-out:hover { color: var(--amber-bright); }
 
-/* Prototype-only device for demonstrating per-site permission checks without
-   real multi-user auth. Deliberately styled as a test tool, not a feature:
-   dashed border, muted, visually distinct from the rest of the rail. */
-.rail-preview {
-  margin-top: var(--s4); padding-top: var(--s4);
-  border-top: 1px dashed rgba(251,246,233,0.16);
-}
-.rail-preview label {
-  display: block; font-family: var(--mono); font-size: 9px; font-weight: 500;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: rgba(251,246,233,0.38); margin-bottom: 6px;
-}
-.rail-preview label span { text-transform: none; letter-spacing: 0; cursor: help; }
-.rail-preview select {
-  width: 100%; padding: 6px 8px;
-  background: rgba(251,246,233,0.06); border: 1px dashed rgba(251,246,233,0.24);
-  border-radius: 3px; color: rgba(251,246,233,0.75); font-size: 12px;
-}
-.rail-preview select:focus { outline: 2px solid var(--amber-bright); outline-offset: 1px; }
-
 /* Mobile rail */
 .rail-toggle {
   display: none;
@@ -476,11 +458,11 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
    -------------------------------------------------------------------------- */
 
 .pip { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.pip-thriving  { background: var(--st-thriving); }
-.pip-watch     { background: var(--st-watch); }
-.pip-treatment { background: var(--st-treatment); }
-.pip-critical  { background: var(--st-critical); }
-.pip-dormant   { background: var(--st-dormant); }
+.pip-thriving { background: var(--st-thriving); }
+.pip-good     { background: var(--st-good); }
+.pip-average  { background: var(--st-average); }
+.pip-poor     { background: var(--st-poor); }
+.pip-treating { background: var(--st-treating); }
 
 .tag {
   display: inline-flex; align-items: center; gap: 6px;
@@ -515,7 +497,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .cell {
   width: 28px; height: 32px;
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  background: var(--st-dormant);
+  background: var(--propolis-40);
   position: relative;
   cursor: pointer;
   transition: transform 0.16s var(--ease), filter 0.16s var(--ease);
@@ -528,11 +510,11 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   outline: none;
 }
 .cell.is-picked { transform: scale(1.22); box-shadow: 0 0 0 2px var(--propolis); z-index: 4; }
-.cell-thriving  { background: var(--st-thriving); }
-.cell-watch     { background: var(--st-watch); }
-.cell-treatment { background: var(--st-treatment); }
-.cell-critical  { background: var(--st-critical); }
-.cell-dormant   { background: var(--st-dormant); }
+.cell-thriving { background: var(--st-thriving); }
+.cell-good     { background: var(--st-good); }
+.cell-average  { background: var(--st-average); }
+.cell-poor     { background: var(--st-poor); }
+.cell-treating { background: var(--st-treating); }
 
 @keyframes cell-fill {
   from { opacity: 0; transform: scale(0.5); }

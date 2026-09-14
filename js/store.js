@@ -4,25 +4,20 @@
    ========================================================================== */
 
 import {
-  threads, allSubs, notifications, currentUser, projects, apiaries, inspections, memberById,
+  notifications, projects, apiaries, inspections, queenLines,
+  members as seedMembers, currentUser as seedCurrentUser,
 } from './data.js';
+import { getSupabase } from './supabaseClient.js';
 
 const KEY = 'aqbba.session.v1';
 
-const seedSubs = () => {
-  const set = new Set();
-  threads.filter((t) => t.subscribed).forEach((t) => set.add(`thread:${t.id}`));
-  allSubs.filter((s) => s.subscribed).forEach((s) => set.add(`repo:${s.id}`));
-  return [...set];
-};
-
 const defaults = () => ({
   signedIn: false,
-  subs: seedSubs(),
+  /* Loaded fresh from Supabase (loadMySubscriptions) whenever the forum or
+     repository is visited — not seeded from anywhere locally, unlike
+     before real subscriptions existed. */
+  subs: [],
   read: notifications.filter((n) => !n.unread).map((n) => n.id),
-  newThreads: [],
-  newPosts: {},
-  newListings: [],
   newProjects: [],
   projectJoins: [],
   projectParticipants: {},
@@ -32,8 +27,16 @@ const defaults = () => ({
   contactDetails: {},
   roleOverrides: {},
   apiaryManagerOverrides: {},
-  previewAs: null,
+  hiveOverrides: {},
+  apiaryOverrides: {},
+  newQueenLines: [],
+  queenLineOverrides: {},
+  breeders: [],
+  breederOverrides: {},
   digest: 'instant',
+  currentUserId: null,
+  provisionedMembers: [],
+  remoteMember: null,
 });
 
 function load() {
@@ -56,31 +59,171 @@ export function commit() {
   listeners.forEach((fn) => fn());
 }
 
-/* --- subscriptions ------------------------------------------------------- */
+/* --- identity -------------------------------------------------------------
+   currentUser is session state, not a constant — which member it resolves
+   to depends on how sign-in happened. The simulated demo path (signIn, used
+   by the gate's plain email/password form) always resolves to the seed
+   currentUser (Pete Czeti, full access, for testing) via state.currentUserId
+   — kept only for that testing convenience (see README: "no production
+   equivalent"), not touched by real sign-in.
+
+   A real Wild Apricot login goes through completeWildApricotLogin (js/
+   waAuth.js), which sets a real Supabase Auth session, then
+   loadSignedInMember() below, which reads that signed-in member's own row
+   — id, name, roles, contact details — from Postgres (RLS lets a member
+   read their own full row; see supabase/migrations) and caches it as
+   state.remoteMember. Everything else in this app still keeps working
+   synchronously off that cache; only the sign-in moment itself is async,
+   deliberately, rather than threading async through every render. */
+
+export function allMembers() {
+  const base = [...seedMembers, ...state.provisionedMembers];
+  if (state.remoteMember && !base.some((m) => m.id === state.remoteMember.id)) {
+    return [...base, state.remoteMember];
+  }
+  return base;
+}
+
+export function memberById(id) {
+  if (state.remoteMember && state.remoteMember.id === id) return state.remoteMember;
+  return allMembers().find((m) => m.id === id) || seedCurrentUser;
+}
+
+export function currentUser() {
+  if (state.remoteMember) return state.remoteMember;
+  return memberById(state.currentUserId || seedCurrentUser.id);
+}
+
+/* Reads the signed-in member's own row from Supabase and caches it as
+   state.remoteMember — the one async step the real sign-in path needs.
+   Called right after completeWildApricotLogin sets a session, and once at
+   boot to restore a session that survived a page reload (Supabase persists
+   it in its own localStorage key, separately from this app's session
+   state).
+
+   Returns null only for "there's genuinely no session to restore" — the
+   ordinary case on a fresh visit or after the simulated demo sign-in,
+   where boot's silent console.warn-and-carry-on handling is correct.
+   Throws for every other failure (the member row can't be read, RLS
+   denies it, no row is linked to this auth user yet) so the caller right
+   after a real Wild Apricot sign-in — which already wraps this in the
+   same try/catch as completeWildApricotLogin — shows an actual error
+   toast instead of a false "Welcome" for a sign-in that didn't really
+   finish. */
+export async function loadSignedInMember() {
+  const supabase = await getSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) return null;
+
+  const { data: row, error } = await supabase
+    .from('members')
+    /* member_roles!member_id hints PostgREST at which foreign key to embed
+       on — member_roles has two FKs to members (member_id, whose row it
+       is, and granted_by, who granted it), which is otherwise ambiguous. */
+    .select('id, name, initials, state, member_since, member_roles!member_id(role_name), member_contact_details(phone, email, address)')
+    .eq('auth_user_id', session.user.id)
+    .maybeSingle();
+  if (error) {
+    console.error('Could not load the signed-in member:', error);
+    throw new Error(`Couldn't load your member record (${error.message}).`);
+  }
+  if (!row) {
+    throw new Error('Signed in, but no member record is linked to this account. Contact your Web Admin.');
+  }
+
+  const contact = Array.isArray(row.member_contact_details) ? row.member_contact_details[0] : row.member_contact_details;
+  state.remoteMember = {
+    id: row.id,
+    name: row.name,
+    initials: row.initials,
+    state: row.state,
+    since: row.member_since,
+    roles: (row.member_roles || []).map((r) => r.role_name),
+    phone: contact?.phone || '',
+    email: contact?.email || '',
+    address: contact?.address || '',
+  };
+  state.signedIn = true;
+  commit();
+  return state.remoteMember;
+}
+
+export function signIn() {
+  state.currentUserId = null;
+  state.signedIn = true;
+  commit();
+}
+
+/* --- subscriptions ---------------------------------------------------------
+   Phase 3 of the backend migration (see the plan doc) — real rows in the
+   `subscriptions` table now, replacing the local 'thread:t1'-style keys
+   this app always displayed with. isSubscribed still reads the same
+   state.subs array of "type:id" keys synchronously, unchanged — only
+   where that array comes from is different: loadMySubscriptions()
+   (called by the forum/repository route loaders) replaces it with this
+   member's real subscription rows, and toggleSub is now async, writing
+   through to Postgres before updating it locally. */
 
 export const isSubscribed = (key) => state.subs.includes(key);
 
-export function toggleSub(key) {
-  const i = state.subs.indexOf(key);
-  if (i === -1) state.subs.push(key); else state.subs.splice(i, 1);
+export async function loadMySubscriptions() {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('subscribable_type, subscribable_id')
+    .eq('member_id', me.id);
+  if (error) throw error;
+  state.subs = data.map((s) => `${s.subscribable_type}:${s.subscribable_id}`);
+  commit();
+}
+
+export async function toggleSub(key) {
+  const me = requireRealMember();
+  const [type, id] = key.split(':');
+  const supabase = await getSupabase();
+  if (state.subs.includes(key)) {
+    const { error } = await supabase.from('subscriptions').delete()
+      .eq('member_id', me.id).eq('subscribable_type', type).eq('subscribable_id', id);
+    if (error) throw error;
+    state.subs = state.subs.filter((s) => s !== key);
+  } else {
+    const { error } = await supabase.from('subscriptions')
+      .insert({ member_id: me.id, subscribable_type: type, subscribable_id: id });
+    if (error) throw error;
+    state.subs.push(key);
+  }
   commit();
   return state.subs.includes(key);
+}
+
+/* Aggregate subscriber counts for a batch of same-type ids in one round
+   trip (the subscriber_counts RPC — see the migration) — e.g. every
+   thread on the forum index at once, rather than one query per thread.
+   Missing ids (nobody subscribed) just don't come back as rows, so this
+   fills those in as 0 for a plain lookup object. */
+export async function subscriberCounts(type, ids) {
+  if (!ids.length) return {};
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.rpc('subscriber_counts', { p_type: type, p_ids: ids });
+  if (error) throw error;
+  const counts = Object.fromEntries(ids.map((id) => [id, 0]));
+  data.forEach((row) => { counts[row.subscribable_id] = Number(row.cnt); });
+  return counts;
 }
 
 /* --- notifications ------------------------------------------------------- */
 
 export function feed() {
-  const generated = [
-    ...state.newThreads.map((t) => ({
-      id: `gn-${t.id}`, kind: 'thread', at: t.at, source: t.categoryName, by: currentUser.id,
-      text: `You created the topic “${t.title}”. Subscribers have been notified.`, to: `#/forum/${t.id}`,
-    })),
-    ...state.newListings.map((l) => ({
-      id: `gl-${l.id}`, kind: 'market', at: l.at, source: 'Marketplace', by: currentUser.id,
-      text: `Your listing “${l.title}” is live.`, to: '#/marketplace',
-    })),
-  ];
-  return [...generated, ...notifications]
+  /* "You created the topic X" / "Your listing is live" echoes used to be
+     generated here from local newThreads/newListings session state — both
+     removed now that threads and listings are real Supabase rows.
+     Notifications move to Postgres in their own later phase; rebuilding
+     these echoes against real data belongs there — see the plan doc for
+     the phase ordering rationale (feed aggregates activity from every
+     migrated entity, so it's migrated last, once, rather than partially
+     rebuilt after each phase). */
+  return [...notifications]
     .map((n) => ({ ...n, unread: !state.read.includes(n.id) }))
     .sort((a, b) => b.at - a.at);
 }
@@ -96,35 +239,183 @@ export function markRead(id) {
   if (!state.read.includes(id)) { state.read.push(id); commit(); }
 }
 
-/* --- member-authored content -------------------------------------------- */
+/* --- forum -------------------------------------------------------------
+   Phase 3 of the backend migration (see the plan doc). Like marketplace
+   listings in Phase 2, every function here requires a real Wild Apricot
+   sign-in (requireRealMember, defined below) — and like marketplace, the
+   six old seed discussions aren't carried over (fake seed authors, no
+   real `members` row), so the forum starts empty.
 
-export function addThread({ title, category, categoryName, body }) {
-  const t = {
-    id: `ut-${Date.now()}`, title, category, categoryName, body,
-    author: currentUser.id, at: 0, created: 0, replies: 0, watchers: 1,
+   Author info (name/initials/roles) is embedded directly in these queries
+   rather than resolved via memberById/roleLabel — those only know about
+   the seed roster plus whichever single member is currently signed in
+   (state.remoteMember), not an arbitrary real author of someone else's
+   post, since the members directory itself hasn't moved to Postgres yet. */
+
+const MEMBER_DISPLAY_FIELDS = 'id, name, initials, member_roles!member_id(role_name)';
+
+function withRoles(m) {
+  return m ? { ...m, roles: (m.member_roles || []).map((r) => r.role_name) } : m;
+}
+
+export async function loadForumThreads() {
+  requireRealMember();
+  const supabase = await getSupabase();
+
+  const [, { data: categories, error: catErr }, { data: threads, error: threadErr }] = await Promise.all([
+    loadMySubscriptions(),
+    supabase.from('forum_categories').select('id, name').order('sort_order'),
+    supabase.from('forum_threads')
+      .select(`id, title, body, pinned, created_at, category:forum_categories(id, name), author:members(${MEMBER_DISPLAY_FIELDS}), forum_posts(count)`)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false }),
+  ]);
+  if (catErr) throw catErr;
+  if (threadErr) throw threadErr;
+
+  const counts = await subscriberCounts('thread', threads.map((t) => t.id));
+  return {
+    categories,
+    threads: threads.map((t) => ({
+      ...t,
+      author: withRoles(t.author),
+      replyCount: t.forum_posts[0]?.count ?? 0,
+      watchers: counts[t.id] ?? 0,
+    })),
   };
-  state.newThreads.unshift(t);
-  state.subs.push(`thread:${t.id}`);
-  commit();
-  return t;
 }
 
-export function addPost(threadId, body) {
-  if (!state.newPosts[threadId]) state.newPosts[threadId] = [];
-  state.newPosts[threadId].push({ by: currentUser.id, at: 0, body });
-  commit();
+export async function loadThread(id) {
+  requireRealMember();
+  const supabase = await getSupabase();
+  await loadMySubscriptions();
+
+  const { data: thread, error: threadErr } = await supabase
+    .from('forum_threads')
+    .select(`id, title, body, pinned, created_at, category:forum_categories(id, name), author:members(${MEMBER_DISPLAY_FIELDS})`)
+    .eq('id', id)
+    .single();
+  if (threadErr) throw threadErr;
+
+  const { data: posts, error: postsErr } = await supabase
+    .from('forum_posts')
+    .select(`id, body, created_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
+    .eq('thread_id', id)
+    .order('created_at', { ascending: true });
+  if (postsErr) throw postsErr;
+
+  const watchers = (await subscriberCounts('thread', [id]))[id] ?? 0;
+
+  return {
+    thread: { ...thread, author: withRoles(thread.author) },
+    posts: posts.map((p) => ({ ...p, author: withRoles(p.author) })),
+    watchers,
+  };
 }
 
-export const postsFor = (threadId) => state.newPosts[threadId] || [];
-
-export function addListing(listing) {
-  const l = { ...listing, id: `ul-${Date.now()}`, at: 0, posted: 0, seller: currentUser.id };
-  state.newListings.unshift(l);
-  commit();
-  return l;
+export async function addThread({ title, categoryId, body }) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('forum_threads')
+    .insert({ category_id: categoryId, author_id: me.id, title, body })
+    .select('id')
+    .single();
+  if (error) throw error;
+  await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'thread', subscribable_id: data.id });
+  return data;
 }
 
-export const memberThreads = () => state.newThreads;
+export async function addPost(threadId, body) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('forum_posts').insert({ thread_id: threadId, author_id: me.id, body });
+  if (error) throw error;
+  if (!isSubscribed(`thread:${threadId}`)) {
+    await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'thread', subscribable_id: threadId });
+    state.subs.push(`thread:${threadId}`);
+    commit();
+  }
+}
+
+/* --- repository --------------------------------------------------------
+   Also Phase 3, but unlike the forum, the track/sub-topic structure is
+   seeded (not purged) — see the migration's header comment for why: real
+   Markdown content on disk already depends on these exact sub-topic ids. */
+
+export async function loadRepository() {
+  requireRealMember();
+  const supabase = await getSupabase();
+  await loadMySubscriptions();
+  const { data: tracks, error: trackErr } = await supabase
+    .from('repository_tracks')
+    .select('id, ord, name, blurb, repository_sub_topics(id, name, summary)')
+    .order('sort_order')
+    .order('sort_order', { foreignTable: 'repository_sub_topics' });
+  if (trackErr) throw trackErr;
+  return tracks.map((t) => ({ ...t, subs: t.repository_sub_topics }));
+}
+
+export async function loadSubTopic(id) {
+  requireRealMember();
+  const supabase = await getSupabase();
+  await loadMySubscriptions();
+  const { data: sub, error } = await supabase
+    .from('repository_sub_topics')
+    .select('id, name, summary, track:repository_tracks(id, ord, name, blurb)')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+
+  const { data: siblingSubs, error: sibErr } = await supabase
+    .from('repository_sub_topics')
+    .select('id, name, summary')
+    .eq('track_id', sub.track.id)
+    .order('sort_order');
+  if (sibErr) throw sibErr;
+
+  return { sub: { id: sub.id, name: sub.name, summary: sub.summary }, track: { ...sub.track, subs: siblingSubs } };
+}
+
+/* --- marketplace -----------------------------------------------------------
+   The first entity migrated to real Postgres tables (Phase 2 — see the
+   plan doc) — deliberately the simplest one, to prove the read/write/RLS
+   pattern before the bigger entities. Both functions require a real
+   Wild Apricot sign-in (state.remoteMember): the simulated demo identity
+   (seedCurrentUser) has a fake, non-UUID id that no real `members` row
+   matches, and has no Supabase session at all, so RLS would reject it —
+   checked explicitly here for a clear error rather than a raw Postgres
+   one. */
+
+function requireRealMember() {
+  if (!state.remoteMember) {
+    throw new Error('This needs a real Wild Apricot sign-in — the demo sign-in can\'t be used here yet.');
+  }
+  return state.remoteMember;
+}
+
+export async function loadListings() {
+  requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('marketplace_listings')
+    .select('id, kind, title, price, unit, qty, detail, state, created_at, seller:members(id, name, initials)')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function addListing({ kind, title, price, unit, qty, detail }) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('marketplace_listings')
+    .insert({ seller_id: me.id, kind, title, price, unit, qty, detail, state: me.state || null })
+    .select('id, kind, title, price, unit, qty, detail, state, created_at, seller:members(id, name, initials)')
+    .single();
+  if (error) throw error;
+  return data;
+}
 
 /* --- projects -------------------------------------------------------------
    A project is joined, not subscribed to: joining records what the member
@@ -136,7 +427,7 @@ export function joinProject(projectId, contribution) {
   if (!state.projectJoins.includes(projectId)) state.projectJoins.push(projectId);
   if (!state.projectParticipants[projectId]) state.projectParticipants[projectId] = [];
   state.projectParticipants[projectId].push({
-    member: currentUser.id, contribution: contribution || 'Joined without a stated contribution.', joined: 0,
+    member: currentUser().id, contribution: contribution || 'Joined without a stated contribution.', joined: 0,
   });
   commit();
 }
@@ -150,7 +441,7 @@ export function addProject({ title, summary, background, aims, questions, method
     background: [background], aims, questions, sites, openSites,
     participation: { summary: methods, methods: [methods], addons },
     timeline: 'Timeline to be confirmed once the project has its first participants.',
-    coordinators: [currentUser.id], created: 0, participants: [],
+    coordinators: [currentUser().id], created: 0, participants: [],
   };
   state.newProjects.unshift(p);
   commit();
@@ -171,10 +462,100 @@ export function recruitingCount() {
    even though the shape of "seeded + member-added, merged for rendering" is
    the same idea throughout. */
 
+/* A hive's fields can be corrected or updated after the fact — either the
+   full Edit Hive form, or just a status change from a hive-level inspection
+   (see addInspection below) — stored the same way as roleOverrides etc.,
+   keyed by hive id and applied on top of whichever base record (seed or
+   member-added) the hive came from. */
+function withHiveOverrides(h) {
+  const o = state.hiveOverrides[h.id];
+  return o ? { ...h, ...o } : h;
+}
+
+function setHiveStatus(hiveId, status) {
+  state.hiveOverrides[hiveId] = { ...(state.hiveOverrides[hiveId] || {}), status, lastSeen: 0 };
+}
+
+export function updateHive(hiveId, patch) {
+  state.hiveOverrides[hiveId] = { ...(state.hiveOverrides[hiveId] || {}), ...patch };
+  commit();
+}
+
+/* An apiary's fields — including status — are editable after creation from
+   its own page, same override pattern as hives above. */
+export function updateApiary(apiaryId, patch) {
+  state.apiaryOverrides[apiaryId] = { ...(state.apiaryOverrides[apiaryId] || {}), ...patch };
+  commit();
+}
+
+/* --- queen lines & breeders --------------------------------------------------
+   Queen lines are a program-wide record, not scoped to one apiary — hives
+   reference a line by its code (hive.line), so the code stays fixed once a
+   line is created, same reasoning as hive ids. Unlike hive id, the code is
+   never shown in the UI — members only ever see and edit the line's name,
+   which can change; the code is an internal key only, so it's generated
+   here rather than entered. A line's breeder can be either an existing
+   member (id like 'm7') or a standalone breeder record added below, for
+   someone contributing a line who isn't a registered platform member —
+   resolved uniformly by breederById. */
+
+export function allQueenLines() {
+  return [...state.newQueenLines, ...queenLines].map((l) => ({ ...l, ...(state.queenLineOverrides[l.code] || {}) }));
+}
+
+export const lineByCode = (code) => allQueenLines().find((l) => l.code === code);
+
+function generateLineCode(name) {
+  const base = (name.match(/[A-Za-z]+/) || ['LIN'])[0].slice(0, 3).toUpperCase() || 'LIN';
+  const taken = new Set(allQueenLines().map((l) => l.code));
+  let n = 1;
+  let code = `${base}-${String(n).padStart(2, '0')}`;
+  while (taken.has(code)) { n++; code = `${base}-${String(n).padStart(2, '0')}`; }
+  return code;
+}
+
+export function addQueenLine({ name, breeder, gen, vshMean, note }) {
+  const line = { code: generateLineCode(name), name, breeder, gen: gen || 1, vshMean: vshMean ?? 0, note: note || '' };
+  state.newQueenLines.unshift(line);
+  commit();
+  return line;
+}
+
+export function updateQueenLine(code, patch) {
+  state.queenLineOverrides[code] = { ...(state.queenLineOverrides[code] || {}), ...patch };
+  commit();
+}
+
+const initialsOf = (name) => name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 3) || '?';
+
+export function allBreeders() {
+  return state.breeders.map((b) => ({ ...b, ...(state.breederOverrides[b.id] || {}) }));
+}
+
+export function addBreeder({ name, state: region, note }) {
+  const b = { id: `br-${Date.now()}`, name, state: region || '', note: note || '', initials: initialsOf(name) };
+  state.breeders.unshift(b);
+  commit();
+  return b;
+}
+
+export function updateBreeder(breederId, patch) {
+  state.breederOverrides[breederId] = { ...(state.breederOverrides[breederId] || {}), ...patch };
+  commit();
+}
+
+/* A queen line's breeder is either a member id ('m7') or a standalone
+   breeder id ('br-...') — resolve to a display-ready shape either way. */
+export function breederById(id) {
+  if (/^m\d+$/.test(id)) return memberById(id);
+  return allBreeders().find((b) => b.id === id) || { id, name: 'Unknown breeder', state: '', initials: '?' };
+}
+
 function withMemberHives(ap) {
   const extra = state.newHives.filter((h) => h.apiary === ap.id);
-  const hiveRecords = [...(ap.hiveRecords || []), ...extra];
-  return { ...ap, hiveRecords, hives: hiveRecords.length, managers: managersFor(ap.id) };
+  const hiveRecords = [...(ap.hiveRecords || []), ...extra].map(withHiveOverrides);
+  const override = state.apiaryOverrides[ap.id] || {};
+  return { ...ap, ...override, hiveRecords, hives: hiveRecords.length, managers: managersFor(ap.id) };
 }
 
 export function allApiaries() {
@@ -192,7 +573,7 @@ export function addApiary({ name, region, coords, flora, brief, manager, establi
   const ap = {
     id: `ap-${Date.now()}`, name, code,
     region, coords: coords || '—',
-    stage: stage || 'initialising', manager,
+    stage: stage || 'establishing', manager,
     established: established || new Date().getFullYear(),
     hives: 0, flora: flora || '—', brief, hiveRecords: [], managers: [manager],
   };
@@ -201,14 +582,10 @@ export function addApiary({ name, region, coords, flora, brief, manager, establi
   return ap;
 }
 
+/* Hive ID is entered by whoever registers the hive (validated for
+   uniqueness in the Add Hive form) rather than assigned automatically. */
 export function addHive(apiaryId, hive) {
-  const ap = allApiaryById(apiaryId);
-  const n = ap.hiveRecords.length + 1;
-  const record = {
-    id: `${ap.code}-${String(n).padStart(3, '0')}`,
-    apiary: apiaryId, lastSeen: 0,
-    ...hive,
-  };
+  const record = { apiary: apiaryId, lastSeen: 0, ...hive };
   state.newHives.push(record);
   commit();
   return record;
@@ -225,12 +602,13 @@ function hydrateInspection(i) {
   return { ...i, date: new Date(`${i.dateStr}T00:00:00`), offset: daysFromToday(i.dateStr) };
 }
 
-export function addInspection({ apiary, kind, by, hivesCount, note, dateStr, done }) {
+export function addInspection({ apiary, kind, by, hiveIds, status, note, dateStr, done }) {
   const insp = {
-    id: `ui-${Date.now()}`, apiary, kind, by: by || currentUser.id,
-    hives: hivesCount, done: !!done, note: note || '', dateStr,
+    id: `ui-${Date.now()}`, apiary, kind, by: by || currentUser().id,
+    hiveIds: hiveIds || [], status: status || null, done: !!done, note: note || '', dateStr,
   };
   state.newInspections.push(insp);
+  if (status) insp.hiveIds.forEach((hiveId) => setHiveStatus(hiveId, status));
   commit();
   return insp;
 }
@@ -303,28 +681,48 @@ export function setManagedApiaries(memberId, apiaryIds) {
   commit();
 }
 
-/* --- permission preview -----------------------------------------------------
-   This app has exactly one real signed-in identity — everyone who opens it
-   is the Research Coordinator, who can act on every site. To make per-site
-   restrictions demonstrable at all, this lets a tester preview the apiary
-   pages as if signed in as someone else. It only affects the two gated
-   actions below (adding a hive, logging an inspection, and creating a new
-   apiary); authorship of forum posts, listings, and project joins always
-   stays the real signed-in member. There is no real multi-user session here
-   — production would derive this from the actual authenticated member. */
+/* --- permissions -------------------------------------------------------------
+   Used to be checked against a "preview as" identity rather than the real
+   signed-in member — a stand-in for not having real per-member sessions,
+   back when everyone who opened the app was signed in as the same seed
+   Web Admin. Removed now that real Wild Apricot sign-in (Phase 1 of the
+   backend migration) makes currentUser() a genuine, distinct identity per
+   member. */
 
-export function setPreviewAs(memberId) { state.previewAs = memberId || null; commit(); }
-export const previewUser = () => memberById(state.previewAs || currentUser.id);
-
-export const isCoordinator = (memberId = previewUser().id) => rolesFor(memberId).includes('Research Coordinator');
+export const isWebAdmin = (memberId = currentUser().id) => rolesFor(memberId).includes('Web Admin');
 
 export function canEditApiary(apiaryId) {
-  const uid = previewUser().id;
-  if (isCoordinator(uid)) return true;
+  const uid = currentUser().id;
+  if (isWebAdmin(uid)) return true;
   return managersFor(apiaryId).includes(uid);
+}
+
+/* --- repository permissions --------------------------------------------------
+   Member is read-only in the repository; Creator adds Member's access plus
+   the ability to contribute content. The operational roles (Web Admin,
+   Apiary Manager, Operator, Breeder) keep the full repository access they've
+   always had, unrelated to the apiary edit grants above. */
+
+const REPOSITORY_CONTRIBUTOR_ROLES = ['Web Admin', 'Apiary Manager', 'Operator', 'Breeder', 'Creator'];
+
+export function canContributeRepository(memberId = currentUser().id) {
+  return rolesFor(memberId).some((r) => REPOSITORY_CONTRIBUTOR_ROLES.includes(r));
 }
 
 /* --- session ------------------------------------------------------------- */
 
-export function signIn() { state.signedIn = true; commit(); }
-export function signOut() { state.signedIn = false; commit(); }
+/* Async because a real sign-in needs its Supabase session cleared too —
+   otherwise a page reload would silently sign the member back in via that
+   persisted session. Best-effort: if Supabase itself can't be reached, the
+   local state still clears and the member is signed out of this app. */
+export async function signOut() {
+  state.signedIn = false;
+  state.remoteMember = null;
+  commit();
+  try {
+    const supabase = await getSupabase();
+    await supabase.auth.signOut();
+  } catch (err) {
+    console.warn('Could not clear the Supabase session:', err);
+  }
+}

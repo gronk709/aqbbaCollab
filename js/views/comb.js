@@ -3,7 +3,8 @@
    Each cell is a real hive record. Colour is colony status. Click for detail.
    ========================================================================== */
 
-import { statusLabels, statusNote, lineByCode, memberById, relDays } from '../data.js';
+import { statusLabels, statusNote, relDays } from '../data.js';
+import { lineByCode, breederById } from '../store.js';
 import { esc, icons } from '../ui.js';
 
 const PER_ROW = 14;
@@ -35,7 +36,7 @@ export function renderComb(hives, { id = 'comb' } = {}) {
     <div class="comb-legend">${legend}</div>`;
 }
 
-export function renderReadout(hive) {
+export function renderReadout(hive, { editable = false } = {}) {
   if (!hive) {
     return `<div class="readout-empty" id="readout">
       Select any cell above to read that hive's record.
@@ -43,12 +44,12 @@ export function renderReadout(hive) {
   }
 
   const line = lineByCode(hive.line);
-  const breeder = memberById(line.breeder);
-  const tf = hive.status === 'treatment'
+  const breeder = breederById(line.breeder);
+  const tf = hive.status === 'treating'
     ? 'Under treatment'
     : hive.treatmentFree === 0 ? 'Not yet established' : `${hive.treatmentFree} season${hive.treatmentFree > 1 ? 's' : ''}`;
 
-  const statusVariant = { thriving: 'tag-green', watch: 'tag', treatment: 'tag-blue', critical: 'tag-red', dormant: 'tag' }[hive.status];
+  const statusVariant = { thriving: 'tag-green', good: 'tag-green', average: 'tag-amber', poor: 'tag-red', treating: 'tag-blue' }[hive.status];
 
   return `
     <div class="readout" id="readout">
@@ -58,6 +59,7 @@ export function renderReadout(hive) {
           <p class="caption" style="margin-top:4px">${esc(statusNote[hive.status])}</p>
         </div>
         <span class="spacer"></span>
+        ${editable ? `<button class="btn btn-ghost btn-sm" id="edit-hive">${icons.pen} Edit</button>` : ''}
         <span class="tag ${statusVariant}"><span class="pip pip-${hive.status}"></span>${statusLabels[hive.status]}</span>
       </div>
 
@@ -71,16 +73,19 @@ export function renderReadout(hive) {
           <dt>Mite load</dt>
           <dd>${hive.miteLoad == null ? '—' : hive.miteLoad}<small style="font-size:10px;color:var(--propolis-40)"> /100</small></dd>
         </div>
-        <div><dt>Brood frames</dt><dd>${hive.broodFrames || '—'}</dd></div>
-        <div><dt>Temperament</dt><dd style="font-size:13px">${hive.temper}</dd></div>
+        <div><dt>Hive Configuration</dt><dd>${hive.broodFrames || '—'}</dd></div>
         <div><dt>Last inspected</dt><dd style="font-size:13px">${relDays(-hive.lastSeen)}</dd></div>
         <div><dt>Treatment free</dt><dd style="font-size:13px">${tf}</dd></div>
       </dl>
 
       <div class="row row-wrap" style="margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade);gap:var(--s5)">
         <div>
-          <div class="eyebrow">Queen line</div>
-          <div class="mono" style="font-size:13px;margin-top:3px">${line.code} · ${esc(line.name)} · gen ${line.gen}</div>
+          <div class="eyebrow">Queen Line</div>
+          <div class="mono" style="font-size:13px;margin-top:3px">${esc(line.name)} · gen ${line.gen}</div>
+        </div>
+        <div>
+          <div class="eyebrow">Queen ID</div>
+          <div class="mono" style="font-size:13px;margin-top:3px">${hive.queenId ? esc(hive.queenId) : '—'}</div>
         </div>
         <div>
           <div class="eyebrow">Contributed by</div>
@@ -94,13 +99,29 @@ export function renderReadout(hive) {
           </div>
         </div>
       </div>
+
+      ${hive.comment ? `
+      <div style="margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
+        <div class="eyebrow">Comments</div>
+        <p style="font-size:13px;margin-top:3px">${esc(hive.comment)}</p>
+      </div>` : ''}
     </div>`;
 }
 
-/* Wire cell selection. Call after the comb is in the DOM. */
-export function bindComb(root, hives) {
+/* Wire cell selection. Call after the comb is in the DOM. Pass onEditHive to
+   show and wire an Edit button on the readout (omit it — e.g. on the
+   read-only dashboard preview — and no Edit button renders at all). */
+export function bindComb(root, hives, { onEditHive } = {}) {
   const field = root.querySelector('.comb-field');
   if (!field) return;
+
+  const wireEditBtn = () => {
+    if (!onEditHive) return;
+    const btn = root.querySelector('#edit-hive');
+    const picked = field.querySelector('.cell.is-picked');
+    const hive = picked && hives.find((h) => h.id === picked.dataset.hive);
+    if (btn && hive) btn.addEventListener('click', () => onEditHive(hive));
+  };
 
   field.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-hive]');
@@ -111,6 +132,7 @@ export function bindComb(root, hives) {
     btn.classList.add('is-picked');
 
     const old = root.querySelector('#readout');
-    if (old) old.outerHTML = renderReadout(hive);
+    if (old) old.outerHTML = renderReadout(hive, { editable: !!onEditHive });
+    wireEditBtn();
   });
 }

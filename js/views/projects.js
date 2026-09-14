@@ -10,13 +10,12 @@
    ========================================================================== */
 
 import {
-  projects, projectStatusLabels, memberById, threadById, relDays,
+  projects, projectStatusLabels, threadById, relDays,
 } from '../data.js';
 import {
   joinProject, memberProjects, sessionParticipantsFor, addProject,
-  allApiaries, allApiaryById, roleLabel,
+  allApiaries, allApiaryById, roleLabel, memberById, currentUser,
 } from '../store.js';
-import { currentUser } from '../data.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
 let activeStatus = 'All';
@@ -32,7 +31,8 @@ function allParticipants(p) {
 }
 
 function isMineAlready(p) {
-  return p.coordinators.includes(currentUser.id) || allParticipants(p).some((x) => x.member === currentUser.id);
+  const uid = currentUser().id;
+  return p.coordinators.includes(uid) || allParticipants(p).some((x) => x.member === uid);
 }
 
 function sitesLine(p) {
