@@ -231,10 +231,12 @@ real usage says otherwise. Setup, once you're ready to move off `serve.py`:
 
 1. **Supabase** — sign up at supabase.com, create a new project, and pick the **Sydney
    (ap-southeast-2)** region at creation time (this can't be changed later without
-   migrating). Project Settings → API gives you the values for `.env.local` (copy
-   `.env.example` from the repo root) — `SUPABASE_URL` and `SUPABASE_ANON_KEY` are safe to
-   expose in frontend code; `SUPABASE_SERVICE_ROLE_KEY` is not and never leaves
-   server-side environment variables.
+   migrating). The project's **Connect** dialog (or Settings → API Keys) gives you the
+   values for `.env.local` (copy `.env.example` from the repo root) — `SUPABASE_URL` and
+   `SUPABASE_PUBLISHABLE_KEY` are safe to expose in frontend code; `SUPABASE_SECRET_KEY`
+   is not and never leaves server-side environment variables. (Supabase renamed these
+   from `anon`/`service_role` in 2025 — the old keys still work but are being phased out,
+   so use the new publishable/secret pair for anything set up now.)
 2. **Vercel** — sign up at vercel.com with the same GitHub account this repo is under,
    then "Import Project" and select it. No configuration should be needed for the static
    site to deploy; every push to `main` then auto-deploys.
