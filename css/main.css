@@ -614,15 +614,30 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
    showing them under it. The composer's own add-link rows and file
    input reuse .field's existing input styling. */
 .attach-inline { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s4); }
+/* A chip is a small pill hosting up to three buttons side by side (open,
+   edit, delete) — none nested, since a <button> can't contain one. */
 .attach-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 10px; border-radius: 3px;
-  border: 1px solid var(--comb-shade); background: #FFF;
-  font-size: 12.5px; font-weight: 500; color: var(--propolis-60);
-  transition: all 0.16s var(--ease);
+  display: inline-flex; align-items: center;
+  border-radius: 3px; border: 1px solid var(--comb-shade); background: #FFF;
+  transition: border-color 0.16s var(--ease);
 }
-.attach-chip:hover { border-color: var(--amber); color: var(--amber-deep); }
-.attach-chip svg { flex: none; width: 13px; height: 13px; }
+.attach-chip:hover { border-color: var(--amber); }
+.attach-chip-open {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px;
+  font-size: 12.5px; font-weight: 500; color: var(--propolis-60);
+}
+.attach-chip-open:hover { color: var(--amber-deep); }
+.attach-chip-open svg { flex: none; width: 13px; height: 13px; }
+.attach-chip-btn {
+  flex: none; display: grid; place-items: center;
+  width: 26px; height: 26px; color: var(--propolis-40);
+  border-left: 1px solid var(--comb-shade);
+}
+.attach-chip-btn:hover { color: var(--propolis); background: var(--comb); }
+.attach-chip-btn svg { width: 12px; height: 12px; }
+.attach-add-toggle { margin-top: var(--s3); }
+.attach-manage { margin-top: var(--s3); padding: var(--s4); border: 1px solid var(--comb-shade); border-radius: 4px; background: var(--comb); }
 .attach-link-row { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); }
 .attach-link-row input { flex: 1; min-width: 0; }
 .attach-remove {

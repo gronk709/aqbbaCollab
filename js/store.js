@@ -306,7 +306,7 @@ export async function loadThread(id) {
 
   const { data: attachments, error: attErr } = await supabase
     .from('forum_attachments')
-    .select('id, post_id, kind, url, storage_path, filename, mime_type, size_bytes, created_at')
+    .select('id, post_id, author_id, kind, url, storage_path, filename, mime_type, size_bytes, created_at')
     .eq('thread_id', id)
     .order('created_at', { ascending: true });
   if (attErr) throw attErr;
@@ -365,6 +365,16 @@ export const ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.txt,.rtf,.odt,.xls,.xlsx,.csv
 
 async function saveAttachments(threadId, postId, authorId, links, files) {
   if (!links.length && !files.length) return;
+  await addForumAttachments(threadId, postId, authorId, links, files);
+}
+
+/* Adds links/documents to a post that may already exist and have replies
+   of its own — unlike addThread/addPost's own use of this (attachments
+   created in the same breath as the post), this is also called standalone
+   any time afterward, since attachment management stays open to an
+   author even once the post itself is frozen (see the permissions
+   migration's header comment for why those are different). */
+export async function addForumAttachments(threadId, postId, authorId, links, files) {
   const supabase = await getSupabase();
   const rows = links.map((l) => ({
     thread_id: threadId, post_id: postId, author_id: authorId,
@@ -382,8 +392,35 @@ async function saveAttachments(threadId, postId, authorId, links, files) {
     });
   }
 
+  if (!rows.length) return;
   const { error } = await supabase.from('forum_attachments').insert(rows);
   if (error) throw error;
+}
+
+/* Only a url-kind attachment is ever editable in place — a file's bytes
+   aren't, so the composer only offers this for links (see forum.js). RLS
+   enforces the ownership check too; this one's just for a fast, clear
+   error rather than a raw Postgres one. */
+export async function updateForumAttachment(a, { url, title }) {
+  const me = requireRealMember();
+  if (a.author_id !== me.id) throw new Error('You can only edit attachments you added.');
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('forum_attachments')
+    .update({ url, filename: title || url })
+    .eq('id', a.id);
+  if (error) throw error;
+}
+
+export async function deleteForumAttachment(a) {
+  const me = requireRealMember();
+  if (a.author_id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only remove attachments you added.');
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('forum_attachments').delete().eq('id', a.id);
+  if (error) throw error;
+  if (a.kind === 'file') {
+    await supabase.storage.from(ATTACHMENTS_BUCKET).remove([a.storage_path]);
+  }
 }
 
 /* Opens an attachment: a plain new tab for a URL, or a freshly-signed

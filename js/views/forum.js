@@ -11,8 +11,9 @@
 
 import { relDays, projectForThread } from '../data.js';
 import {
-  isSubscribed, addThread, addPost, state, currentUser,
-  openForumAttachment, ATTACHMENT_MAX_BYTES, ATTACHMENT_ACCEPT,
+  isSubscribed, addThread, addPost, state, currentUser, isWebAdmin,
+  openForumAttachment, addForumAttachments, updateForumAttachment, deleteForumAttachment,
+  ATTACHMENT_MAX_BYTES, ATTACHMENT_ACCEPT,
 } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
@@ -101,6 +102,40 @@ function collectFiles(container) {
    inside saveAttachments. */
 function oversizeFile(files) {
   return files.find((f) => f.size > ATTACHMENT_MAX_BYTES)?.name;
+}
+
+/* Only a link's url/label is ever edited in place — a file's own bytes
+   aren't (see updateForumAttachment in store.js), so this is the only
+   "edit" affordance an attachment chip gets. */
+function openEditAttachmentModal(a, onSaved) {
+  const body = `
+    <div class="field">
+      <label for="edit-url">URL</label>
+      <input id="edit-url" type="url" value="${esc(a.url)}">
+    </div>
+    <div class="field">
+      <label for="edit-title">Label</label>
+      <input id="edit-title" type="text" value="${esc(a.filename)}">
+    </div>`;
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-edit-attach">Save</button>`;
+  const scrim = modal({ title: 'Edit link', body, actions });
+
+  scrim.querySelector('#save-edit-attach').addEventListener('click', async () => {
+    const url = scrim.querySelector('#edit-url').value.trim();
+    const title = scrim.querySelector('#edit-title').value.trim();
+    if (!url) { toast('A link needs a URL.'); return; }
+    try {
+      await updateForumAttachment(a, { url: /^https?:\/\//i.test(url) ? url : `https://${url}`, title });
+    } catch (err) {
+      toast(`Couldn't update the link: ${err.message}`);
+      return;
+    }
+    closeModal();
+    toast('Link updated.');
+    onSaved();
+  });
 }
 
 /* created_at is a real Postgres timestamp now, not the old seed data's
@@ -278,6 +313,8 @@ export function renderThread(data) {
   const { thread: t, posts, watchers, attachments } = data;
   const key = `thread:${t.id}`;
   const on = isSubscribed(key);
+  const me = currentUser();
+  const admin = isWebAdmin(me.id);
 
   const allPosts = [{ id: 'op', author: t.author, created_at: t.created_at, body: t.body }, ...posts];
 
@@ -288,14 +325,29 @@ export function renderThread(data) {
     (attachmentsByPost[k] ||= []).push(a);
   });
 
-  const attachmentChip = (a) => `
-    <button type="button" class="attach-chip" data-open-attachment="${a.id}">
-      ${a.kind === 'url' ? icons.link : icons.attach}<span>${esc(a.filename)}</span>
-    </button>`;
+  /* A link's url/label stays editable by whoever added it; any attachment
+     stays deletable by whoever added it, or by a Web Admin moderating —
+     same author-or-admin shape as every other member-authored row here.
+     The post/topic it hangs off of is a different story (see the
+     permissions migration's header comment): frozen once published,
+     which is exactly why attachment upkeep doesn't route through editing
+     the post at all. */
+  const attachmentChip = (a) => {
+    const own = a.author_id === me.id;
+    return `
+      <span class="attach-chip">
+        <button type="button" class="attach-chip-open" data-open-attachment="${a.id}">
+          ${a.kind === 'url' ? icons.link : icons.attach}<span>${esc(a.filename)}</span>
+        </button>
+        ${own && a.kind === 'url' ? `<button type="button" class="attach-chip-btn" data-edit-attachment="${a.id}" aria-label="Edit link">${icons.pen}</button>` : ''}
+        ${own || admin ? `<button type="button" class="attach-chip-btn" data-delete-attachment="${a.id}" aria-label="Remove attachment">${icons.x}</button>` : ''}
+      </span>`;
+  };
 
   const postHTML = allPosts.map((p) => {
     const paras = p.body.split('\n\n').map((x) => `<p>${esc(x)}</p>`).join('');
     const postAttachments = attachmentsByPost[p.id] || [];
+    const canAddHere = p.author.id === me.id;
     return `
       <article class="post" id="post-${p.id}">
         ${avatar(p.author)}
@@ -308,6 +360,15 @@ export function renderThread(data) {
           </div>
           <div class="post-body">${paras}</div>
           ${postAttachments.length ? `<div class="attach-inline">${postAttachments.map(attachmentChip).join('')}</div>` : ''}
+          ${canAddHere ? `
+            <div class="attach-manage" data-attach-manage="${p.id}" hidden>
+              ${attachFieldsHTML()}
+              <div class="row" style="justify-content:flex-end;gap:var(--s2)">
+                <button type="button" class="btn btn-ghost btn-sm" data-cancel-add-attach="${p.id}">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" data-save-add-attach="${p.id}">Save</button>
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm attach-add-toggle" data-toggle-add-attach="${p.id}">${icons.plus} Add attachment</button>` : ''}
         </div>
       </article>`;
   }).join('');
@@ -434,6 +495,78 @@ export function renderThread(data) {
         } catch (err) {
           toast(`Couldn't open that attachment: ${err.message}`);
         }
+      });
+    });
+
+    document.querySelectorAll('[data-edit-attachment]').forEach((el) => {
+      el.addEventListener('click', () => {
+        openEditAttachmentModal(attachmentsById[el.dataset.editAttachment], () => {
+          window.__aqbba_invalidateData();
+          window.__aqbba_render();
+        });
+      });
+    });
+
+    document.querySelectorAll('[data-delete-attachment]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const a = attachmentsById[el.dataset.deleteAttachment];
+        el.disabled = true;
+        try {
+          await deleteForumAttachment(a);
+        } catch (err) {
+          toast(`Couldn't remove that attachment: ${err.message}`);
+          el.disabled = false;
+          return;
+        }
+        toast('Attachment removed.');
+        window.__aqbba_invalidateData();
+        window.__aqbba_render();
+      });
+    });
+
+    document.querySelectorAll('[data-toggle-add-attach]').forEach((toggleBtn) => {
+      toggleBtn.addEventListener('click', () => {
+        const postId = toggleBtn.dataset.toggleAddAttach;
+        const box = document.querySelector(`[data-attach-manage="${postId}"]`);
+        if (!box) return;
+        if (!box.dataset.bound) { bindAttachFields(box); box.dataset.bound = '1'; }
+        box.hidden = false;
+        toggleBtn.hidden = true;
+      });
+    });
+
+    document.querySelectorAll('[data-cancel-add-attach]').forEach((cancelBtn) => {
+      cancelBtn.addEventListener('click', () => {
+        const postId = cancelBtn.dataset.cancelAddAttach;
+        const box = document.querySelector(`[data-attach-manage="${postId}"]`);
+        const toggleBtn = document.querySelector(`[data-toggle-add-attach="${postId}"]`);
+        if (box) box.hidden = true;
+        if (toggleBtn) toggleBtn.hidden = false;
+      });
+    });
+
+    document.querySelectorAll('[data-save-add-attach]').forEach((saveBtn) => {
+      saveBtn.addEventListener('click', async () => {
+        const postId = saveBtn.dataset.saveAddAttach;
+        const box = document.querySelector(`[data-attach-manage="${postId}"]`);
+        const links = collectLinks(box);
+        const files = collectFiles(box);
+        if (!links.length && !files.length) { toast('Add a link or a file first.'); return; }
+        const tooBig = oversizeFile(files);
+        if (tooBig) { toast(`${tooBig} is over the 20MB limit.`); return; }
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+        try {
+          await addForumAttachments(t.id, postId === 'op' ? null : postId, currentUser().id, links, files);
+        } catch (err) {
+          toast(`Couldn't add that attachment: ${err.message}`);
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save';
+          return;
+        }
+        toast('Attachment added.');
+        window.__aqbba_invalidateData();
+        window.__aqbba_render();
       });
     });
 
