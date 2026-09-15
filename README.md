@@ -30,9 +30,9 @@ serve stale JS and CSS after an edit.
 model. Offers Wild Apricot SSO (simulated handoff) or direct credentials.
 
 **The VSH program is itself a project.** The Varroa Sensitive Hygiene Breeding Program is
-PRJ-00 — the flagship entry on the Projects page, with the same structure as every other
-project (Background, Aims, Questions, Participation, Timeline, Coordinators,
-Participants). What it has that single-question projects don't is a **Topic areas** panel
+PRJ-00 — the flagship entry on the Projects page, with the same structure any project
+gets (Background, Aims, Questions, Participation, Timeline, a Project team, Participants).
+What it has that a single-question project doesn't is a **Topic areas** panel
 (an optional `topics` field on any project) linking to its working surfaces: the research
 dashboard, the apiary records, and the two assessment-related repository sub-topics.
 Because the program is the organizing concept, **Projects is the landing page** (`#/`);
@@ -91,9 +91,7 @@ maintenance flows are meaningfully different from the member-facing composers el
 (forum, marketplace, repository) — they alter the program's research data rather than
 adding social content, so they're access-gated: adding a new apiary is Web Admin only,
 and adding a hive or logging an inspection at an existing site requires Web Admin or that
-site's manager grant (see "Roles & apiary access" below). The prototype enforces this
-today via the **"Preview access as"** selector, since there's only one real signed-in
-user to test with otherwise.
+site's manager grant (see "Roles & apiary access" below).
 
 **Manager details** (`#/managers/:id`) — phone, email and postal address for whoever is
 listed as an apiary's manager. Phone and email are mandatory once a record is saved
@@ -120,12 +118,20 @@ checkbox in the roles editor:
 - **Member** — read-only on apiary data and the repository; full forum access (publish,
   subscribe, notifications) and can list items in the Marketplace.
 - **Creator** — everything Member has, plus the ability to contribute repository content.
+- **Project Manager** — update and delete content (background, aims, questions, timeline,
+  participation, participants) on research projects they've been assigned to manage.
+- **Contributor** — add and update project content on projects they've been assigned to
+  support; cannot delete content, and cannot create, delete, or manage a project.
 
 Holding the "Apiary Manager" title is not itself a site-level permission — actual edit
 access to a specific site (adding a hive, logging an inspection) is a separate grant,
 checked per apiary via `canEditApiary` in `js/store.js`. A member with that grant for
 Barrowfield cannot touch Oradale's data unless separately granted there too; Web Admin
-can always edit every site, and creating a brand-new apiary is Web Admin only.
+can always edit every site, and creating a brand-new apiary is Web Admin only. Project
+Manager/Contributor follow the identical pattern one level down: the role tag is a label,
+and a Web Admin separately assigns a member 'manage' or 'contribute' access to one
+specific project (`project_team` — see "Projects" below), never apiary-wide or
+project-wide by default.
 Repository contribution (`canContributeRepository` in `js/store.js`) is gated by role
 instead — to the four operational roles above plus Creator — so a plain Member sees the
 repository read-only, with no Contribute button. Editing roles and grants themselves is
@@ -141,19 +147,29 @@ has since been removed (`previewUser`/`setPreviewAs` in `js/store.js`, the rail'
 
 **Projects** (`#/projects`) — coordinated research initiatives, distinct from apiaries: a
 project is a question with a method attached, and can span apiaries, run at one, or wait
-for a member to volunteer a site. Each has Background, Aims, Research questions,
-Participation & methods, a Timeline, named coordinators and a participant list. Members
-propose new projects and join existing ones with a stated contribution; joining and
-proposing are separate flows from forum subscription, since a project is something you
-do, not just something you follow. Every seeded project traces back to a real forum
-thread, and both directions link to each other, so the life cycle a member actually sees
-is: a problem raised in the forum → a project proposed to answer it → members joining
-with what they can contribute.
+for a member to volunteer a site. Real Postgres rows now (Phase 6 of the backend
+migration — see "Hosting & backend" below): only a Web Admin creates or deletes a
+project; its content — Background, Aims, Research questions, Participation & methods, a
+Timeline — is what the Project Managers and Contributors a Web Admin assigns to it can
+add, edit and (Project Manager only) delete, one bullet/paragraph at a time, from the
+project's own page. Any member can still join or leave a project with a stated
+contribution regardless of team assignment — that's unrelated to content permissions,
+same as it was before. Of the original five seed projects only PRJ-00 (the VSH program)
+remains; the other four, each originally proposed from a forum discussion by a member,
+were removed, and project creation is Web-Admin-only from here on rather than a
+member-facing "propose" flow.
 
 **Forum** (`#/forum`) — real member discussions now (Phase 3 of the backend migration —
 see "Hosting & backend" below), starting empty rather than the six invented seed
 discussions this used to show. Members create topics, subscribe to topics or whole
 categories, and set email delivery frequency (each post / daily digest / weekly digest).
+A published topic's own title/body is frozen for its author from then on (Web Admin can
+still edit or remove one, for moderation) — replies were never frozen the same way, and
+their own author (or Web Admin) can delete one outright. Any post — the topic's opening
+one or a reply — can carry links and documents (PDF, Word, text, spreadsheet, slide
+files, real Supabase Storage uploads via a signed URL, never a public link): add one at
+any time from the post itself, and a thread page's own Attachments panel lists every one
+across the whole topic with a link back to the post that added it.
 
 **Repository** (`#/repository`) — the three tracks from the brief (Foundation → Queen
 Production → Queen Breeding), sixteen sub-topics, each independently subscribable and
@@ -220,7 +236,7 @@ js/
     comb.js           The honeycomb grid and hive readout
     apiaries.js       Apiary index and per-apiary record
     managers.js       Manager contact details: view, edit, validate
-    projects.js       Research initiatives: index, detail, propose, join
+    projects.js       Research initiatives: index, detail, content editor, team, join
     forum.js          Topic list, thread view, composer
     repository.js     Tracks, sub-topics, article reader
     marketplace.js    Listings, filters, composer, enquiry
@@ -305,7 +321,9 @@ real usage says otherwise. Setup, once you're ready to move off `serve.py`:
 real Postgres tables with Row Level Security, entity by entity — see
 `/root/.claude/plans/zazzy-swinging-scone.md` for the full phased plan (identity first,
 then marketplace, forum/repository, queen lines/breeders, apiaries/hives/inspections,
-projects, notifications, then a final cleanup pass).
+projects, notifications, then a final cleanup pass). Phases aren't strictly done in that
+order — Projects (Phase 6) landed before queen lines/breeders and apiaries/hives/
+inspections (Phases 4-5), simply because that's what was needed next.
 
 Phase 1 (identity — `members`, `member_roles`, `apiary_managers`, contact details, and
 the Wild Apricot auth bridge) is **live and verified**: a real Wild Apricot sign-in
@@ -320,25 +338,36 @@ able to browse or post), and `js/app.js`'s router supports a `load` function per
 run before the still-synchronous view, with a loading state, an error panel with retry,
 and a small cache invalidated on real navigation or right after a successful write.
 
-Phase 3 (forum + repository metadata + subscriptions) has its schema and code written
-(`supabase/migrations/20260829000000_forum_repository_subscriptions.sql`, `js/store.js`'s
-`loadForumThreads`/`loadThread`/`addThread`/`addPost`/`loadRepository`/`loadSubTopic`/
-`loadMySubscriptions`/`toggleSub`, `js/views/forum.js`, `js/views/repository.js`) but not
-yet applied to the live project. Two different purge decisions in this one phase, worth
-remembering: the forum's six seed discussions don't carry over (invented conversations by
-fake seed members, same reasoning as Phase 2's listings), but the repository's three
-tracks and ~16 sub-topic ids (`rs-graft`, `rs-vsh`, etc.) **do** carry over intact — those
-ids are load-bearing, referenced by real Markdown articles and documents already
-committed under `content/repository/`, which this phase doesn't touch at all (article
-content stays exactly as file-based as before). One real, deliberate product change: a
-thread's "N watching" is a real aggregate count now (via a `subscriber_count`/
-`subscriber_counts` RPC), but the old "Members watching" avatar list is gone — individual
-subscriber identity isn't broadly visible under this schema's RLS (self-only, on
-purpose), only the aggregate is.
+Phase 3 (forum + repository metadata + subscriptions —
+`supabase/migrations/20260829000000_forum_repository_subscriptions.sql`) is **live and
+verified**. Two different purge decisions in this one phase, worth remembering: the
+forum's six seed discussions don't carry over (invented conversations by fake seed
+members, same reasoning as Phase 2's listings), but the repository's three tracks and
+~16 sub-topic ids (`rs-graft`, `rs-vsh`, etc.) **do** carry over intact — those ids are
+load-bearing, referenced by real Markdown articles and documents already committed under
+`content/repository/`, which this phase doesn't touch at all (article content stays
+exactly as file-based as before — see "Authoring repository content" above; there's no
+plan to move it into Postgres). One real, deliberate product change: a thread's "N
+watching" is a real aggregate count now (via a `subscriber_count`/`subscriber_counts`
+RPC), but the old "Members watching" avatar list is gone — individual subscriber
+identity isn't broadly visible under this schema's RLS (self-only, on purpose), only the
+aggregate is. Two follow-on migrations built on top of Phase 3 afterward, same
+Supabase-backed rigor: `forum_attachments` (links/documents on a post — see "Forum"
+above) and a permissions pass freezing a published topic's own content against its
+author while leaving attachment management and reply deletion open (`author_id`/
+`is_web_admin()` policies on `forum_threads`/`forum_posts`, unchanged from Phase 3 for
+posts, tightened for threads).
 
-Every other entity (apiaries, hives, inspections, projects, notifications) still runs
-entirely from `js/data.js` mock data + `js/store.js`'s localStorage patches, unchanged,
-until its own phase comes up.
+Phase 6 (projects — `supabase/migrations/20260901000000_projects.sql`) is **live and
+verified**: only Web Admin creates or deletes a project; its content
+(`project_sections`, one row per bullet/paragraph) is real Postgres now, with
+Contributor-or-above able to add/edit a row and only Manager-or-above able to delete
+one — the per-project grant (`project_team`) a Web Admin assigns, same shape as
+`apiary_managers`. Of the five seed projects, only PRJ-00 carried over.
+
+Still mock (`js/data.js` + `js/store.js`'s localStorage patches), until their own phase
+comes up: queen lines/breeders (Phase 4), apiaries/hives/inspections (Phase 5), and
+notifications (Phase 7).
 
 ## Wiring up the real integrations
 
@@ -402,12 +431,13 @@ topic publish, forum reply, repository contribution. Subscriptions are real
 a later migration phase.
 
 **Persistence** — `js/store.js` still writes some entities to `localStorage` behind a
-small interface (`commit`, `addProject`, `joinProject`). Identity (`loadSignedInMember`,
-`signOut`), marketplace listings (`loadListings`, `addListing`), and forum/repository/
+small interface (`commit`, `addQueenLine`, `updateApiary`). Identity (`loadSignedInMember`,
+`signOut`), marketplace listings (`loadListings`, `addListing`), forum/repository/
 subscriptions (`loadForumThreads`, `loadThread`, `addThread`, `addPost`, `loadRepository`,
-`loadSubTopic`, `loadMySubscriptions`, `toggleSub`) now read/write real Supabase state
-instead; every other entity's functions in this module are next, one migration phase at
-a time.
+`loadSubTopic`, `loadMySubscriptions`, `toggleSub`, `addForumAttachments`), and projects
+(`loadProjects`, `loadProject`, `addProject`, `deleteProject`, `addProjectSection`,
+`joinProject`, `setProjectTeamMember`) now read/write real Supabase state instead; every
+other entity's functions in this module are next, one migration phase at a time.
 
 **Data** — `js/data.js` exports plain arrays and lookup helpers, each tagged `[PERMANENT]`
 (pure reference/formatting code that survives the migration) or `[SEED — Phase N]` (mock
