@@ -35,12 +35,17 @@ import {
 } from '../store.js';
 import { contentFor, articleFor, fetchArticleBody, mdToHtml } from '../content.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
+import { members } from '../data.js';
 
 /* Article authors in front-matter are member ids where possible (resolved
    via the seed roster — real, non-seed authors aren't supported by this
    file-based content path), but plain names are allowed for guest
    contributors. Unchanged by any of this — still file-only. */
 function authorDisplay(author) {
+  if (author && /^m\d+$/.test(author)) {
+    const m = members.find((x) => x.id === author);
+    if (m) return { name: m.name, sub: 'Contributor', avatar: '' };
+  }
   return { name: author || 'AQBBA', sub: 'Contributor', avatar: '' };
 }
 
