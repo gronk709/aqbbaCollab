@@ -596,7 +596,7 @@ export async function loadSubTopic(id) {
       .select(`id, title, summary, body, created_at, updated_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
       .eq('sub_topic_id', id).order('created_at', { ascending: false }),
     supabase.from('repository_documents')
-      .select(`id, filename, storage_path, mime_type, size_bytes, created_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
+      .select(`id, filename, storage_path, mime_type, size_bytes, external_url, created_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
       .eq('sub_topic_id', id).order('created_at', { ascending: false }),
     /* repository_team has two FKs to members (member_id, granted_by) —
        same ambiguity member_roles/project_team hit; !member_id disambiguates. */
@@ -653,16 +653,30 @@ export async function addRepositoryDocument(subTopicId, file) {
   if (error) throw error;
 }
 
+export async function addRepositoryLink(subTopicId, { name, url }) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('repository_documents').insert({
+    sub_topic_id: subTopicId, author_id: me.id, filename: name, external_url: url,
+  });
+  if (error) throw error;
+}
+
 export async function deleteRepositoryDocument(doc) {
   const supabase = await getSupabase();
   const { error } = await supabase.from('repository_documents').delete().eq('id', doc.id);
   if (error) throw error;
-  await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).remove([doc.storage_path]);
+  if (doc.storage_path) await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).remove([doc.storage_path]);
 }
 
-/* Bucket is private — always a freshly-signed, short-lived URL, same
-   reasoning as openForumAttachment. */
+/* A link attachment just opens its URL directly. A file attachment's
+   bucket is private, so it always needs a freshly-signed, short-lived
+   URL first, same reasoning as openForumAttachment. */
 export async function openRepositoryDocument(doc) {
+  if (doc.external_url) {
+    window.open(doc.external_url, '_blank', 'noopener');
+    return;
+  }
   const tab = window.open('', '_blank');
   const supabase = await getSupabase();
   const { data, error } = await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).createSignedUrl(doc.storage_path, 3600);

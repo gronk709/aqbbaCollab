@@ -28,7 +28,7 @@
 
 import {
   addRepositoryArticle, updateRepositoryArticle, deleteRepositoryArticle,
-  addRepositoryDocument, deleteRepositoryDocument, openRepositoryDocument,
+  addRepositoryDocument, addRepositoryLink, deleteRepositoryDocument, openRepositoryDocument,
   setRepositoryTeamMember, removeRepositoryTeamMember, loadRealMembers,
   isSubscribed,
   REPOSITORY_DOC_MAX_BYTES, REPOSITORY_DOC_ACCEPT,
@@ -80,7 +80,8 @@ function mergedDocuments(c, dbDocuments) {
   }));
   const db = dbDocuments.map((d) => ({
     key: `db:${d.id}`, source: 'db', id: d.id, name: d.filename,
-    meta: `${d.mime_type || 'Document'} · ${fmtBytes(d.size_bytes)}`, authorId: d.author?.id, raw: d,
+    meta: d.external_url ? d.external_url.replace(/^https?:\/\//, '').replace(/\/$/, '') : `${d.mime_type || 'Document'} · ${fmtBytes(d.size_bytes)}`,
+    isLink: !!d.external_url, authorId: d.author?.id, raw: d,
   }));
   return [...file, ...db];
 }
@@ -195,6 +196,7 @@ function openContribute(eligibleSubs, preselect) {
       <select id="c-kind">
         <option value="article">An article</option>
         <option value="document">A document</option>
+        <option value="link">A website link</option>
       </select>
     </div>
     <div id="c-article-fields">
@@ -217,6 +219,16 @@ function openContribute(eligibleSubs, preselect) {
         <input type="file" id="c-file" accept="${REPOSITORY_DOC_ACCEPT}">
         <p class="caption" style="margin-top:6px">PDF, Word, text, spreadsheet, slide or image files — up to 20MB.</p>
       </div>
+    </div>
+    <div id="c-link-fields" hidden>
+      <div class="field">
+        <label for="c-link-name">Name</label>
+        <input id="c-link-name" placeholder="How this should appear in the list">
+      </div>
+      <div class="field">
+        <label for="c-link-url">URL</label>
+        <input id="c-link-url" placeholder="https://…">
+      </div>
     </div>`;
 
   const actions = `
@@ -228,18 +240,19 @@ function openContribute(eligibleSubs, preselect) {
   const kindSelect = scrim.querySelector('#c-kind');
   const articleFields = scrim.querySelector('#c-article-fields');
   const documentFields = scrim.querySelector('#c-document-fields');
+  const linkFields = scrim.querySelector('#c-link-fields');
   kindSelect.addEventListener('change', () => {
-    const isArticle = kindSelect.value === 'article';
-    articleFields.hidden = !isArticle;
-    documentFields.hidden = isArticle;
+    articleFields.hidden = kindSelect.value !== 'article';
+    documentFields.hidden = kindSelect.value !== 'document';
+    linkFields.hidden = kindSelect.value !== 'link';
   });
 
   const btn = scrim.querySelector('#pub-contrib');
   btn.addEventListener('click', async () => {
     const subId = scrim.querySelector('#c-sub').value;
-    const isArticle = kindSelect.value === 'article';
+    const kind = kindSelect.value;
 
-    if (isArticle) {
+    if (kind === 'article') {
       const title = scrim.querySelector('#c-title').value.trim();
       const summary = scrim.querySelector('#c-summary').value.trim();
       const text = scrim.querySelector('#c-body').value.trim();
@@ -254,7 +267,7 @@ function openContribute(eligibleSubs, preselect) {
         btn.textContent = 'Publish';
         return;
       }
-    } else {
+    } else if (kind === 'document') {
       const file = scrim.querySelector('#c-file').files[0];
       if (!file) { toast('Choose a file first.'); return; }
       if (file.size > REPOSITORY_DOC_MAX_BYTES) { toast(`${file.name} is over the 20MB limit.`); return; }
@@ -264,6 +277,21 @@ function openContribute(eligibleSubs, preselect) {
         await addRepositoryDocument(subId, file);
       } catch (err) {
         toast(`Couldn't upload: ${err.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Publish';
+        return;
+      }
+    } else {
+      const name = scrim.querySelector('#c-link-name').value.trim();
+      const url = scrim.querySelector('#c-link-url').value.trim();
+      if (!name || !url) { toast('Add a name and a URL before publishing.'); return; }
+      if (!/^https?:\/\//i.test(url)) { toast('The URL needs to start with http:// or https://.'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Publishing…';
+      try {
+        await addRepositoryLink(subId, { name, url });
+      } catch (err) {
+        toast(`Couldn't publish: ${err.message}`);
         btn.disabled = false;
         btn.textContent = 'Publish';
         return;
@@ -443,7 +471,7 @@ function attachmentsPanel(docs, canContribute, canManage) {
           return `
             <div class="sub">
               <button type="button" class="sub-title" style="text-align:left;background:none;border:none;cursor:pointer" data-open-doc="${d.id}">
-                <strong>${esc(d.name)}</strong>
+                <strong>${d.isLink ? `${icons.link} ` : ''}${esc(d.name)}</strong>
                 <span>${esc(d.meta)}</span>
               </button>
               ${canManage ? `<button type="button" class="attach-remove" data-delete-doc="${d.id}" aria-label="Delete">${icons.x}</button>` : ''}
