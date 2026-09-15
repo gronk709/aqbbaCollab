@@ -6,6 +6,7 @@ import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
   roleLabel, currentUser, loadSignedInMember,
   isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
+  loadProjects, loadProject,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
@@ -39,22 +40,26 @@ const NAV = [
 ];
 
 const ROUTES = [
-  { test: /^#\/?$/,                    view: renderProjects },
+  { test: /^#\/?$/,                    view: renderProjects, load: loadProjects },
   { test: /^#\/apiaries\/?$/,          view: renderApiaries },
-  { test: /^#\/apiaries\/(.+)$/,       view: renderApiary },
+  /* Loads the project list too (Phase 6), just for the "Running here"
+     panel — which projects are running at this site. */
+  { test: /^#\/apiaries\/(.+)$/,       view: renderApiary, load: loadProjects },
   { test: /^#\/members\/?$/,           view: renderMembers },
   { test: /^#\/managers\/(.+)$/,       view: renderManager },
-  { test: /^#\/projects\/?$/,          view: renderProjects },
+  { test: /^#\/projects\/?$/,          view: renderProjects, load: loadProjects },
   /* The dashboard is a topic area of the VSH program (PRJ-00), not a page in
      its own right — hence the project-scoped route. Must precede the generic
-     project route, which would otherwise swallow "p0/dashboard" as an id. */
-  { test: /^#\/projects\/p0\/dashboard\/?$/, view: renderDashboard },
-  { test: /^#\/projects\/(.+)$/,       view: renderProject },
-  /* Async routes (Phase 2 marketplace, Phase 3 forum/repository — real
-     Supabase rows now). `load` fetches the data render() awaits before
-     calling the still-synchronous view below with it — see render()'s own
-     comment for how the loading/error states and caching around this
-     work. */
+     project route, which would otherwise swallow "p0/dashboard" as an id.
+     Still loads the project list (Phase 6) just for its "N research
+     projects" stat tile. */
+  { test: /^#\/projects\/p0\/dashboard\/?$/, view: renderDashboard, load: loadProjects },
+  { test: /^#\/projects\/(.+)$/,       view: renderProject, load: (id) => loadProject(id) },
+  /* Async routes (Phase 2 marketplace, Phase 3 forum/repository, Phase 6
+     projects — real Supabase rows now). `load` fetches the data render()
+     awaits before calling the still-synchronous view below with it — see
+     render()'s own comment for how the loading/error states and caching
+     around this work. */
   { test: /^#\/forum\/?$/,             view: renderForum,    load: loadForumThreads },
   { test: /^#\/forum\/(.+)$/,          view: renderThread,   load: (id) => loadThread(id) },
   { test: /^#\/repository\/?$/,        view: renderRepository, load: loadRepository },

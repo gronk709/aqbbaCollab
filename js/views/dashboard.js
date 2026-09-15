@@ -5,7 +5,7 @@
    ========================================================================== */
 
 import {
-  stageLabels, statusLabels, projects,
+  stageLabels, statusLabels,
   tally, vshAverage, relDays, fmtDate, fmtDateLong,
 } from '../data.js';
 import {
@@ -312,7 +312,7 @@ function openQueenLineForm(line) {
   });
 }
 
-export function renderDashboard() {
+export function renderDashboard(projects) {
   const apiaries = allApiaries();
   const allHives = getAllHives();
   const upcomingInspections = allUpcomingInspections();

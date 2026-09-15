@@ -9,20 +9,20 @@
 import {
   stageLabels, statusLabels,
   tally, vshAverage, relDays, fmtDateLong,
-  projects, projectStatusLabels, inspectionKinds, queenColours,
+  projectStatusLabels, inspectionKinds, queenColours,
 } from '../data.js';
 import {
-  allApiaries, allApiaryById, allInspections, memberProjects, hasContact,
+  allApiaries, allApiaryById, allInspections, hasContact,
   addApiary, addHive, addInspection, roleLabel, isWebAdmin, canEditApiary, updateApiary, updateHive,
   allQueenLines, lineByCode, breederById, memberById, allMembers,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
 
-/* Member-proposed projects sit alongside the seeded ones, same as everywhere
-   else member-authored content is combined with the seed data. */
-const projectsForApiary = (apiaryId) =>
-  [...memberProjects(), ...projects].filter((p) => p.sites.includes(apiaryId));
+/* Projects are real Supabase rows now (Phase 6) — `sites` is a plain
+   jsonb array of apiary ids, no different from the old mock shape here. */
+const projectsForApiary = (projects, apiaryId) =>
+  projects.filter((p) => (p.sites || []).includes(apiaryId));
 
 const stageVariant = { establishing: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green', requeening: 'tag-red' };
 
@@ -179,7 +179,7 @@ function openApiaryForm() {
   });
 }
 
-export function renderApiary(id) {
+export function renderApiary(projects, id) {
   const ap = allApiaryById(id);
   if (!ap) return '';
 
@@ -187,7 +187,7 @@ export function renderApiary(id) {
   const t = tally(hives);
   const mgr = memberById(ap.manager);
   const insp = allInspections().filter((i) => i.apiary === ap.id).sort((a, b) => a.date - b.date);
-  const siteProjects = projectsForApiary(ap.id);
+  const siteProjects = projectsForApiary(projects, ap.id);
   const canEdit = canEditApiary(ap.id);
   const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 

@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import {
-  notifications, projects, apiaries, inspections, queenLines,
+  notifications, apiaries, inspections, queenLines,
   members as seedMembers, currentUser as seedCurrentUser,
 } from './data.js';
 import { getSupabase } from './supabaseClient.js';
@@ -18,9 +18,6 @@ const defaults = () => ({
      before real subscriptions existed. */
   subs: [],
   read: notifications.filter((n) => !n.unread).map((n) => n.id),
-  newProjects: [],
-  projectJoins: [],
-  projectParticipants: {},
   newApiaries: [],
   newHives: [],
   newInspections: [],
@@ -82,6 +79,19 @@ export function allMembers() {
     return [...base, state.remoteMember];
   }
   return base;
+}
+
+/* allMembers() above mixes in seed/demo members whose ids ('m1', 'm2', …)
+   aren't real uuids — fine for read-only display, but project_team.member_id
+   is a real FK to this table, so assigning one of those ids would fail
+   (or worse, silently attach the grant to nothing). Anywhere that writes a
+   real per-member row — like the project team picker — needs to read this
+   table directly instead. */
+export async function loadRealMembers() {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('members').select('id, name, initials').order('name');
+  if (error) throw error;
+  return data;
 }
 
 export function memberById(id) {
@@ -562,43 +572,191 @@ export async function addListing({ kind, title, price, unit, qty, detail }) {
   return data;
 }
 
-/* --- projects -------------------------------------------------------------
-   A project is joined, not subscribed to: joining records what the member
-   is contributing, not just that they want to hear about it. */
+/* --- projects ---------------------------------------------------------
+   Phase 6 of the backend migration: real Supabase rows now (see
+   supabase/migrations/20260901000000_projects.sql). Only Web Admin can
+   create or delete a project (projects_insert/delete RLS); a project's
+   narrative content — background/aims/questions/timeline/participation —
+   lives in project_sections, one row per bullet/paragraph, specifically
+   so "add or edit" and "delete" are different SQL operations RLS can
+   gate separately: Contributor-or-above can insert/update a section,
+   only Manager-or-above (or Web Admin) can delete one. Holding the
+   "Project Manager"/"Contributor" role tag is just a label, same as
+   Apiary Manager — the real grant is project_team, assignable only by a
+   Web Admin, one project at a time (mirrors apiary_managers exactly). */
 
-export const isJoined = (projectId) => state.projectJoins.includes(projectId);
+let cachedRecruitingCount = 0;
+/* Reads a cache populated by the last loadProjects() call — recruitingCount
+   is a synchronous nav-badge read (js/app.js's shellHTML renders on every
+   page, not just Projects), so it can't itself await a Supabase query. The
+   badge is simply 0 until Projects has been loaded once this session. */
+export const recruitingCount = () => cachedRecruitingCount;
 
-export function joinProject(projectId, contribution) {
-  if (!state.projectJoins.includes(projectId)) state.projectJoins.push(projectId);
-  if (!state.projectParticipants[projectId]) state.projectParticipants[projectId] = [];
-  state.projectParticipants[projectId].push({
-    member: currentUser().id, contribution: contribution || 'Joined without a stated contribution.', joined: 0,
-  });
-  commit();
+export async function loadProjects() {
+  const supabase = await getSupabase();
+  const { data: rows, error } = await supabase
+    .from('projects')
+    .select('id, code, status, title, summary, sites, open_sites, created_at')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+
+  const counts = await participantCounts(rows.map((p) => p.id));
+  cachedRecruitingCount = rows.filter((p) => p.status === 'recruiting').length;
+  return rows.map((p) => ({ ...p, participantCount: counts[p.id] ?? 0 }));
 }
 
-export const sessionParticipantsFor = (projectId) => state.projectParticipants[projectId] || [];
+async function participantCounts(projectIds) {
+  if (!projectIds.length) return {};
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('project_participants')
+    .select('project_id')
+    .in('project_id', projectIds);
+  if (error) throw error;
+  return data.reduce((acc, r) => { acc[r.project_id] = (acc[r.project_id] || 0) + 1; return acc; }, {});
+}
 
-export function addProject({ title, summary, background, aims, questions, methods, addons, sites, openSites }) {
-  const p = {
-    id: `up-${Date.now()}`, code: `PRJ-${String(projects.length + state.newProjects.length + 1).padStart(2, '0')}`,
-    status: 'recruiting', title, summary,
-    background: [background], aims, questions, sites, openSites,
-    participation: { summary: methods, methods: [methods], addons },
-    timeline: 'Timeline to be confirmed once the project has its first participants.',
-    coordinators: [currentUser().id], created: 0, participants: [],
+export async function loadProject(id) {
+  const supabase = await getSupabase();
+  const [
+    { data: project, error: projErr },
+    { data: sections, error: secErr },
+    { data: participants, error: partErr },
+    { data: team, error: teamErr },
+  ] = await Promise.all([
+    supabase.from('projects').select('id, code, status, title, summary, sites, open_sites, topics, created_at').eq('id', id).single(),
+    supabase.from('project_sections').select('id, section, body, sort_order').eq('project_id', id).order('sort_order'),
+    supabase.from('project_participants').select(`project_id, contribution, joined_at, member:members(${MEMBER_DISPLAY_FIELDS})`).eq('project_id', id).order('joined_at'),
+    /* project_team has two FKs to members (member_id, granted_by) — same
+       ambiguity member_roles hit; !member_id picks the right one. */
+    supabase.from('project_team').select(`member_id, access_level, member:members!member_id(${MEMBER_DISPLAY_FIELDS})`).eq('project_id', id),
+  ]);
+  if (projErr) throw projErr;
+  if (secErr) throw secErr;
+  if (partErr) throw partErr;
+  if (teamErr) throw teamErr;
+
+  const me = currentUser();
+  const admin = isWebAdmin(me.id);
+  const myAccess = team.find((t) => t.member_id === me.id)?.access_level ?? null;
+
+  return {
+    project,
+    sections,
+    participants: participants.map((p) => ({ ...p, member: withRoles(p.member) })),
+    team: team.map((t) => ({ ...t, member: withRoles(t.member) })),
+    isAdmin: admin,
+    canManage: admin || myAccess === 'manage',
+    canContribute: admin || myAccess === 'manage' || myAccess === 'contribute',
+    isParticipant: participants.some((p) => p.member?.id === me.id),
   };
-  state.newProjects.unshift(p);
-  commit();
-  return p;
 }
 
-export const memberProjects = () => state.newProjects;
+export async function addProject({ title, summary }) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can create a project.');
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { count, error: countErr } = await supabase.from('projects').select('id', { count: 'exact', head: true });
+  if (countErr) throw countErr;
+  const id = `proj-${crypto.randomUUID()}`;
+  const code = `PRJ-${String((count ?? 0) + 1).padStart(2, '0')}`;
 
-export function recruitingCount() {
-  const seeded = projects.filter((p) => p.status === 'recruiting').length;
-  const mine = state.newProjects.filter((p) => p.status === 'recruiting').length;
-  return seeded + mine;
+  const { data: project, error } = await supabase
+    .from('projects')
+    .insert({ id, code, status: 'recruiting', title, summary })
+    .select('id, code, status, title, summary, sites, open_sites, created_at')
+    .single();
+  if (error) throw error;
+
+  /* The creator gets 'manage' access immediately — otherwise a brand-new
+     project would have no Project Manager and nobody but a second Web
+     Admin action could ever add its content. */
+  const { error: teamErr } = await supabase
+    .from('project_team')
+    .insert({ project_id: id, member_id: me.id, access_level: 'manage', granted_by: me.id });
+  if (teamErr) throw teamErr;
+
+  return project;
+}
+
+export async function deleteProject(id) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can delete a project.');
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('projects').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function addProjectSection(projectId, section, body) {
+  const supabase = await getSupabase();
+  const { data: last, error: lastErr } = await supabase
+    .from('project_sections')
+    .select('sort_order')
+    .eq('project_id', projectId).eq('section', section)
+    .order('sort_order', { ascending: false }).limit(1);
+  if (lastErr) throw lastErr;
+  const { error } = await supabase
+    .from('project_sections')
+    .insert({ project_id: projectId, section, body, sort_order: (last[0]?.sort_order ?? 0) + 1 });
+  if (error) throw error;
+}
+
+export async function updateProjectSection(sectionId, body) {
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('project_sections')
+    .update({ body, updated_at: new Date().toISOString() })
+    .eq('id', sectionId);
+  if (error) throw error;
+}
+
+export async function deleteProjectSection(sectionId) {
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('project_sections').delete().eq('id', sectionId);
+  if (error) throw error;
+}
+
+/* A project is joined, not subscribed to: joining records what the member
+   is contributing, not just that they want to hear about it. Any member
+   can join/leave themself regardless of project_team access — that's
+   unrelated to the Manager/Contributor content permissions above. */
+export async function joinProject(projectId, contribution) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('project_participants')
+    .insert({ project_id: projectId, member_id: me.id, contribution: contribution || 'Joined without a stated contribution.' });
+  if (error) throw error;
+}
+
+export async function leaveProject(projectId, memberId) {
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('project_participants').delete().eq('project_id', projectId).eq('member_id', memberId);
+  if (error) throw error;
+}
+
+export async function updateProjectParticipant(projectId, memberId, contribution) {
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('project_participants').update({ contribution }).eq('project_id', projectId).eq('member_id', memberId);
+  if (error) throw error;
+}
+
+/* The actual permission grant behind Project Manager/Contributor —
+   Web-Admin-only to change, exactly like apiary_managers. */
+export async function setProjectTeamMember(projectId, memberId, accessLevel) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can assign project team access.');
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('project_team')
+    .upsert({ project_id: projectId, member_id: memberId, access_level: accessLevel, granted_by: me.id }, { onConflict: 'project_id,member_id' });
+  if (error) throw error;
+}
+
+export async function removeProjectTeamMember(projectId, memberId) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can change project team access.');
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('project_team').delete().eq('project_id', projectId).eq('member_id', memberId);
+  if (error) throw error;
 }
 
 /* --- apiaries, hives & inspections ----------------------------------------
