@@ -374,6 +374,15 @@ async function saveAttachments(threadId, postId, authorId, links, files) {
    any time afterward, since attachment management stays open to an
    author even once the post itself is frozen (see the permissions
    migration's header comment for why those are different). */
+/* Storage keys are far stricter than filenames — Supabase Storage rejects
+   spaces, brackets and other punctuation with a bare "Invalid key" error
+   (hit in practice on a real filename like "American Bee Journal . March
+   2026 Vol 166 No 3[26].pdf"). The original name is kept as-is in
+   `filename` for display; only the upload path itself gets sanitized. */
+function safeStorageSegment(name) {
+  return name.normalize('NFKD').replace(/[^\w.-]+/g, '_');
+}
+
 export async function addForumAttachments(threadId, postId, authorId, links, files) {
   const supabase = await getSupabase();
   const rows = links.map((l) => ({
@@ -382,7 +391,7 @@ export async function addForumAttachments(threadId, postId, authorId, links, fil
   }));
 
   for (const file of files) {
-    const path = `${threadId}/${postId ?? 'op'}/${crypto.randomUUID()}-${file.name}`;
+    const path = `${threadId}/${postId ?? 'op'}/${crypto.randomUUID()}-${safeStorageSegment(file.name)}`;
     const { error: upErr } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file);
     if (upErr) throw upErr;
     rows.push({
