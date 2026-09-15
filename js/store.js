@@ -352,6 +352,32 @@ export async function addPost(threadId, body, links = [], files = []) {
   }
 }
 
+/* A reply, unlike the topic itself, was never frozen (see the permissions
+   migration's header comment for why those two are treated differently)
+   — its author can still remove it outright, same as Web Admin
+   moderating. forum_attachments rows on it cascade-delete in Postgres
+   automatically (the FK is ON DELETE CASCADE), but that only removes
+   the metadata rows — a file-kind attachment's actual Storage object
+   doesn't cascade, so it's cleaned up here first. */
+export async function deleteForumPost(post) {
+  const me = requireRealMember();
+  if (post.author.id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only delete your own replies.');
+  const supabase = await getSupabase();
+
+  const { data: files, error: filesErr } = await supabase
+    .from('forum_attachments')
+    .select('storage_path')
+    .eq('post_id', post.id)
+    .eq('kind', 'file');
+  if (filesErr) throw filesErr;
+  if (files.length) {
+    await supabase.storage.from(ATTACHMENTS_BUCKET).remove(files.map((f) => f.storage_path));
+  }
+
+  const { error } = await supabase.from('forum_posts').delete().eq('id', post.id);
+  if (error) throw error;
+}
+
 /* --- forum attachments -------------------------------------------------
    URLs and documents attached to a topic's opening post (post_id null) or
    a reply (post_id set). Files land in the private 'forum-attachments'

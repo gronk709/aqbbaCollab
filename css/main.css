@@ -234,6 +234,11 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .btn-primary:active { transform: translateY(1px); }
 .btn-ghost { border: 1px solid var(--comb-shade); background: #FFF; }
 .btn-ghost:hover { border-color: var(--propolis-40); }
+/* Same rust-red as .tag-red, for the one genuinely destructive action
+   (deleting a reply) — everything else here (removing a link/file
+   attachment) is low-stakes enough to stay btn-ghost. */
+.btn-danger { background: #8C2B21; color: var(--comb); }
+.btn-danger:hover { background: #6E211A; }
 .btn-block { width: 100%; }
 .btn-sm { padding: 7px var(--s3); font-size: 12.5px; }
 
@@ -600,6 +605,13 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .post:last-child { border-bottom: none; }
 .post-who { display: flex; align-items: baseline; gap: var(--s3); flex-wrap: wrap; margin-bottom: var(--s2); }
 .post-who strong { font-size: 13.5px; font-weight: 600; }
+.post-delete {
+  display: grid; place-items: center;
+  width: 22px; height: 22px; border-radius: 3px;
+  color: var(--propolis-40);
+}
+.post-delete:hover { color: #8C2B21; background: var(--comb); }
+.post-delete svg { width: 12px; height: 12px; }
 .post-body { font-family: var(--display); font-size: 15px; line-height: 1.68; color: #33291C; }
 .post-body p + p { margin-top: var(--s4); }
 /* Briefly highlights a post scrolled to from the Attachments panel's

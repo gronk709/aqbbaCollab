@@ -11,7 +11,7 @@
 
 import { relDays, projectForThread } from '../data.js';
 import {
-  isSubscribed, addThread, addPost, state, currentUser, isWebAdmin,
+  isSubscribed, addThread, addPost, deleteForumPost, state, currentUser, isWebAdmin,
   openForumAttachment, addForumAttachments, updateForumAttachment, deleteForumAttachment,
   ATTACHMENT_MAX_BYTES, ATTACHMENT_ACCEPT,
 } from '../store.js';
@@ -135,6 +135,33 @@ function openEditAttachmentModal(a, onSaved) {
     closeModal();
     toast('Link updated.');
     onSaved();
+  });
+}
+
+/* A reply, unlike the topic itself, was never frozen — its author (or
+   Web Admin) can remove it outright, so this asks for actual
+   confirmation first, unlike an attachment chip's immediate remove. */
+function openDeleteReplyModal(post, onDeleted) {
+  const body = `<p>Delete this reply? This can't be undone, and removes any attachments on it too.</p>`;
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-danger" id="confirm-delete-reply">Delete reply</button>`;
+  const scrim = modal({ title: 'Delete reply', body, actions });
+
+  scrim.querySelector('#confirm-delete-reply').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = 'Deleting…';
+    try {
+      await deleteForumPost(post);
+    } catch (err) {
+      toast(`Couldn't delete that reply: ${err.message}`);
+      e.target.disabled = false;
+      e.target.textContent = 'Delete reply';
+      return;
+    }
+    closeModal();
+    toast('Reply deleted.');
+    onDeleted();
   });
 }
 
@@ -319,6 +346,7 @@ export function renderThread(data) {
   const allPosts = [{ id: 'op', author: t.author, created_at: t.created_at, body: t.body }, ...posts];
 
   const attachmentsById = Object.fromEntries(attachments.map((a) => [a.id, a]));
+  const postsById = Object.fromEntries(allPosts.map((p) => [p.id, p]));
   const attachmentsByPost = {};
   attachments.forEach((a) => {
     const k = a.post_id || 'op';
@@ -348,6 +376,10 @@ export function renderThread(data) {
     const paras = p.body.split('\n\n').map((x) => `<p>${esc(x)}</p>`).join('');
     const postAttachments = attachmentsByPost[p.id] || [];
     const canAddHere = p.author.id === me.id;
+    /* The opening post is the topic itself — frozen, not deletable here.
+       A reply was never frozen, so its author (or Web Admin) can remove
+       it outright. */
+    const canDeleteHere = p.id !== 'op' && (p.author.id === me.id || admin);
     return `
       <article class="post" id="post-${p.id}">
         ${avatar(p.author)}
@@ -357,6 +389,7 @@ export function renderThread(data) {
             <span class="caption">${esc(roleLabelFrom(p.author.roles))}</span>
             <span class="spacer"></span>
             <span class="caption mono">${relDays(daysAgo(p.created_at))}</span>
+            ${canDeleteHere ? `<button type="button" class="post-delete" data-delete-reply="${p.id}" aria-label="Delete reply">${icons.x}</button>` : ''}
           </div>
           <div class="post-body">${paras}</div>
           ${postAttachments.length ? `<div class="attach-inline">${postAttachments.map(attachmentChip).join('')}</div>` : ''}
@@ -501,6 +534,15 @@ export function renderThread(data) {
     document.querySelectorAll('[data-edit-attachment]').forEach((el) => {
       el.addEventListener('click', () => {
         openEditAttachmentModal(attachmentsById[el.dataset.editAttachment], () => {
+          window.__aqbba_invalidateData();
+          window.__aqbba_render();
+        });
+      });
+    });
+
+    document.querySelectorAll('[data-delete-reply]').forEach((el) => {
+      el.addEventListener('click', () => {
+        openDeleteReplyModal(postsById[el.dataset.deleteReply], () => {
           window.__aqbba_invalidateData();
           window.__aqbba_render();
         });
