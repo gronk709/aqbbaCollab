@@ -304,16 +304,24 @@ export async function loadThread(id) {
     .order('created_at', { ascending: true });
   if (postsErr) throw postsErr;
 
+  const { data: attachments, error: attErr } = await supabase
+    .from('forum_attachments')
+    .select('id, post_id, kind, url, storage_path, filename, mime_type, size_bytes, created_at')
+    .eq('thread_id', id)
+    .order('created_at', { ascending: true });
+  if (attErr) throw attErr;
+
   const watchers = (await subscriberCounts('thread', [id]))[id] ?? 0;
 
   return {
     thread: { ...thread, author: withRoles(thread.author) },
     posts: posts.map((p) => ({ ...p, author: withRoles(p.author) })),
+    attachments,
     watchers,
   };
 }
 
-export async function addThread({ title, categoryId, body }) {
+export async function addThread({ title, categoryId, body, links = [], files = [] }) {
   const me = requireRealMember();
   const supabase = await getSupabase();
   const { data, error } = await supabase
@@ -323,19 +331,84 @@ export async function addThread({ title, categoryId, body }) {
     .single();
   if (error) throw error;
   await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'thread', subscribable_id: data.id });
+  await saveAttachments(data.id, null, me.id, links, files);
   return data;
 }
 
-export async function addPost(threadId, body) {
+export async function addPost(threadId, body, links = [], files = []) {
   const me = requireRealMember();
   const supabase = await getSupabase();
-  const { error } = await supabase.from('forum_posts').insert({ thread_id: threadId, author_id: me.id, body });
+  const { data, error } = await supabase
+    .from('forum_posts')
+    .insert({ thread_id: threadId, author_id: me.id, body })
+    .select('id')
+    .single();
   if (error) throw error;
+  await saveAttachments(threadId, data.id, me.id, links, files);
   if (!isSubscribed(`thread:${threadId}`)) {
     await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'thread', subscribable_id: threadId });
     state.subs.push(`thread:${threadId}`);
     commit();
   }
+}
+
+/* --- forum attachments -------------------------------------------------
+   URLs and documents attached to a topic's opening post (post_id null) or
+   a reply (post_id set). Files land in the private 'forum-attachments'
+   Storage bucket (see the Phase 3+ migration) — never a public one, so
+   opening one always goes through a freshly-signed, short-lived URL
+   (openForumAttachment) rather than a plain link. */
+
+const ATTACHMENTS_BUCKET = 'forum-attachments';
+export const ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const ATTACHMENT_ACCEPT = '.pdf,.doc,.docx,.txt,.rtf,.odt,.xls,.xlsx,.csv,.ppt,.pptx';
+
+async function saveAttachments(threadId, postId, authorId, links, files) {
+  if (!links.length && !files.length) return;
+  const supabase = await getSupabase();
+  const rows = links.map((l) => ({
+    thread_id: threadId, post_id: postId, author_id: authorId,
+    kind: 'url', url: l.url, filename: l.title || l.url,
+  }));
+
+  for (const file of files) {
+    const path = `${threadId}/${postId ?? 'op'}/${crypto.randomUUID()}-${file.name}`;
+    const { error: upErr } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file);
+    if (upErr) throw upErr;
+    rows.push({
+      thread_id: threadId, post_id: postId, author_id: authorId,
+      kind: 'file', storage_path: path, filename: file.name,
+      mime_type: file.type || null, size_bytes: file.size,
+    });
+  }
+
+  const { error } = await supabase.from('forum_attachments').insert(rows);
+  if (error) throw error;
+}
+
+/* Opens an attachment: a plain new tab for a URL, or a freshly-signed
+   (1 hour) Storage URL for a file — the bucket is private, so there's no
+   permanent public link to hand out.
+
+   The tab is opened synchronously, before the `await` below, and then
+   redirected once the signed URL comes back — opening it only after the
+   await would run outside the click's user-gesture window and get
+   popup-blocked in most browsers, since a blocked popup can't be
+   retried once the gesture is gone. */
+export async function openForumAttachment(a) {
+  if (a.kind === 'url') {
+    window.open(a.url, '_blank', 'noopener');
+    return;
+  }
+  const tab = window.open('', '_blank');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.storage.from(ATTACHMENTS_BUCKET).createSignedUrl(a.storage_path, 3600);
+  if (error) {
+    tab?.close();
+    throw error;
+  }
+  if (tab) tab.location.href = data.signedUrl;
+  else window.open(data.signedUrl, '_blank', 'noopener');
 }
 
 /* --- repository --------------------------------------------------------

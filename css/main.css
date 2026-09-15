@@ -602,6 +602,36 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .post-who strong { font-size: 13.5px; font-weight: 600; }
 .post-body { font-family: var(--display); font-size: 15px; line-height: 1.68; color: #33291C; }
 .post-body p + p { margin-top: var(--s4); }
+/* Briefly highlights a post scrolled to from the Attachments panel's
+   "Jump to post" link, so landing on it doesn't feel like nothing happened. */
+.post.flash { animation: post-flash 1.6s var(--ease); }
+@keyframes post-flash {
+  0%, 100% { background: transparent; }
+  15% { background: var(--amber-wash); }
+}
+
+/* Attachments — links/documents attached to a post, and the inline row
+   showing them under it. The composer's own add-link rows and file
+   input reuse .field's existing input styling. */
+.attach-inline { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s4); }
+.attach-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 3px;
+  border: 1px solid var(--comb-shade); background: #FFF;
+  font-size: 12.5px; font-weight: 500; color: var(--propolis-60);
+  transition: all 0.16s var(--ease);
+}
+.attach-chip:hover { border-color: var(--amber); color: var(--amber-deep); }
+.attach-chip svg { flex: none; width: 13px; height: 13px; }
+.attach-link-row { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); }
+.attach-link-row input { flex: 1; min-width: 0; }
+.attach-remove {
+  flex: none; display: grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 3px;
+  border: 1px solid var(--comb-shade); background: #FFF; color: var(--propolis-40);
+}
+.attach-remove:hover { border-color: var(--propolis-40); color: var(--propolis); }
+.attach-remove svg { width: 14px; height: 14px; }
 
 /* Repository — a real learning sequence, so the numbers earn their place */
 .track { border: 1px solid var(--comb-shade); border-radius: 4px; background: #FFF; overflow: hidden; }

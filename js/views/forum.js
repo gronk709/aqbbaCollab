@@ -12,6 +12,7 @@
 import { relDays, projectForThread } from '../data.js';
 import {
   isSubscribed, addThread, addPost, state, currentUser,
+  openForumAttachment, ATTACHMENT_MAX_BYTES, ATTACHMENT_ACCEPT,
 } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
@@ -40,6 +41,66 @@ function threadCard(t) {
         <span class="mono">${t.watchers} watching</span>
       </div>
     </a>`;
+}
+
+/* --- attachments: shared between the new-topic composer and the reply
+   box below a thread. Links are plain input rows read at submit time;
+   files are whatever the native multi-file input holds — no separate JS
+   tracking needed for either, so "remove" for files is just "reopen the
+   picker and choose again". --------------------------------------------- */
+
+function attachFieldsHTML() {
+  return `
+    <div class="field">
+      <label>Links</label>
+      <div class="attach-links" data-links></div>
+      <button type="button" class="btn btn-ghost btn-sm" data-add-link>${icons.link} Add a link</button>
+    </div>
+    <div class="field">
+      <label>Documents</label>
+      <input type="file" data-files multiple accept="${ATTACHMENT_ACCEPT}">
+      <p class="caption" style="margin-top:6px">PDF, Word, text, spreadsheet or slide files — up to 20MB each.</p>
+    </div>`;
+}
+
+function addLinkRow(list) {
+  const row = document.createElement('div');
+  row.className = 'attach-link-row';
+  row.innerHTML = `
+    <input type="url" placeholder="https://…" data-link-url>
+    <input type="text" placeholder="Label (optional)" data-link-title>
+    <button type="button" class="attach-remove" aria-label="Remove link">${icons.x}</button>`;
+  row.querySelector('.attach-remove').addEventListener('click', () => row.remove());
+  list.appendChild(row);
+}
+
+function bindAttachFields(container) {
+  const list = container.querySelector('[data-links]');
+  container.querySelector('[data-add-link]').addEventListener('click', () => addLinkRow(list));
+}
+
+function collectLinks(container) {
+  const urls = [...container.querySelectorAll('[data-link-url]')];
+  const titles = [...container.querySelectorAll('[data-link-title]')];
+  return urls.map((input, i) => {
+    const url = input.value.trim();
+    if (!url) return null;
+    const title = titles[i].value.trim();
+    return { url: /^https?:\/\//i.test(url) ? url : `https://${url}`, title };
+  }).filter(Boolean);
+}
+
+function collectFiles(container) {
+  const input = container.querySelector('[data-files]');
+  return input && input.files ? [...input.files] : [];
+}
+
+/* Returns the offending file's name if anything is over the limit — the
+   caller checks this before the actual publish/post call, so a too-big
+   file fails fast with a clear message instead of an upload error deep
+   inside saveAttachments. */
+function oversizeFile(files) {
+  return files.find((f) => f.size > ATTACHMENT_MAX_BYTES)?.name;
 }
 
 /* created_at is a real Postgres timestamp now, not the old seed data's
@@ -163,6 +224,7 @@ function openComposer(categories) {
         <label for="t-body">First post</label>
         <textarea id="t-body" required placeholder="Give enough detail that someone can answer without asking three follow-up questions."></textarea>
       </div>
+      ${attachFieldsHTML()}
     </form>`;
 
   const actions = `
@@ -170,6 +232,7 @@ function openComposer(categories) {
     <button class="btn btn-primary" id="publish">Publish topic</button>`;
 
   const scrim = modal({ title: 'New topic', body, actions });
+  bindAttachFields(scrim);
   const publishBtn = scrim.querySelector('#publish');
 
   publishBtn.addEventListener('click', async () => {
@@ -181,12 +244,19 @@ function openComposer(categories) {
       toast('Add a title and a first post before publishing.');
       return;
     }
+    const links = collectLinks(scrim);
+    const files = collectFiles(scrim);
+    const tooBig = oversizeFile(files);
+    if (tooBig) {
+      toast(`${tooBig} is over the 20MB limit — remove it before publishing.`);
+      return;
+    }
 
     publishBtn.disabled = true;
     publishBtn.textContent = 'Publishing…';
     let t;
     try {
-      t = await addThread({ title, categoryId, body: text });
+      t = await addThread({ title, categoryId, body: text, links, files });
     } catch (err) {
       toast(`Couldn't publish the topic: ${err.message}`);
       publishBtn.disabled = false;
@@ -205,16 +275,29 @@ function openComposer(categories) {
 /* --- single thread -------------------------------------------------------- */
 
 export function renderThread(data) {
-  const { thread: t, posts, watchers } = data;
+  const { thread: t, posts, watchers, attachments } = data;
   const key = `thread:${t.id}`;
   const on = isSubscribed(key);
 
-  const allPosts = [{ author: t.author, created_at: t.created_at, body: t.body }, ...posts];
+  const allPosts = [{ id: 'op', author: t.author, created_at: t.created_at, body: t.body }, ...posts];
+
+  const attachmentsById = Object.fromEntries(attachments.map((a) => [a.id, a]));
+  const attachmentsByPost = {};
+  attachments.forEach((a) => {
+    const k = a.post_id || 'op';
+    (attachmentsByPost[k] ||= []).push(a);
+  });
+
+  const attachmentChip = (a) => `
+    <button type="button" class="attach-chip" data-open-attachment="${a.id}">
+      ${a.kind === 'url' ? icons.link : icons.attach}<span>${esc(a.filename)}</span>
+    </button>`;
 
   const postHTML = allPosts.map((p) => {
     const paras = p.body.split('\n\n').map((x) => `<p>${esc(x)}</p>`).join('');
+    const postAttachments = attachmentsByPost[p.id] || [];
     return `
-      <article class="post">
+      <article class="post" id="post-${p.id}">
         ${avatar(p.author)}
         <div>
           <div class="post-who">
@@ -224,9 +307,29 @@ export function renderThread(data) {
             <span class="caption mono">${relDays(daysAgo(p.created_at))}</span>
           </div>
           <div class="post-body">${paras}</div>
+          ${postAttachments.length ? `<div class="attach-inline">${postAttachments.map(attachmentChip).join('')}</div>` : ''}
         </div>
       </article>`;
   }).join('');
+
+  const attachmentSummaryHTML = attachments.length ? `
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Attachments</h2>
+        <span class="spacer"></span>
+        <span class="caption mono">${attachments.length}</span>
+      </div>
+      <div class="panel-body panel-body-flush">
+        ${attachments.map((a) => `
+          <div class="sub">
+            <div class="sub-title">
+              <strong>${esc(a.filename)}</strong>
+              <span>${a.kind === 'url' ? 'Link' : (a.mime_type || 'Document')} · ${relDays(daysAgo(a.created_at))}</span>
+            </div>
+            <button type="button" class="sub-btn" data-jump-to="post-${a.post_id || 'op'}">${icons.chevron}<span>Jump to post</span></button>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
 
   const project = projectForThread(t.id);
 
@@ -251,11 +354,12 @@ export function renderThread(data) {
             ${postHTML}
           </div>
 
-          <div style="padding:var(--s5);border-top:1px solid var(--comb-shade);background:var(--comb)">
+          <div id="reply-box" style="padding:var(--s5);border-top:1px solid var(--comb-shade);background:var(--comb)">
             <div class="field">
               <label for="reply">Add a reply</label>
               <textarea id="reply" placeholder="Reply to ${esc(t.author.name.split(' ')[0])}."></textarea>
             </div>
+            ${attachFieldsHTML()}
             <div class="row">
               <p class="caption" style="flex:1">
                 Replies are emailed to everyone watching. Posting subscribes you to the topic.
@@ -287,6 +391,8 @@ export function renderThread(data) {
             </div>
           </div>
 
+          ${attachmentSummaryHTML}
+
           ${project ? `
             <div class="panel">
               <div class="panel-head"><h2>Became a project</h2></div>
@@ -308,16 +414,43 @@ export function renderThread(data) {
     </div>`;
 
   setTimeout(() => {
+    const replyBox = document.getElementById('reply-box');
+    if (replyBox) bindAttachFields(replyBox);
+
+    document.querySelectorAll('[data-jump-to]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const target = document.getElementById(el.dataset.jumpTo);
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target.classList.add('flash');
+        setTimeout(() => target.classList.remove('flash'), 1600);
+      });
+    });
+
+    document.querySelectorAll('[data-open-attachment]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        try {
+          await openForumAttachment(attachmentsById[el.dataset.openAttachment]);
+        } catch (err) {
+          toast(`Couldn't open that attachment: ${err.message}`);
+        }
+      });
+    });
+
     const btn = document.getElementById('post-reply');
     if (!btn) return;
     btn.addEventListener('click', async () => {
       const box = document.getElementById('reply');
       const text = box.value.trim();
       if (!text) { toast('Write something before posting.'); return; }
+      const links = collectLinks(replyBox);
+      const files = collectFiles(replyBox);
+      const tooBig = oversizeFile(files);
+      if (tooBig) { toast(`${tooBig} is over the 20MB limit — remove it before posting.`); return; }
       btn.disabled = true;
       btn.textContent = 'Posting…';
       try {
-        await addPost(t.id, text);
+        await addPost(t.id, text, links, files);
       } catch (err) {
         toast(`Couldn't post the reply: ${err.message}`);
         btn.disabled = false;

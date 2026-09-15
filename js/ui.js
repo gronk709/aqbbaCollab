@@ -44,6 +44,8 @@ export const icons = {
   search:   svg('<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>'),
   beaker:   svg('<path d="M9 3h6M10 3v6.2l-5.2 9A1.8 1.8 0 006.4 21h11.2a1.8 1.8 0 001.6-2.8l-5.2-9V3"/><path d="M7.5 15h9"/>'),
   flag:     svg('<path d="M5 3v18"/><path d="M5 4h11l-2.5 4L16 12H5"/>'),
+  link:     svg('<path d="M9 15l6-6"/><path d="M13.5 5.5l1-1a3.5 3.5 0 015 5l-1 1"/><path d="M10.5 18.5l-1 1a3.5 3.5 0 01-5-5l1-1"/>'),
+  attach:   svg('<path d="M8 12l6-6a3 3 0 114 4l-8 8a5 5 0 01-7-7l8-8"/>'),
 };
 
 /* The association's own crest (assets/logo.png), background removed so it
