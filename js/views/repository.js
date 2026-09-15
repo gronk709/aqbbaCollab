@@ -2,41 +2,89 @@
    Information repository. Three tracks, each with sub-topics members can
    subscribe to, publish to, and be notified about.
 
-   Content comes from two layers: real association material under
-   content/repository/ (Markdown articles + document attachments, indexed by
-   a manifest — see js/content.js), with the original seeded placeholder
-   shown only for sub-topics that have no real content yet.
+   Content comes from two layers, merged per sub-topic: real association
+   material under content/repository/ (Markdown articles + document
+   attachments, indexed by a manifest — see js/content.js, unaffected by
+   any of the migrations below and never edited from inside the app), and
+   articles/documents authored from inside the app (repository_articles/
+   repository_documents — real Supabase rows + Storage uploads), which is
+   what the "Contribute"/"Add item" composer actually writes now instead
+   of simulating a publish.
 
-   Track/sub-topic structure itself is a real Supabase table now (Phase 3 of
-   the backend migration — see the plan doc): js/app.js's router loads it
-   (loadRepository / loadSubTopic in js/store.js) before calling the render
-   functions below, which stay plain and synchronous — they just take that
-   data as a parameter instead of importing a mock array. Article/document
-   content is unaffected by that migration — still file-based, still loaded
-   the same way via js/content.js.
+   Track/sub-topic structure itself is a real Supabase table (Phase 3 —
+   see the plan doc); js/app.js's router loads it (loadRepository /
+   loadSubTopic in js/store.js) before calling the render functions below.
+
+   Permissions are scoped per sub-topic (repository_team), same shape as
+   apiary_managers/project_team: holding "Repository Manager" or "Creator"
+   as a role tag is just a label — a Web Admin assigns 'manage' (add,
+   edit, delete) or 'contribute' (add, edit) access to one specific
+   sub-topic. Creating a track or sub-topic itself stays Web-Admin-only,
+   unchanged from Phase 3.
 
    The ordinals here are earned: Foundation → Production → Breeding is a real
    progression, and a member working through it needs to know the order.
    ========================================================================== */
 
-import { isSubscribed, canContributeRepository } from '../store.js';
+import {
+  addRepositoryArticle, updateRepositoryArticle, deleteRepositoryArticle,
+  addRepositoryDocument, deleteRepositoryDocument, openRepositoryDocument,
+  setRepositoryTeamMember, removeRepositoryTeamMember, loadRealMembers,
+  isSubscribed,
+  REPOSITORY_DOC_MAX_BYTES, REPOSITORY_DOC_ACCEPT,
+} from '../store.js';
 import { contentFor, articleFor, fetchArticleBody, mdToHtml } from '../content.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 
 /* Article authors in front-matter are member ids where possible (resolved
    via the seed roster — real, non-seed authors aren't supported by this
-   file-based content path, unchanged from before this migration), but
-   plain names are allowed for guest contributors. */
+   file-based content path), but plain names are allowed for guest
+   contributors. Unchanged by any of this — still file-only. */
 function authorDisplay(author) {
   return { name: author || 'AQBBA', sub: 'Contributor', avatar: '' };
 }
 
-/* No real content yet — no fake seed item count to fall back to either,
-   now that the seed placeholder numbers (14, 9, 11...) aren't carried
-   over. 0 is the honest answer. */
+function fmtBytes(n) {
+  if (n == null) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/* --- merging the two content sources into one display list --------------- */
+
+function mergedArticles(subId, c, dbArticles) {
+  const file = (c ? c.articles : []).map((a) => ({
+    key: `file:${a.slug}`, source: 'file', slug: a.slug,
+    title: a.title, authorName: authorDisplay(a.author).name,
+    dateLabel: a.date, dateSort: a.date ? new Date(a.date).getTime() : 0,
+    raw: a,
+  }));
+  const db = dbArticles.map((a) => ({
+    key: `db:${a.id}`, source: 'db', id: a.id,
+    title: a.title, authorName: a.author?.name || 'Member', authorId: a.author?.id,
+    dateLabel: (a.updated_at || a.created_at).slice(0, 10), dateSort: new Date(a.created_at).getTime(),
+    raw: a,
+  }));
+  return [...file, ...db].sort((x, y) => y.dateSort - x.dateSort);
+}
+
+function mergedDocuments(c, dbDocuments) {
+  const file = (c ? c.attachments : []).map((a) => ({
+    key: `file:${a.file}`, source: 'file', name: a.name, meta: `${a.kind} · ${a.size}`, href: a.file,
+  }));
+  const db = dbDocuments.map((d) => ({
+    key: `db:${d.id}`, source: 'db', id: d.id, name: d.filename,
+    meta: `${d.mime_type || 'Document'} · ${fmtBytes(d.size_bytes)}`, authorId: d.author?.id, raw: d,
+  }));
+  return [...file, ...db];
+}
+
+/* --- index ----------------------------------------------------------------- */
+
 function itemCount(s) {
   const c = contentFor(s.id);
-  return c ? c.articles.length + c.attachments.length : 0;
+  return (c ? c.articles.length + c.attachments.length : 0) + (s.dbCount || 0);
 }
 
 function subRow(s) {
@@ -52,7 +100,7 @@ function subRow(s) {
       </div>
       <div style="flex:none;text-align:right;min-width:96px">
         <div class="mono" style="font-size:12.5px">${n} ${n === 1 ? 'item' : 'items'}</div>
-        <div class="caption" style="font-size:11px">${c ? 'documents attached' : 'no content yet'}</div>
+        <div class="caption" style="font-size:11px">${c || s.dbCount ? 'documents attached' : 'no content yet'}</div>
       </div>
       ${subButton(key, on, 'Subscribe')}
     </div>`;
@@ -62,6 +110,7 @@ export function renderRepository(tracks) {
   const allSubsFlat = tracks.flatMap((t) => t.subs);
   const subCount = allSubsFlat.filter((s) => isSubscribed(`repo:${s.id}`)).length;
   const totalItems = allSubsFlat.reduce((n, s) => n + itemCount(s), 0);
+  const contributable = allSubsFlat.filter((s) => s.canContribute);
 
   const tracksHTML = tracks.map((track) => `
     <section class="track">
@@ -82,7 +131,7 @@ export function renderRepository(tracks) {
         <h1>Repository</h1>
       </div>
       <div class="topbar-actions">
-        ${canContributeRepository() ? `<button class="btn btn-primary btn-sm" id="contribute">${icons.pen} Contribute</button>` : ''}
+        ${contributable.length ? `<button class="btn btn-primary btn-sm" id="contribute">${icons.pen} Contribute</button>` : ''}
       </div>
     </div>
 
@@ -120,40 +169,49 @@ export function renderRepository(tracks) {
 
   setTimeout(() => {
     const btn = document.getElementById('contribute');
-    if (btn) btn.addEventListener('click', () => openContribute(tracks));
+    if (btn) btn.addEventListener('click', () => openContribute(contributable));
   }, 0);
 
   return html;
 }
 
-function openContribute(tracks, preselect) {
+/* --- contribute (real add-article / add-document composer) --------------- */
+
+function openContribute(eligibleSubs, preselect) {
   const body = `
-    <p class="caption" style="margin-bottom:var(--s5)">
-      Everyone subscribed to the sub-topic you choose is notified when you publish.
-    </p>
-    <form id="contrib-form">
-      <div class="field">
-        <label for="c-sub">Sub-topic</label>
-        <select id="c-sub">
-          ${tracks.map((t) => `
-            <optgroup label="${esc(t.ord)} · ${esc(t.name)}">
-              ${t.subs.map((s) => `<option value="${s.id}" ${s.id === preselect ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
-            </optgroup>`).join('')}
-        </select>
-      </div>
+    <div class="field">
+      <label for="c-sub">Sub-topic</label>
+      <select id="c-sub">
+        ${eligibleSubs.map((s) => `<option value="${s.id}" ${s.id === preselect ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label for="c-kind">Adding</label>
+      <select id="c-kind">
+        <option value="article">An article</option>
+        <option value="document">A document</option>
+      </select>
+    </div>
+    <div id="c-article-fields">
       <div class="field">
         <label for="c-title">Title</label>
-        <input id="c-title" required placeholder="What does this cover?">
+        <input id="c-title" placeholder="What does this cover?">
+      </div>
+      <div class="field">
+        <label for="c-summary">One-line summary</label>
+        <input id="c-summary" placeholder="Shown in the article list">
       </div>
       <div class="field">
         <label for="c-body">Content</label>
-        <textarea id="c-body" required placeholder="Write for a member who knows the previous track but not this one."></textarea>
+        <textarea id="c-body" placeholder="Write for a member who knows the previous track but not this one."></textarea>
       </div>
-    </form>
-    <div class="gate-hint" style="margin-top:var(--s4)">
-      <strong>Prototype.</strong> This form simulates publishing. Real content is added as
-      Markdown files and documents under <code>content/repository/</code> — see the
-      README's authoring guide.
+    </div>
+    <div id="c-document-fields" hidden>
+      <div class="field">
+        <label for="c-file">File</label>
+        <input type="file" id="c-file" accept="${REPOSITORY_DOC_ACCEPT}">
+        <p class="caption" style="margin-top:6px">PDF, Word, text, spreadsheet, slide or image files — up to 20MB.</p>
+      </div>
     </div>`;
 
   const actions = `
@@ -162,62 +220,253 @@ function openContribute(tracks, preselect) {
 
   const scrim = modal({ title: 'Contribute to the repository', body, actions });
 
-  scrim.querySelector('#pub-contrib').addEventListener('click', () => {
-    const title = scrim.querySelector('#c-title').value.trim();
-    const text = scrim.querySelector('#c-body').value.trim();
-    const subId = scrim.querySelector('#c-sub').value;
-    if (!title || !text) { toast('Add a title and some content before publishing.'); return; }
+  const kindSelect = scrim.querySelector('#c-kind');
+  const articleFields = scrim.querySelector('#c-article-fields');
+  const documentFields = scrim.querySelector('#c-document-fields');
+  kindSelect.addEventListener('change', () => {
+    const isArticle = kindSelect.value === 'article';
+    articleFields.hidden = !isArticle;
+    documentFields.hidden = isArticle;
+  });
 
-    const s = tracks.flatMap((t) => t.subs).find((x) => x.id === subId);
+  const btn = scrim.querySelector('#pub-contrib');
+  btn.addEventListener('click', async () => {
+    const subId = scrim.querySelector('#c-sub').value;
+    const isArticle = kindSelect.value === 'article';
+
+    if (isArticle) {
+      const title = scrim.querySelector('#c-title').value.trim();
+      const summary = scrim.querySelector('#c-summary').value.trim();
+      const text = scrim.querySelector('#c-body').value.trim();
+      if (!title || !summary || !text) { toast('Add a title, summary and content before publishing.'); return; }
+      btn.disabled = true;
+      btn.textContent = 'Publishing…';
+      try {
+        await addRepositoryArticle(subId, { title, summary, body: text });
+      } catch (err) {
+        toast(`Couldn't publish: ${err.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Publish';
+        return;
+      }
+    } else {
+      const file = scrim.querySelector('#c-file').files[0];
+      if (!file) { toast('Choose a file first.'); return; }
+      if (file.size > REPOSITORY_DOC_MAX_BYTES) { toast(`${file.name} is over the 20MB limit.`); return; }
+      btn.disabled = true;
+      btn.textContent = 'Uploading…';
+      try {
+        await addRepositoryDocument(subId, file);
+      } catch (err) {
+        toast(`Couldn't upload: ${err.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Publish';
+        return;
+      }
+    }
+
     closeModal();
-    const notified = 4 + Math.floor(Math.random() * 14);
-    toast(`Published to ${s.name}. ${notified} subscribers notified by email.`);
+    toast('Published.');
+    window.__aqbba_invalidateData();
+    window.__aqbba_render();
+  });
+}
+
+function openEditArticleModal(article, onSaved) {
+  const body = `
+    <div class="field">
+      <label for="e-title">Title</label>
+      <input id="e-title" value="${esc(article.title)}">
+    </div>
+    <div class="field">
+      <label for="e-summary">One-line summary</label>
+      <input id="e-summary" value="${esc(article.summary)}">
+    </div>
+    <div class="field">
+      <label for="e-body">Content</label>
+      <textarea id="e-body">${esc(article.body)}</textarea>
+    </div>`;
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-article">Save</button>`;
+  const scrim = modal({ title: 'Edit article', body, actions });
+
+  scrim.querySelector('#save-article').addEventListener('click', async (e) => {
+    const title = scrim.querySelector('#e-title').value.trim();
+    const summary = scrim.querySelector('#e-summary').value.trim();
+    const text = scrim.querySelector('#e-body').value.trim();
+    if (!title || !summary || !text) { toast('Title, summary and content are all required.'); return; }
+    e.target.disabled = true;
+    try {
+      await updateRepositoryArticle(article.id, { title, summary, body: text });
+    } catch (err) {
+      toast(`Couldn't save: ${err.message}`);
+      e.target.disabled = false;
+      return;
+    }
+    closeModal();
+    toast('Article updated.');
+    onSaved();
+  });
+}
+
+/* --- team (Repository Manager / Creator assignment) ----------------------- */
+
+function teamPanelHTML(data) {
+  return `
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Repository team</h2>
+        <span class="spacer"></span>
+        ${data.isAdmin ? `<button type="button" class="btn btn-ghost btn-sm" id="manage-repo-team">${icons.pen} Manage</button>` : ''}
+      </div>
+      <div class="panel-body panel-body-flush">
+        ${data.team.length ? data.team.map((t) => `
+          <div class="breeder">
+            ${avatar(t.member)}
+            <div style="flex:1;min-width:0">
+              <strong style="font-size:13.5px;font-weight:600;display:block">${esc(t.member.name)}</strong>
+              <span class="caption">${t.access_level === 'manage' ? 'Repository Manager' : 'Creator'}</span>
+            </div>
+          </div>`).join('') : `
+          <div class="empty" style="padding:var(--s5)"><p class="caption">No one assigned yet — a Web Admin assigns Repository Managers and Creators here.</p></div>`}
+      </div>
+    </div>`;
+}
+
+async function openManageRepoTeamModal(subId, data) {
+  let realMembers;
+  try {
+    realMembers = await loadRealMembers();
+  } catch (err) {
+    toast(`Couldn't load members: ${err.message}`);
+    return;
+  }
+  const already = new Set(data.team.map((t) => t.member_id));
+  const eligible = realMembers.filter((m) => !already.has(m.id));
+
+  const body = `
+    <div style="border:1px solid var(--comb-shade);border-radius:4px;margin-bottom:var(--s5)">
+      ${data.team.length ? data.team.map((t) => `
+        <div class="breeder">
+          ${avatar(t.member)}
+          <div style="flex:1;min-width:0">
+            <strong style="font-size:13.5px;font-weight:600;display:block">${esc(t.member.name)}</strong>
+            <span class="caption">${t.access_level === 'manage' ? 'Repository Manager' : 'Creator'}</span>
+          </div>
+          <button type="button" class="attach-remove" data-remove-repo-team="${t.member_id}" aria-label="Remove">${icons.x}</button>
+        </div>`).join('') : `<div class="empty" style="padding:var(--s4)"><p class="caption">No one assigned yet.</p></div>`}
+    </div>
+    ${eligible.length ? `
+      <div class="field">
+        <label for="repo-team-member">Add a member</label>
+        <select id="repo-team-member">
+          ${eligible.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label for="repo-team-level">As</label>
+        <select id="repo-team-level">
+          <option value="manage">Repository Manager — add, edit, delete content</option>
+          <option value="contribute">Creator — add, edit content, no delete</option>
+        </select>
+      </div>` : '<p class="caption">Every member is already on this sub-topic\'s team.</p>'}`;
+
+  const actions = eligible.length ? `
+    <button class="btn btn-ghost" data-close>Close</button>
+    <button class="btn btn-primary" id="add-repo-team-member">Add to team</button>` : `
+    <button class="btn btn-ghost" data-close>Close</button>`;
+
+  const scrim = modal({ title: 'Manage repository team', body, actions });
+
+  scrim.querySelectorAll('[data-remove-repo-team]').forEach((b) => {
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        await removeRepositoryTeamMember(subId, b.dataset.removeRepoTeam);
+      } catch (err) {
+        toast(`Couldn't remove: ${err.message}`);
+        b.disabled = false;
+        return;
+      }
+      closeModal();
+      window.__aqbba_invalidateData();
+      window.__aqbba_render();
+    });
+  });
+
+  const addBtn = scrim.querySelector('#add-repo-team-member');
+  if (addBtn) addBtn.addEventListener('click', async () => {
+    const memberId = scrim.querySelector('#repo-team-member').value;
+    const level = scrim.querySelector('#repo-team-level').value;
+    addBtn.disabled = true;
+    try {
+      await setRepositoryTeamMember(subId, memberId, level);
+    } catch (err) {
+      toast(`Couldn't assign: ${err.message}`);
+      addBtn.disabled = false;
+      return;
+    }
+    closeModal();
+    window.__aqbba_invalidateData();
+    window.__aqbba_render();
   });
 }
 
 /* --- shared pieces -------------------------------------------------------- */
 
-function attachmentsPanel(c) {
-  if (!c || !c.attachments.length) return '';
+function attachmentsPanel(docs, canContribute, canManage) {
+  if (!docs.length) return '';
   return `
     <div class="panel">
       <div class="panel-head">
         <h2>Documents</h2>
         <span class="spacer"></span>
-        <span class="caption mono">${c.attachments.length}</span>
+        <span class="caption mono">${docs.length}</span>
       </div>
       <div class="panel-body panel-body-flush">
-        ${c.attachments.map((a) => `
-          <a class="sub" href="${a.file}" target="_blank" rel="noopener">
-            <div class="sub-title">
-              <strong>${esc(a.name)}</strong>
-              <span>${esc(a.kind)} · ${esc(a.size)}</span>
-            </div>
-            <span class="tag tag-outline">${esc(a.kind)}</span>
-          </a>`).join('')}
+        ${docs.map((d) => {
+          if (d.source === 'file') {
+            return `
+              <a class="sub" href="${d.href}" target="_blank" rel="noopener">
+                <div class="sub-title">
+                  <strong>${esc(d.name)}</strong>
+                  <span>${esc(d.meta)}</span>
+                </div>
+              </a>`;
+          }
+          return `
+            <div class="sub">
+              <button type="button" class="sub-title" style="text-align:left;background:none;border:none;cursor:pointer" data-open-doc="${d.id}">
+                <strong>${esc(d.name)}</strong>
+                <span>${esc(d.meta)}</span>
+              </button>
+              ${canManage ? `<button type="button" class="attach-remove" data-delete-doc="${d.id}" aria-label="Delete">${icons.x}</button>` : ''}
+            </div>`;
+        }).join('')}
       </div>
     </div>`;
 }
 
-function articleListPanel(s, c, activeSlug = null) {
-  if (!c || !c.articles.length) return '';
+function articleListPanel(s, articles, activeKey = null) {
+  if (!articles.length) return '';
   return `
     <div class="panel">
       <div class="panel-head">
         <h2>Articles</h2>
         <span class="spacer"></span>
-        <span class="caption mono">${c.articles.length}</span>
+        <span class="caption mono">${articles.length}</span>
       </div>
       <div class="panel-body panel-body-flush">
-        ${c.articles.map((a) => {
-          const who = authorDisplay(a.author);
-          const here = a.slug === activeSlug;
+        ${articles.map((a) => {
+          const here = a.key === activeKey;
+          const href = a.source === 'file' ? `#/repository/${s.id}/${a.slug}` : `#/repository/${s.id}/${a.id}`;
           return `
-            <a class="sub" href="#/repository/${s.id}/${a.slug}"
+            <a class="sub" href="${href}"
                style="${here ? 'background:var(--amber-wash)' : ''}">
               <div class="sub-title">
                 <strong>${esc(a.title)}</strong>
-                <span>${esc(who.name)}${a.date ? ` · ${esc(a.date)}` : ''}</span>
+                <span>${esc(a.authorName)}${a.dateLabel ? ` · ${esc(a.dateLabel)}` : ''}</span>
               </div>
               ${icons.chevron}
             </a>`;
@@ -226,8 +475,8 @@ function articleListPanel(s, c, activeSlug = null) {
     </div>`;
 }
 
-/* Fetch an article body into the placeholder the page rendered. */
-function hydrateArticle(article) {
+/* Fetch a file-based article body into the placeholder the page rendered. */
+function hydrateFileArticle(article) {
   setTimeout(async () => {
     const el = document.getElementById('md-body');
     if (!el) return;
@@ -240,20 +489,50 @@ function hydrateArticle(article) {
   }, 0);
 }
 
+function bindDocButtons(docsById) {
+  document.querySelectorAll('[data-open-doc]').forEach((el) => {
+    el.addEventListener('click', async () => {
+      try {
+        await openRepositoryDocument(docsById[el.dataset.openDoc].raw);
+      } catch (err) {
+        toast(`Couldn't open that document: ${err.message}`);
+      }
+    });
+  });
+  document.querySelectorAll('[data-delete-doc]').forEach((el) => {
+    el.addEventListener('click', async () => {
+      el.disabled = true;
+      try {
+        await deleteRepositoryDocument(docsById[el.dataset.deleteDoc].raw);
+      } catch (err) {
+        toast(`Couldn't delete: ${err.message}`);
+        el.disabled = false;
+        return;
+      }
+      window.__aqbba_invalidateData();
+      window.__aqbba_render();
+    });
+  });
+}
+
 /* --- sub-topic ------------------------------------------------------------ */
 
 export function renderSubTopic(data) {
-  const { sub: s, track } = data;
+  const { sub: s, track, dbArticles, dbDocuments, canContribute, canManage } = data;
   const key = `repo:${s.id}`;
   const on = isSubscribed(key);
   const c = contentFor(s.id);
   const siblings = track.subs.filter((x) => x.id !== s.id);
 
-  const newest = c && c.articles.length ? c.articles[0] : null;
-  const newestWho = newest ? authorDisplay(newest.author) : null;
+  const articles = mergedArticles(s.id, c, dbArticles);
+  const docs = mergedDocuments(c, dbDocuments);
+  const docsById = Object.fromEntries(docs.filter((d) => d.source === 'db').map((d) => [d.id, d]));
+  const newest = articles[0] || null;
 
   let mainColumn;
   if (newest) {
+    const canEditNewest = newest.source === 'db' && canContribute;
+    const canDeleteNewest = newest.source === 'db' && canManage;
     mainColumn = `
       <article class="panel">
         <div class="panel-head">
@@ -261,13 +540,15 @@ export function renderSubTopic(data) {
             <div class="eyebrow">Most recent</div>
             <h2 style="margin-top:2px;line-height:1.3">${esc(newest.title)}</h2>
           </div>
+          <span class="spacer"></span>
+          ${canEditNewest ? `<button type="button" class="attach-remove" data-edit-article="${newest.id}" aria-label="Edit">${icons.pen}</button>` : ''}
+          ${canDeleteNewest ? `<button type="button" class="attach-remove" data-delete-article="${newest.id}" aria-label="Delete">${icons.x}</button>` : ''}
         </div>
         <div class="panel-body">
           <div class="row" style="gap:var(--s3);padding-bottom:var(--s5);border-bottom:1px solid var(--comb-shade)">
-            ${newestWho.avatar}
             <div>
-              <div style="font-size:13.5px;font-weight:600">${esc(newestWho.name)}</div>
-              <div class="caption">${esc(newestWho.sub)}${newest.date ? ` · ${esc(newest.date)}` : ''}</div>
+              <div style="font-size:13.5px;font-weight:600">${esc(newest.authorName)}</div>
+              <div class="caption">${newest.dateLabel ? esc(newest.dateLabel) : ''}</div>
             </div>
           </div>
           <div class="prose" style="margin-top:var(--s5)" id="md-body">
@@ -275,7 +556,7 @@ export function renderSubTopic(data) {
           </div>
         </div>
       </article>
-      ${attachmentsPanel(c)}`;
+      ${attachmentsPanel(docs, canContribute, canManage)}`;
   } else {
     mainColumn = `
       <div class="panel">
@@ -283,9 +564,10 @@ export function renderSubTopic(data) {
           <div class="empty" style="padding:var(--s5) 0">
             <h3>No content here yet</h3>
             <p>
+              ${canContribute ? 'Use "Add item" to publish the first article or document here.' : `
               Add Markdown articles and documents under
-              <span class="mono" style="font-size:11.5px">content/repository/${s.id}/</span>
-              — see the README's authoring guide.
+              <span class="mono" style="font-size:11.5px">content/repository/${s.id}/</span>,
+              or ask a Web Admin for repository access to publish here directly.`}
             </p>
           </div>
         </div>
@@ -299,12 +581,12 @@ export function renderSubTopic(data) {
           <a href="#/repository">Repository</a> ${icons.chevron}
           <span>${esc(track.ord)} · ${esc(track.name)}</span>
         </div>
-        <div class="eyebrow">${itemCount(s)} items</div>
+        <div class="eyebrow">${itemCount({ id: s.id, dbCount: dbArticles.length + dbDocuments.length })} items</div>
         <h1>${esc(s.name)}</h1>
       </div>
       <div class="topbar-actions">
         ${subButton(key, on, 'Subscribe')}
-        ${canContributeRepository() ? `<button class="btn btn-primary btn-sm" id="add-here">${icons.plus} Add item</button>` : ''}
+        ${canContribute ? `<button class="btn btn-primary btn-sm" id="add-here">${icons.plus} Add item</button>` : ''}
       </div>
     </div>
 
@@ -315,7 +597,7 @@ export function renderSubTopic(data) {
         </div>
 
         <div class="stack">
-          ${articleListPanel(s, c, newest ? newest.slug : null)}
+          ${articleListPanel(s, articles.slice(1), newest ? newest.key : null)}
 
           <div class="panel">
             <div class="panel-head"><h2>Notifications</h2></div>
@@ -327,6 +609,8 @@ export function renderSubTopic(data) {
               <div style="margin-top:var(--s4)">${subButton(key, on, 'Subscribe')}</div>
             </div>
           </div>
+
+          ${teamPanelHTML(data)}
 
           <div class="panel">
             <div class="panel-head"><h2>${esc(track.ord)} · ${esc(track.name)}</h2></div>
@@ -345,11 +629,45 @@ export function renderSubTopic(data) {
       </div>
     </div>`;
 
-  if (newest) hydrateArticle(newest);
+  if (newest) {
+    if (newest.source === 'file') hydrateFileArticle(newest.raw);
+    else setTimeout(() => {
+      const el = document.getElementById('md-body');
+      if (el) el.innerHTML = mdToHtml(newest.raw.body);
+    }, 0);
+  }
 
   setTimeout(() => {
     const btn = document.getElementById('add-here');
-    if (btn) btn.addEventListener('click', () => openContribute([track], s.id));
+    if (btn) btn.addEventListener('click', () => openContribute([{ id: s.id, name: s.name }], s.id));
+
+    const teamBtn = document.getElementById('manage-repo-team');
+    if (teamBtn) teamBtn.addEventListener('click', () => openManageRepoTeamModal(s.id, data));
+
+    bindDocButtons(docsById);
+
+    document.querySelectorAll('[data-edit-article]').forEach((el) => {
+      el.addEventListener('click', () => {
+        openEditArticleModal(newest.raw, () => {
+          window.__aqbba_invalidateData();
+          window.__aqbba_render();
+        });
+      });
+    });
+    document.querySelectorAll('[data-delete-article]').forEach((el) => {
+      el.addEventListener('click', async () => {
+        el.disabled = true;
+        try {
+          await deleteRepositoryArticle(el.dataset.deleteArticle);
+        } catch (err) {
+          toast(`Couldn't delete: ${err.message}`);
+          el.disabled = false;
+          return;
+        }
+        window.__aqbba_invalidateData();
+        window.__aqbba_render();
+      });
+    });
   }, 0);
 
   return html;
@@ -358,14 +676,22 @@ export function renderSubTopic(data) {
 /* --- article reader ------------------------------------------------------- */
 
 export function renderArticle(data, subId, slug) {
-  const { sub: s, track } = data;
-  const article = articleFor(subId, slug);
-  if (!article) return '';
+  const { sub: s, track, dbArticles, dbDocuments, canContribute, canManage } = data;
+  const dbArticle = dbArticles.find((a) => a.id === slug);
+  const fileArticle = dbArticle ? null : articleFor(subId, slug);
+  if (!dbArticle && !fileArticle) return '';
 
   const c = contentFor(s.id);
-  const who = authorDisplay(article.author);
+  const articles = mergedArticles(s.id, c, dbArticles);
+  const docs = mergedDocuments(c, dbDocuments);
   const key = `repo:${s.id}`;
   const on = isSubscribed(key);
+
+  const title = dbArticle ? dbArticle.title : fileArticle.title;
+  const who = dbArticle ? { name: dbArticle.author?.name || 'Member', sub: 'Contributor' } : authorDisplay(fileArticle.author);
+  const dateLabel = dbArticle ? (dbArticle.updated_at || dbArticle.created_at).slice(0, 10) : fileArticle.date;
+  const canEdit = dbArticle && canContribute;
+  const canDelete = dbArticle && canManage;
 
   const html = `
     <div class="topbar">
@@ -376,9 +702,11 @@ export function renderArticle(data, subId, slug) {
           <span>Article</span>
         </div>
         <div class="eyebrow">${esc(track.ord)} · ${esc(track.name)}</div>
-        <h1 style="font-size:clamp(1.375rem,2.4vw,1.75rem);max-width:36ch">${esc(article.title)}</h1>
+        <h1 style="font-size:clamp(1.375rem,2.4vw,1.75rem);max-width:36ch">${esc(title)}</h1>
       </div>
-      <div class="topbar-actions">
+      <div class="topbar-actions" style="gap:var(--s2)">
+        ${canEdit ? `<button class="btn btn-ghost btn-sm" id="edit-this-article">${icons.pen} Edit</button>` : ''}
+        ${canDelete ? `<button class="btn btn-ghost btn-sm" id="delete-this-article">${icons.x} Delete</button>` : ''}
         ${subButton(key, on, 'Subscribe')}
       </div>
     </div>
@@ -389,10 +717,9 @@ export function renderArticle(data, subId, slug) {
           <article class="panel">
             <div class="panel-body">
               <div class="row" style="gap:var(--s3);padding-bottom:var(--s5);border-bottom:1px solid var(--comb-shade)">
-                ${who.avatar}
                 <div>
                   <div style="font-size:13.5px;font-weight:600">${esc(who.name)}</div>
-                  <div class="caption">${esc(who.sub)}${article.date ? ` · ${esc(article.date)}` : ''}</div>
+                  <div class="caption">${esc(who.sub)}${dateLabel ? ` · ${esc(dateLabel)}` : ''}</div>
                 </div>
               </div>
               <div class="prose" style="margin-top:var(--s5)" id="md-body">
@@ -403,12 +730,47 @@ export function renderArticle(data, subId, slug) {
         </div>
 
         <div class="stack">
-          ${articleListPanel(s, c, slug)}
-          ${attachmentsPanel(c)}
+          ${articleListPanel(s, articles, dbArticle ? `db:${dbArticle.id}` : `file:${slug}`)}
+          ${attachmentsPanel(docs, canContribute, canManage)}
         </div>
       </div>
     </div>`;
 
-  hydrateArticle(article);
+  if (dbArticle) {
+    setTimeout(() => {
+      const el = document.getElementById('md-body');
+      if (el) el.innerHTML = mdToHtml(dbArticle.body);
+    }, 0);
+  } else {
+    hydrateFileArticle(fileArticle);
+  }
+
+  setTimeout(() => {
+    const docsById = Object.fromEntries(docs.filter((d) => d.source === 'db').map((d) => [d.id, d]));
+    bindDocButtons(docsById);
+
+    const editBtn = document.getElementById('edit-this-article');
+    if (editBtn) editBtn.addEventListener('click', () => {
+      openEditArticleModal(dbArticle, () => {
+        window.__aqbba_invalidateData();
+        window.__aqbba_render();
+      });
+    });
+    const deleteBtn = document.getElementById('delete-this-article');
+    if (deleteBtn) deleteBtn.addEventListener('click', async () => {
+      deleteBtn.disabled = true;
+      try {
+        await deleteRepositoryArticle(dbArticle.id);
+      } catch (err) {
+        toast(`Couldn't delete: ${err.message}`);
+        deleteBtn.disabled = false;
+        return;
+      }
+      toast('Article deleted.');
+      window.__aqbba_invalidateData();
+      location.hash = `#/repository/${s.id}`;
+    });
+  }, 0);
+
   return html;
 }

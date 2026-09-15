@@ -62,16 +62,20 @@ export const members = [
    Apiary Manager for a site. Each entry carries a description shown next to
    its checkbox in the editor (see openRolesForm in js/views/managers.js)
    and, for the operational roles, read by the permission checks in
-   js/store.js (isWebAdmin, canContributeRepository). */
+   js/store.js (isWebAdmin and friends) — Apiary Manager/Project Manager/
+   Repository Manager/Contributor/Creator are just labels, though; the
+   real per-site/per-project/per-sub-topic grant lives in its own table
+   (apiary_managers/project_team/repository_team), assigned by a Web Admin. */
 export const roleOptions = [
   { name: 'Web Admin', description: 'Superuser. Full access to every apiary, member record, and role/access grant.' },
   { name: 'Apiary Manager', description: 'Complete CRUD privileges for the apiary they manage.' },
   { name: 'Operator', description: 'Assists the Apiary Manager in the conduct of inspections and data updates. Has change and update privileges but cannot create or delete.' },
   { name: 'Breeder', description: 'Has change and update privileges only.' },
   { name: 'Member', description: 'Read-only access to apiary data and the information repository. Full forum access — publish, subscribe, and notifications — and can add Marketplace listings.' },
-  { name: 'Creator', description: 'Everything a Member has, plus the ability to add content to the information repository.' },
+  { name: 'Creator', description: 'Add and update content (articles, documents) on repository sub-topics they\'ve been assigned to support. Cannot delete content, and cannot create a track/sub-topic or manage one they haven\'t been assigned to.' },
   { name: 'Project Manager', description: 'Update and delete content (background, aims, questions, timeline, participation, participants) on research projects they\'ve been assigned to manage. Cannot create or delete a project itself, or manage a project they haven\'t been assigned to.' },
   { name: 'Contributor', description: 'Add and update content on research projects they\'ve been assigned to support. Cannot delete project content, and cannot create, delete, or manage a project.' },
+  { name: 'Repository Manager', description: 'Add, edit and delete content on repository sub-topics they\'ve been assigned to manage. Cannot create a new track/sub-topic, or manage one they haven\'t been assigned to.' },
 ];
 
 /* [SEED — Phase 1] currentUser/memberById go away with the members array

@@ -494,21 +494,78 @@ export async function openForumAttachment(a) {
 }
 
 /* --- repository --------------------------------------------------------
-   Also Phase 3, but unlike the forum, the track/sub-topic structure is
-   seeded (not purged) — see the migration's header comment for why: real
-   Markdown content on disk already depends on these exact sub-topic ids. */
+   Track/sub-topic structure is Phase 3 (seeded, not purged — see that
+   migration's header comment: real Markdown content on disk already
+   depends on these exact sub-topic ids). Article/document *content*
+   authored from inside the app is a later addition (repository_articles/
+   repository_documents), living alongside the older file-based content
+   under content/repository/ rather than replacing it — merged client-side
+   in js/views/repository.js.
+
+   Permissions are scoped per sub-topic (repository_team), same shape as
+   apiary_managers/project_team: holding "Repository Manager" or "Creator"
+   as a role tag is just a label — a Web Admin separately assigns
+   'manage'/'contribute' access on one specific sub-topic, checked here
+   via repository_access_level. */
+
+const REPOSITORY_DOCUMENTS_BUCKET = 'repository-documents';
+export const REPOSITORY_DOC_MAX_BYTES = 20 * 1024 * 1024;
+export const REPOSITORY_DOC_ACCEPT = '.pdf,.doc,.docx,.txt,.rtf,.odt,.xls,.xlsx,.csv,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp';
+
+async function myRepositoryAccess() {
+  const me = currentUser();
+  if (isWebAdmin(me.id)) return { admin: true, grants: {} };
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('repository_team').select('sub_topic_id, access_level').eq('member_id', me.id);
+  if (error) throw error;
+  const grants = {};
+  data.forEach((r) => { grants[r.sub_topic_id] = r.access_level; });
+  return { admin: false, grants };
+}
+
+function accessFor(access, subId) {
+  const level = access.grants[subId];
+  return {
+    canContribute: access.admin || level === 'manage' || level === 'contribute',
+    canManage: access.admin || level === 'manage',
+  };
+}
+
+async function repositoryContentCounts(subIds) {
+  if (!subIds.length) return {};
+  const supabase = await getSupabase();
+  const [{ data: arts, error: e1 }, { data: docs, error: e2 }] = await Promise.all([
+    supabase.from('repository_articles').select('sub_topic_id').in('sub_topic_id', subIds),
+    supabase.from('repository_documents').select('sub_topic_id').in('sub_topic_id', subIds),
+  ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+  const counts = {};
+  [...arts, ...docs].forEach((r) => { counts[r.sub_topic_id] = (counts[r.sub_topic_id] || 0) + 1; });
+  return counts;
+}
 
 export async function loadRepository() {
   requireRealMember();
   const supabase = await getSupabase();
   await loadMySubscriptions();
-  const { data: tracks, error: trackErr } = await supabase
-    .from('repository_tracks')
-    .select('id, ord, name, blurb, repository_sub_topics(id, name, summary)')
-    .order('sort_order')
-    .order('sort_order', { foreignTable: 'repository_sub_topics' });
+  const [{ data: tracks, error: trackErr }, access] = await Promise.all([
+    supabase
+      .from('repository_tracks')
+      .select('id, ord, name, blurb, repository_sub_topics(id, name, summary)')
+      .order('sort_order')
+      .order('sort_order', { foreignTable: 'repository_sub_topics' }),
+    myRepositoryAccess(),
+  ]);
   if (trackErr) throw trackErr;
-  return tracks.map((t) => ({ ...t, subs: t.repository_sub_topics }));
+
+  const allSubIds = tracks.flatMap((t) => t.repository_sub_topics.map((s) => s.id));
+  const dbCounts = await repositoryContentCounts(allSubIds);
+
+  return tracks.map((t) => ({
+    ...t,
+    subs: t.repository_sub_topics.map((s) => ({ ...s, dbCount: dbCounts[s.id] || 0, ...accessFor(access, s.id) })),
+  }));
 }
 
 export async function loadSubTopic(id) {
@@ -529,7 +586,111 @@ export async function loadSubTopic(id) {
     .order('sort_order');
   if (sibErr) throw sibErr;
 
-  return { sub: { id: sub.id, name: sub.name, summary: sub.summary }, track: { ...sub.track, subs: siblingSubs } };
+  const [
+    { data: articles, error: artErr },
+    { data: documents, error: docErr },
+    { data: team, error: teamErr },
+    access,
+  ] = await Promise.all([
+    supabase.from('repository_articles')
+      .select(`id, title, summary, body, created_at, updated_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
+      .eq('sub_topic_id', id).order('created_at', { ascending: false }),
+    supabase.from('repository_documents')
+      .select(`id, filename, storage_path, mime_type, size_bytes, created_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
+      .eq('sub_topic_id', id).order('created_at', { ascending: false }),
+    /* repository_team has two FKs to members (member_id, granted_by) —
+       same ambiguity member_roles/project_team hit; !member_id disambiguates. */
+    supabase.from('repository_team').select(`member_id, access_level, member:members!member_id(${MEMBER_DISPLAY_FIELDS})`).eq('sub_topic_id', id),
+    myRepositoryAccess(),
+  ]);
+  if (artErr) throw artErr;
+  if (docErr) throw docErr;
+  if (teamErr) throw teamErr;
+
+  return {
+    sub: { id: sub.id, name: sub.name, summary: sub.summary },
+    track: { ...sub.track, subs: siblingSubs },
+    dbArticles: articles.map((a) => ({ ...a, author: withRoles(a.author) })),
+    dbDocuments: documents.map((d) => ({ ...d, author: withRoles(d.author) })),
+    team: team.map((t) => ({ ...t, member: withRoles(t.member) })),
+    isAdmin: access.admin,
+    ...accessFor(access, id),
+  };
+}
+
+export async function addRepositoryArticle(subTopicId, { title, summary, body }) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('repository_articles').insert({ sub_topic_id: subTopicId, author_id: me.id, title, summary, body });
+  if (error) throw error;
+}
+
+export async function updateRepositoryArticle(id, { title, summary, body }) {
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('repository_articles')
+    .update({ title, summary, body, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteRepositoryArticle(id) {
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('repository_articles').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function addRepositoryDocument(subTopicId, file) {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const path = `${subTopicId}/${crypto.randomUUID()}-${safeStorageSegment(file.name)}`;
+  const { error: upErr } = await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).upload(path, file);
+  if (upErr) throw upErr;
+  const { error } = await supabase.from('repository_documents').insert({
+    sub_topic_id: subTopicId, author_id: me.id, filename: file.name, storage_path: path,
+    mime_type: file.type || null, size_bytes: file.size,
+  });
+  if (error) throw error;
+}
+
+export async function deleteRepositoryDocument(doc) {
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('repository_documents').delete().eq('id', doc.id);
+  if (error) throw error;
+  await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).remove([doc.storage_path]);
+}
+
+/* Bucket is private — always a freshly-signed, short-lived URL, same
+   reasoning as openForumAttachment. */
+export async function openRepositoryDocument(doc) {
+  const tab = window.open('', '_blank');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).createSignedUrl(doc.storage_path, 3600);
+  if (error) {
+    tab?.close();
+    throw error;
+  }
+  if (tab) tab.location.href = data.signedUrl;
+  else window.open(data.signedUrl, '_blank', 'noopener');
+}
+
+/* The actual permission grant behind Repository Manager/Creator —
+   Web-Admin-only to change, exactly like apiary_managers/project_team. */
+export async function setRepositoryTeamMember(subTopicId, memberId, accessLevel) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can assign repository team access.');
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('repository_team')
+    .upsert({ sub_topic_id: subTopicId, member_id: memberId, access_level: accessLevel, granted_by: me.id }, { onConflict: 'sub_topic_id,member_id' });
+  if (error) throw error;
+}
+
+export async function removeRepositoryTeamMember(subTopicId, memberId) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can change repository team access.');
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('repository_team').delete().eq('sub_topic_id', subTopicId).eq('member_id', memberId);
+  if (error) throw error;
 }
 
 /* --- marketplace -----------------------------------------------------------
@@ -998,18 +1159,6 @@ export function canEditApiary(apiaryId) {
   const uid = currentUser().id;
   if (isWebAdmin(uid)) return true;
   return managersFor(apiaryId).includes(uid);
-}
-
-/* --- repository permissions --------------------------------------------------
-   Member is read-only in the repository; Creator adds Member's access plus
-   the ability to contribute content. The operational roles (Web Admin,
-   Apiary Manager, Operator, Breeder) keep the full repository access they've
-   always had, unrelated to the apiary edit grants above. */
-
-const REPOSITORY_CONTRIBUTOR_ROLES = ['Web Admin', 'Apiary Manager', 'Operator', 'Breeder', 'Creator'];
-
-export function canContributeRepository(memberId = currentUser().id) {
-  return rolesFor(memberId).some((r) => REPOSITORY_CONTRIBUTOR_ROLES.includes(r));
 }
 
 /* --- session ------------------------------------------------------------- */
