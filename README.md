@@ -443,12 +443,25 @@ member by email — a known, temporary gap that closes once the members director
 moves to Postgres. (See `BUGS.md` for the related "Wild Apricot ID: undefined" issue on
 a real member's own detail page.)
 
-**Notification email** — every point that would send mail currently calls `toast()` with
-the message and recipient count. Those call sites are the integration points: forum
-topic publish, forum reply, repository contribution. Subscriptions are real
-`subscriptions` rows now (Phase 3), keyed the same way they always displayed
-(`thread:<id>`, `repo:<id>`, `cat:<id>`) — notifications themselves are still simulated,
-a later migration phase.
+**Notification email** — real now, not simulated: forum topic publish, forum reply, and
+repository contribution (article/document/link) each call `notifySubscribers` (`js/
+store.js`), which invokes the `notify-subscribers` Edge Function
+(`supabase/functions/notify-subscribers/`). It looks up `subscriptions` rows for that
+`thread:<id>`/`repo:<id>`/`cat:<id>` key (Phase 3), resolves each subscriber's email from
+`member_contact_details`, and sends via Resend. The call is fire-and-forget from the
+client — a publish still succeeds even if email sending fails or isn't configured yet.
+
+Needs one-time setup before it actually delivers: a Resend account, a verified sending
+domain (SPF/DKIM records on whichever domain the from-address uses), and
+
+```
+supabase secrets set RESEND_API_KEY=...
+supabase secrets set NOTIFY_FROM_EMAIL='AQBBA <notifications@aqbba.org.au>'   # optional — this is the default
+```
+
+then `supabase functions deploy notify-subscribers`. See that function's header comment
+for the full payload shape and the Resend sandbox-sender workaround for testing before a
+domain is verified.
 
 **Persistence** — `js/store.js` still writes some entities to `localStorage` behind a
 small interface (`commit`, `addQueenLine`, `updateApiary`). Identity (`loadSignedInMember`,

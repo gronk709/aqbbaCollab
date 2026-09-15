@@ -222,6 +222,23 @@ export async function subscriberCounts(type, ids) {
   return counts;
 }
 
+/* Fires the real subscriber email (supabase/functions/notify-subscribers)
+   after a successful publish — forum thread/reply and repository article/
+   document/link all call this the same way. Fire-and-forget: a broken or
+   unconfigured email provider (e.g. RESEND_API_KEY not set yet) shouldn't
+   stop the publish that already succeeded, so failures just log. */
+async function notifySubscribers({ type, id, contextName, itemKind, itemTitle, url, excludeMemberId }) {
+  try {
+    const supabase = await getSupabase();
+    const { error } = await supabase.functions.invoke('notify-subscribers', {
+      body: { type, id, contextName, itemKind, itemTitle, actorName: currentUser().name, url, excludeMemberId },
+    });
+    if (error) console.warn('Notification email failed to send:', error.message || error);
+  } catch (err) {
+    console.warn('Notification email failed to send:', err);
+  }
+}
+
 /* --- notifications ------------------------------------------------------- */
 
 export function feed() {
@@ -337,11 +354,15 @@ export async function addThread({ title, categoryId, body, links = [], files = [
   const { data, error } = await supabase
     .from('forum_threads')
     .insert({ category_id: categoryId, author_id: me.id, title, body })
-    .select('id')
+    .select('id, category:forum_categories(name)')
     .single();
   if (error) throw error;
   await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'thread', subscribable_id: data.id });
   await saveAttachments(data.id, null, me.id, links, files);
+  notifySubscribers({
+    type: 'cat', id: categoryId, contextName: data.category?.name || 'the forum', itemKind: 'thread',
+    itemTitle: title, url: `${location.origin}/#/forum/${data.id}`, excludeMemberId: me.id,
+  });
   return data;
 }
 
@@ -351,9 +372,14 @@ export async function addPost(threadId, body, links = [], files = []) {
   const { data, error } = await supabase
     .from('forum_posts')
     .insert({ thread_id: threadId, author_id: me.id, body })
-    .select('id')
+    .select('id, thread:forum_threads(title)')
     .single();
   if (error) throw error;
+  notifySubscribers({
+    type: 'thread', id: threadId, contextName: data.thread?.title || 'a thread', itemKind: 'reply',
+    itemTitle: body.length > 140 ? `${body.slice(0, 140)}…` : body,
+    url: `${location.origin}/#/forum/${threadId}`, excludeMemberId: me.id,
+  });
   await saveAttachments(threadId, data.id, me.id, links, files);
   if (!isSubscribed(`thread:${threadId}`)) {
     await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'thread', subscribable_id: threadId });
@@ -621,8 +647,15 @@ export async function loadSubTopic(id) {
 export async function addRepositoryArticle(subTopicId, { title, summary, body }) {
   const me = requireRealMember();
   const supabase = await getSupabase();
-  const { error } = await supabase.from('repository_articles').insert({ sub_topic_id: subTopicId, author_id: me.id, title, summary, body });
+  const { data, error } = await supabase.from('repository_articles')
+    .insert({ sub_topic_id: subTopicId, author_id: me.id, title, summary, body })
+    .select('id, sub_topic:repository_sub_topics(name)')
+    .single();
   if (error) throw error;
+  notifySubscribers({
+    type: 'repo', id: subTopicId, contextName: data.sub_topic?.name || 'the repository', itemKind: 'article',
+    itemTitle: title, url: `${location.origin}/#/repository/${subTopicId}/${data.id}`, excludeMemberId: me.id,
+  });
 }
 
 export async function updateRepositoryArticle(id, { title, summary, body }) {
@@ -646,20 +679,28 @@ export async function addRepositoryDocument(subTopicId, file) {
   const path = `${subTopicId}/${crypto.randomUUID()}-${safeStorageSegment(file.name)}`;
   const { error: upErr } = await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).upload(path, file);
   if (upErr) throw upErr;
-  const { error } = await supabase.from('repository_documents').insert({
+  const { data, error } = await supabase.from('repository_documents').insert({
     sub_topic_id: subTopicId, author_id: me.id, filename: file.name, storage_path: path,
     mime_type: file.type || null, size_bytes: file.size,
-  });
+  }).select('sub_topic:repository_sub_topics(name)').single();
   if (error) throw error;
+  notifySubscribers({
+    type: 'repo', id: subTopicId, contextName: data.sub_topic?.name || 'the repository', itemKind: 'document',
+    itemTitle: file.name, url: `${location.origin}/#/repository/${subTopicId}`, excludeMemberId: me.id,
+  });
 }
 
 export async function addRepositoryLink(subTopicId, { name, url }) {
   const me = requireRealMember();
   const supabase = await getSupabase();
-  const { error } = await supabase.from('repository_documents').insert({
+  const { data, error } = await supabase.from('repository_documents').insert({
     sub_topic_id: subTopicId, author_id: me.id, filename: name, external_url: url,
-  });
+  }).select('sub_topic:repository_sub_topics(name)').single();
   if (error) throw error;
+  notifySubscribers({
+    type: 'repo', id: subTopicId, contextName: data.sub_topic?.name || 'the repository', itemKind: 'link',
+    itemTitle: name, url: `${location.origin}/#/repository/${subTopicId}`, excludeMemberId: me.id,
+  });
 }
 
 export async function deleteRepositoryDocument(doc) {
