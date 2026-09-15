@@ -25,32 +25,32 @@
   ],
   "attachments": [
    {
-    "file": "content/repository/rs-graft/cell-run-process.png",
-    "name": "Cell run process diagram",
-    "kind": "Image",
-    "size": "459.4 KB"
-   },
-   {
-    "file": "content/repository/rs-graft/colony-prep-for-cell-raising.docx",
-    "name": "Colony preparation for cell raising",
-    "kind": "Word",
-    "size": "17 KB"
-   },
-   {
-    "file": "content/repository/rs-graft/miller-method-steps.xlsx",
-    "name": "Miller method — steps",
-    "kind": "Excel",
-    "size": "10.1 KB"
-   },
-   {
-    "file": "content/repository/rs-graft/odd-acres-queen-rearing-procedures.pdf",
-    "name": "Odd Acres Apiary queen rearing procedures",
+    "file": "content/repository/rs-graft/simple-queen-rearing-nick-withers.pdf",
+    "name": "Simple Queen Rearing (Nick Withers, NZ)",
     "kind": "PDF",
-    "size": "98.9 KB"
+    "size": "26.2 KB"
+   },
+   {
+    "file": "content/repository/rs-graft/easy-queen-rearing-amanda-miller.pdf",
+    "name": "Easy Queen Rearing (Amanda Miller)",
+    "kind": "PDF",
+    "size": "264.4 KB"
+   },
+   {
+    "file": "content/repository/rs-graft/foolproof-queen-rearing-randy-oliver.jpg",
+    "name": "Foolproof Queen Rearing (Randy Oliver)",
+    "kind": "Image",
+    "size": "127.1 KB"
+   },
+   {
+    "file": "content/repository/rs-graft/queen-rearing-planner.xlsx",
+    "name": "Queen Rearing Planner",
+    "kind": "Excel",
+    "size": "86.8 KB"
    },
    {
     "file": "content/repository/rs-graft/standard-methods-rearing-selection-queens-coloss.pdf",
-    "name": "Standard methods for rearing and selection of A. mellifera queens (COLOSS)",
+    "name": "Standard methods for rearing and selection of Apis mellifera queens (Ralph Büchler et al.)",
     "kind": "PDF",
     "size": "3.5 MB"
    }
