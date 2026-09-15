@@ -1,11 +1,11 @@
 ---
-title: Where to start with this collection
+title: Introduction to Queen Rearing
 author: m1
 date: 2026-08-05
-summary: How the queen rearing documents in this sub-topic fit together, and the order to read them in.
+summary: Some introductory articles and links about queen rearing
 ---
 
-The documents and links attached to this sub-topic cover the fundamental hands-on side of queen rearing: methods, procedures, schedules and cell-building processes.
+The documents and links below provide basic information about queen rearing: methods, procedures, schedules, drones and cell-building.
 
 ## What's here and how it fits together
 
@@ -17,7 +17,9 @@ The documents and links attached to this sub-topic cover the fundamental hands-o
 
 **Foolproof Queen Rearing** (Randy Oliver) is a graphic that shows recommended steps for establishing cell builders and cell finishers. It is taken from his website Scientific Beekeeping and specifically his article "Small-scale Queenrearing."
 
-**Standard methods for rearing and selection of Apis mellifera queens** (Ralph Büchler et al.) is an extract from the Colony Loss Survey (COLOSS) Beebook and provides an extensive summary of techniques, equipment and management of the rearing process. It is geared more towards research than recreational or commercial operations but still relevant.
+**Standard methods for rearing and selection of Apis mellifera queens** (Ralph Büchler et al.) is an extract from the Colony Loss Survey (COLOSS) Beebook and provides an extensive summary of techniques, equipment and management of the rearing process. It provides considerable detail and relevant images.
+
+**Drone Mother colonies - numbers and positioning** (J.Rhodes) An old AgNote, but it covers the important implications of drone availability for queen mating. A slightly more advanced topic but an important introduction to more advanced aspects of queen production.
 
 ## Suggested reading order
 
@@ -26,3 +28,4 @@ The documents and links attached to this sub-topic cover the fundamental hands-o
 3. Foolproof Queen Rearing (Randy Oliver)
 4. Queen Rearing Planner
 5. Standard methods for rearing and selection of Apis mellifera queens (Ralph Büchler et al.)
+6. Drone Mother colonies - numbers and positioning.

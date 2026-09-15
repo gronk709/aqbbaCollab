@@ -17,18 +17,18 @@
    {
     "slug": "where-to-start-with-queen-rearing",
     "file": "content/repository/rs-graft/where-to-start-with-queen-rearing.md",
-    "title": "Where to start with this collection",
+    "title": "Introduction to Queen Rearing",
     "author": "m1",
     "date": "2026-08-05",
-    "summary": "How the queen rearing documents in this sub-topic fit together, and the order to read them in."
+    "summary": "Some introductory articles and links about queen rearing"
    }
   ],
   "attachments": [
    {
-    "file": "content/repository/rs-graft/simple-queen-rearing-nick-withers.pdf",
-    "name": "Simple Queen Rearing (Nick Withers, NZ)",
+    "file": "content/repository/rs-graft/drone-mother-colonies-numbers-positioning-rhodes.pdf",
+    "name": "Drone Mother colonies - numbers and positioning (J. Rhodes)",
     "kind": "PDF",
-    "size": "26.2 KB"
+    "size": "30 KB"
    },
    {
     "file": "content/repository/rs-graft/easy-queen-rearing-amanda-miller.pdf",
@@ -47,6 +47,12 @@
     "name": "Queen Rearing Planner",
     "kind": "Excel",
     "size": "86.8 KB"
+   },
+   {
+    "file": "content/repository/rs-graft/simple-queen-rearing-nick-withers.pdf",
+    "name": "Simple Queen Rearing (Nick Withers, NZ)",
+    "kind": "PDF",
+    "size": "26.2 KB"
    },
    {
     "file": "content/repository/rs-graft/standard-methods-rearing-selection-queens-coloss.pdf",
