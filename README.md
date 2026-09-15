@@ -117,25 +117,29 @@ checkbox in the roles editor:
   Instrumental Insem., and Laboratory — Assays roles, which have been retired.
 - **Member** — read-only on apiary data and the repository; full forum access (publish,
   subscribe, notifications) and can list items in the Marketplace.
-- **Creator** — everything Member has, plus the ability to contribute repository content.
+- **Creator** — add and update content (articles, documents) on repository sub-topics
+  they've been assigned to support; cannot delete content, create a track/sub-topic, or
+  manage one they haven't been assigned to.
 - **Project Manager** — update and delete content (background, aims, questions, timeline,
   participation, participants) on research projects they've been assigned to manage.
 - **Contributor** — add and update project content on projects they've been assigned to
   support; cannot delete content, and cannot create, delete, or manage a project.
+- **Repository Manager** — add, edit and delete content on repository sub-topics they've
+  been assigned to manage; cannot create a new track/sub-topic, or manage one they
+  haven't been assigned to.
 
 Holding the "Apiary Manager" title is not itself a site-level permission — actual edit
 access to a specific site (adding a hive, logging an inspection) is a separate grant,
 checked per apiary via `canEditApiary` in `js/store.js`. A member with that grant for
 Barrowfield cannot touch Oradale's data unless separately granted there too; Web Admin
 can always edit every site, and creating a brand-new apiary is Web Admin only. Project
-Manager/Contributor follow the identical pattern one level down: the role tag is a label,
-and a Web Admin separately assigns a member 'manage' or 'contribute' access to one
-specific project (`project_team` — see "Projects" below), never apiary-wide or
-project-wide by default.
-Repository contribution (`canContributeRepository` in `js/store.js`) is gated by role
-instead — to the four operational roles above plus Creator — so a plain Member sees the
-repository read-only, with no Contribute button. Editing roles and grants themselves is
-restricted to Web Admin.
+Manager/Contributor and Repository Manager/Creator follow the identical pattern one
+level down: the role tag is a label, and a Web Admin separately assigns a member
+'manage' or 'contribute' access to one specific project or repository sub-topic
+(`project_team` / `repository_team` — see "Projects" and "Repository" above), never
+apiary-wide, project-wide or repository-wide by default. Creating a track/sub-topic
+itself, like creating a brand-new project, stays Web-Admin-only. Editing roles and
+grants themselves is restricted to Web Admin.
 
 These checks run against the real signed-in member (`currentUser()`) now that Wild
 Apricot sign-in is real. Earlier in the prototype, before that existed, everyone who
@@ -172,13 +176,18 @@ any time from the post itself, and a thread page's own Attachments panel lists e
 across the whole topic with a link back to the post that added it.
 
 **Repository** (`#/repository`) — the three tracks from the brief (Foundation → Queen
-Production → Queen Breeding), sixteen sub-topics, each independently subscribable and
-publishable — real Postgres rows now (Phase 3), though only for sign-in and subscribing;
-sub-topics still carry **real association content** exactly as before: Markdown articles
-(with an article reader at `#/repository/<sub>/<slug>`) and document attachments (PDF,
-Word, Excel, images) served as download links with type and size. A sub-topic with no
-real content yet shows an honest "no content here yet" empty state. See "Authoring
-repository content" below for how to add material.
+Production → Queen Breeding), sixteen sub-topics, each independently subscribable —
+real Postgres rows (Phase 3). Content comes from two merged sources: the original
+**real association material** under `content/repository/` (Markdown articles, an
+article reader at `#/repository/<sub>/<slug>`, and document attachments served as
+download links — see "Authoring repository content" below, unchanged and permanent),
+and articles/documents **published from inside the app** (real Supabase rows and
+Storage uploads — the "Contribute"/"Add item" composer actually writes now, rather
+than simulating it). Publishing is scoped per sub-topic, the same shape as an
+apiary's or project's own manager grant: a Web Admin assigns a member "Repository
+Manager" (add, edit, delete) or "Creator" (add, edit) access to one specific
+sub-topic. A sub-topic with no content at all yet shows an honest "no content here
+yet" empty state.
 
 **Marketplace** (`#/marketplace`) — queens, nucs, semen and equipment, filterable by
 category, with a listing composer and a seller enquiry flow.
@@ -248,8 +257,16 @@ tools/rebuild_manifest.py   Regenerates the content manifest from disk
 
 ## Authoring repository content
 
-Repository content is plain files in the repo — no CMS, no build step. To add or change
-material:
+There are two ways to add repository content now, deliberately kept separate. This
+section covers the older, permanent one: real association material committed as plain
+files in the repo — no CMS, no build step. Use it for material meant to last (the kind
+of thing a Web Admin or the association itself stands behind). For a quick addition by
+whoever's been assigned Repository Manager/Creator access to a sub-topic, use the
+in-app "Contribute"/"Add item" composer instead — see "Repository" above and the
+"Roles & apiary access" section for how that access is granted. Both sources are read
+side by side on the same sub-topic page.
+
+To add or change a file-based item:
 
 1. Put files in `content/repository/<sub-topic-id>/` (the ids are in `js/data.js`:
    `rs-graft`, `rs-nutri`, `rs-vsh`, and so on — also the real, authoritative
@@ -278,10 +295,10 @@ material:
 3. Commit and push. The app reads only the manifest at boot and fetches article bodies
    on demand.
 
-The in-app "Contribute" form remains a simulation until the backend exists — anything a
-browser "saves" locally is invisible to other members, so real content goes through the
-files-and-push path above. When the backend lands, a folder of front-mattered Markdown
-imports straight into a database.
+The in-app "Contribute" form is real now (`repository_articles`/`repository_documents`
+in Supabase) — it's a second, parallel source rather than a replacement for the
+files-and-push path above, which stays exactly as it was for real, permanent
+association material.
 
 **Copyright note:** this repo is public. Only commit documents you have the right to
 redistribute — your own material and openly-licensed references (e.g. the COLOSS
@@ -351,12 +368,15 @@ plan to move it into Postgres). One real, deliberate product change: a thread's 
 watching" is a real aggregate count now (via a `subscriber_count`/`subscriber_counts`
 RPC), but the old "Members watching" avatar list is gone — individual subscriber
 identity isn't broadly visible under this schema's RLS (self-only, on purpose), only the
-aggregate is. Two follow-on migrations built on top of Phase 3 afterward, same
+aggregate is. Several follow-on migrations built on top of Phase 3 afterward, same
 Supabase-backed rigor: `forum_attachments` (links/documents on a post — see "Forum"
-above) and a permissions pass freezing a published topic's own content against its
+above); a permissions pass freezing a published topic's own content against its
 author while leaving attachment management and reply deletion open (`author_id`/
 `is_web_admin()` policies on `forum_threads`/`forum_posts`, unchanged from Phase 3 for
-posts, tightened for threads).
+posts, tightened for threads); and real in-app Repository content authoring
+(`repository_articles`/`repository_documents`/`repository_team` — see "Repository"
+above and "Authoring repository content" below), scoped per sub-topic the same way
+Phase 6's `project_team` is scoped per project.
 
 Phase 6 (projects — `supabase/migrations/20260901000000_projects.sql`) is **live and
 verified**: only Web Admin creates or deletes a project; its content
@@ -434,10 +454,12 @@ a later migration phase.
 small interface (`commit`, `addQueenLine`, `updateApiary`). Identity (`loadSignedInMember`,
 `signOut`), marketplace listings (`loadListings`, `addListing`), forum/repository/
 subscriptions (`loadForumThreads`, `loadThread`, `addThread`, `addPost`, `loadRepository`,
-`loadSubTopic`, `loadMySubscriptions`, `toggleSub`, `addForumAttachments`), and projects
-(`loadProjects`, `loadProject`, `addProject`, `deleteProject`, `addProjectSection`,
-`joinProject`, `setProjectTeamMember`) now read/write real Supabase state instead; every
-other entity's functions in this module are next, one migration phase at a time.
+`loadSubTopic`, `loadMySubscriptions`, `toggleSub`, `addForumAttachments`,
+`addRepositoryArticle`, `addRepositoryDocument`, `setRepositoryTeamMember`), and
+projects (`loadProjects`, `loadProject`, `addProject`, `deleteProject`,
+`addProjectSection`, `joinProject`, `setProjectTeamMember`) now read/write real
+Supabase state instead; every other entity's functions in this module are next, one
+migration phase at a time.
 
 **Data** — `js/data.js` exports plain arrays and lookup helpers, each tagged `[PERMANENT]`
 (pure reference/formatting code that survives the migration) or `[SEED — Phase N]` (mock
