@@ -471,27 +471,6 @@ export const subById = (id) => allSubs.find((s) => s.id === id);
 export const listingKinds = ['All', 'Queens', 'Nucs', 'Semen', 'Equipment'];
 
 /* --------------------------------------------------------------------------
-   [SEED — Phase 7] Notifications — what the subscription machinery would
-   have delivered. Migrated last since it aggregates activity from the
-   forum/marketplace/repository/projects entities above.
-   -------------------------------------------------------------------------- */
-
-export const notifications = [
-  { id: 'n1', kind: 'reply',  at: -0.2, unread: true,  source: 'Standardising the freeze-killed brood protocol', by: 'm9',
-    text: 'Kenji Watanabe posted a draft protocol for comment.', to: '#/forum/t1' },
-  { id: 'n2', kind: 'repo',   at: -0.4, unread: true,  source: 'Queen Breeding → Assessment methods', by: 'm9',
-    text: 'New article: Scoring partial removals in the freeze-killed brood assay.', to: '#/repository/rs-assess' },
-  { id: 'n3', kind: 'insp',   at: -1,   unread: true,  source: 'Barrowfield', by: 'm9',
-    text: 'Brood pattern assessment completed on 18 hives. Two flagged for follow-up.', to: '#/apiaries/ap-barrow' },
-  { id: 'n4', kind: 'thread', at: -3,   unread: false, source: 'Association', by: 'm1',
-    text: 'New topic: Proposal to publish the annual line performance table.', to: '#/forum/t5' },
-  { id: 'n5', kind: 'repo',   at: -5,   unread: false, source: 'Queen Breeding → Establishing and maintaining lines', by: 'm5',
-    text: 'Trevor Bowe added generation records for TMB-22 through generation nine.', to: '#/repository/rs-lines' },
-  { id: 'n6', kind: 'market', at: -6,   unread: false, source: 'Marketplace', by: 'm5',
-    text: 'Tambo 22 mated queens listed — 40 available for December dispatch.', to: '#/marketplace' },
-];
-
-/* --------------------------------------------------------------------------
    [PERMANENT] Helpers shared across views
    -------------------------------------------------------------------------- */
 

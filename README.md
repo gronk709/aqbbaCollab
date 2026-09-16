@@ -385,9 +385,18 @@ Contributor-or-above able to add/edit a row and only Manager-or-above able to de
 one — the per-project grant (`project_team`) a Web Admin assigns, same shape as
 `apiary_managers`. Of the five seed projects, only PRJ-00 carried over.
 
+Phase 7 (notifications — `supabase/migrations/20260916000000_notifications.sql`) is
+**live and verified**: `notify-subscribers` (see "Notification email" below) writes one
+real row per notified subscriber, and the Notifications page (`js/views/notifications.js`)
+reads them back — self-only RLS, same shape as `subscriptions`, with no insert/delete
+policy for `authenticated` at all since every row is written by that Edge Function
+running as the service role. The "What you follow" sidebar's forum-topic chips still
+can't resolve a real thread's title (an unrelated, smaller gap — see that file's own
+comment), and the "Email frequency" digest selector remains UI-only; every notification
+is still sent the instant it happens, not batched.
+
 Still mock (`js/data.js` + `js/store.js`'s localStorage patches), until their own phase
-comes up: queen lines/breeders (Phase 4), apiaries/hives/inspections (Phase 5), and
-notifications (Phase 7).
+comes up: queen lines/breeders (Phase 4), apiaries/hives/inspections (Phase 5).
 
 ## Wiring up the real integrations
 
@@ -447,9 +456,12 @@ a real member's own detail page.)
 repository contribution (article/document/link) each call `notifySubscribers` (`js/
 store.js`), which invokes the `notify-subscribers` Edge Function
 (`supabase/functions/notify-subscribers/`). It looks up `subscriptions` rows for that
-`thread:<id>`/`repo:<id>`/`cat:<id>` key (Phase 3), resolves each subscriber's email from
-`member_contact_details`, and sends via Resend. The call is fire-and-forget from the
-client — a publish still succeeds even if email sending fails or isn't configured yet.
+`thread:<id>`/`repo:<id>`/`cat:<id>` key (Phase 3), writes a real `notifications` row
+(Phase 7) for every one of them regardless of whether they have an email on file, then
+separately resolves whichever do from `member_contact_details` and sends via Resend. The
+call is fire-and-forget from the client — a publish still succeeds even if email sending
+fails or isn't configured yet, and the in-app notification doesn't depend on the email
+succeeding either.
 
 Needs one-time setup before it actually delivers: a Resend account, a verified sending
 domain (SPF/DKIM records on whichever domain the from-address uses), and

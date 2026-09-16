@@ -1,11 +1,29 @@
 /* ==========================================================================
-   Notifications. Every entry corresponds to an email the subscription
-   machinery would have sent. Shown on screen while email delivery is stubbed.
+   Notifications. Real now (20260916000000... — see that migration's header
+   comment): notify-subscribers writes one row per notified subscriber
+   alongside the email it sends, and this reads them back. The route's
+   `load` (js/app.js) is loadNotifications(), which populates
+   state.notifications; feed()/unreadCount() (js/store.js) read that cache
+   synchronously — this file doesn't touch Supabase directly.
    ========================================================================== */
 
-import { relHours, allSubs, subById, threads, threadById } from '../data.js';
-import { feed, markAllRead, markRead, state, unreadCount, memberById, currentUser } from '../store.js';
+import { relDays, subById, threadById } from '../data.js';
+import { feed, markAllRead, markRead, state, unreadCount, currentUser } from '../store.js';
 import { esc, icons, avatar, toast } from '../ui.js';
+
+/* created_at is a real Postgres timestamp — relDays/relHours in data.js
+   expect a day-offset-from-today number instead, same reasoning as
+   forum.js/marketplace.js's own local daysAgo() helpers. This one keeps
+   minute/hour granularity for anything under a day old, which a stream of
+   recent activity actually needs (relDays alone collapses same-day items
+   to just "today"). */
+function agoLabel(isoTimestamp) {
+  const mins = (Date.now() - new Date(isoTimestamp).getTime()) / 60000;
+  if (mins < 60) return `${Math.max(1, Math.round(mins))} min ago`;
+  const hours = mins / 60;
+  if (hours < 24) return `${Math.round(hours)} h ago`;
+  return relDays(-Math.floor(hours / 24));
+}
 
 const kindMeta = {
   reply:  { label: 'Reply',       icon: 'forum',  variant: 'tag-outline' },
@@ -25,21 +43,20 @@ export function renderNotifications() {
 
   const rows = items.map((n) => {
     const meta = kindMeta[n.kind] || kindMeta.reply;
-    const who = memberById(n.by);
     return `
       <li>
-        <a class="line" href="${n.to}" data-notif="${n.id}"
+        <a class="line" href="${n.link_path}" data-notif="${n.id}"
            style="${n.unread ? 'background:var(--amber-wash)' : ''}">
           <span class="pip" style="background:${n.unread ? 'var(--amber)' : 'transparent'};margin-left:4px"></span>
           <div class="line-body">
             <div class="row" style="gap:var(--s2);margin-bottom:2px">
               <span class="tag ${meta.variant}">${meta.label}</span>
-              <span class="caption">${esc(n.source)}</span>
+              <span class="caption">${esc(n.source_name)}</span>
             </div>
-            <strong style="font-weight:${n.unread ? 600 : 400}">${esc(n.text)}</strong>
+            <strong style="font-weight:${n.unread ? 600 : 400}">${esc(n.body)}</strong>
           </div>
           <div class="line-meta">
-            <div class="caption mono">${relHours(n.at)}</div>
+            <div class="caption mono">${agoLabel(n.created_at)}</div>
           </div>
         </a>
       </li>`;
@@ -106,11 +123,12 @@ export function renderNotifications() {
             </div>
             <div class="panel-body">
               ${section('Forum topics', threadSubs.map((k) => {
-                /* threadById only knows the old mock seed threads — real
-                   Postgres threads (Phase 3) aren't resolvable here yet.
-                   Notifications itself is a later migration phase; until
-                   then a real thread subscription just doesn't get a title
-                   in this list rather than crashing on removed local state. */
+                /* threadById only knows the old mock seed threads — a real
+                   Postgres thread (Phase 3) isn't resolvable here yet, so a
+                   real thread subscription just doesn't get a title in this
+                   list rather than crashing. Unrelated to notifications
+                   themselves being real now (that's the activity feed
+                   above) — this is only the subscription-chips sidebar. */
                 const t = threadById(k.slice(7));
                 return t ? `<a class="tag tag-outline" href="#/forum/${k.slice(7)}">${esc(t.title.slice(0, 46))}${t.title.length > 46 ? '…' : ''}</a>` : '';
               }))}
@@ -128,14 +146,27 @@ export function renderNotifications() {
 
   setTimeout(() => {
     const btn = document.getElementById('mark-read');
-    if (btn) btn.addEventListener('click', () => {
-      markAllRead();
+    if (btn) btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await markAllRead();
+      } catch (err) {
+        toast(`Couldn't mark all read: ${err.message}`);
+        btn.disabled = false;
+        return;
+      }
       toast('All notifications marked read.');
       window.__aqbba_render();
     });
 
+    /* Fire-and-forget: the click also navigates via the anchor's own href,
+       so this shouldn't block or preventDefault that — a failed mark-read
+       just means the badge stays stale by one, not worth surfacing a toast
+       for on the way out of the page. */
     document.querySelectorAll('[data-notif]').forEach((a) => {
-      a.addEventListener('click', () => markRead(a.dataset.notif));
+      a.addEventListener('click', () => {
+        markRead(a.dataset.notif).catch((err) => console.warn('Could not mark notification read:', err));
+      });
     });
 
     const digest = document.getElementById('n-digest');

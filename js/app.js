@@ -4,7 +4,7 @@
 
 import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
-  roleLabel, currentUser, loadSignedInMember,
+  roleLabel, currentUser, loadSignedInMember, loadNotifications,
   isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
   loadProjects, loadProject,
 } from './store.js';
@@ -68,7 +68,7 @@ const ROUTES = [
   { test: /^#\/repository\/([^/]+)\/(.+)$/, view: renderArticle,  load: (subId) => loadSubTopic(subId) },
   { test: /^#\/repository\/(.+)$/,     view: renderSubTopic, load: (id) => loadSubTopic(id) },
   { test: /^#\/marketplace\/?$/,       view: renderMarketplace, load: loadListings },
-  { test: /^#\/notifications\/?$/,     view: renderNotifications },
+  { test: /^#\/notifications\/?$/,     view: renderNotifications, load: loadNotifications },
 ];
 
 function shellHTML(inner) {
@@ -312,6 +312,17 @@ if (isWildApricotCallback()) {
   } catch (err) {
     console.warn('Could not check for a persisted Supabase session:', err);
   }
+}
+
+/* Fire-and-forget, not awaited: the rail's unread badge (unreadCount(),
+   read synchronously on every render) would otherwise stay at 0 until the
+   member happens to visit Notifications once — this fetches it in the
+   background so it's right from the very first page. commit() inside
+   loadNotifications() re-renders the badge (onChange(refreshBadge) below)
+   once it resolves; a real member not existing yet or the fetch failing
+   just leaves the badge at 0 rather than blocking boot. */
+if (state.remoteMember) {
+  loadNotifications().catch((err) => console.warn('Could not load notifications:', err));
 }
 
 /* The repository content manifest loads before first paint (top-level await

@@ -6,7 +6,10 @@
    sent: every add-content call site just called toast() instead. This
    function is the real send; js/store.js's notifySubscribers() calls it,
    fire-and-forget, right after a successful publish (see addRepositoryArticle,
-   addRepositoryDocument, addRepositoryLink, addThread, addPost).
+   addRepositoryDocument, addRepositoryLink, addThread, addPost). It also
+   writes one row per notified subscriber into the real `notifications` table
+   (20260916000000...) — the in-app Notifications page reads that, and gets
+   one regardless of whether that subscriber even has an email on file.
 
    Called with:
      {
@@ -16,9 +19,15 @@
        itemKind: 'article' | 'document' | 'link' | 'thread' | 'reply',
        itemTitle: string,                 // article title, filename, link name, or a reply preview
        actorName: string,                 // who published it
-       url: string,                       // absolute link to view it
-       excludeMemberId?: string,          // don't email the person who just published
+       actorId: string,                   // members.id of whoever published it
+       path: string,                      // in-app hash route, e.g. '#/repository/rs-graft'
+       excludeMemberId?: string,          // don't notify the person who just published
      }
+
+   The emailed link is built from this request's Origin header + `path`
+   (falling back to the production URL if there's no Origin, e.g. a direct
+   test call) — so it's correct whether this was triggered from production
+   or a local dev server, without needing to know that here.
 
    Requires the caller to hold a real Supabase session (checked via
    auth.getUser(jwt) below) — same trust boundary as the rest of the app:
@@ -53,6 +62,12 @@ const SUBSCRIBABLE_TYPES = new Set(['repo', 'thread', 'cat']);
 const ITEM_KINDS: Record<string, string> = {
   article: 'article', document: 'document', link: 'link', thread: 'topic', reply: 'reply',
 };
+/* notifications.kind is a narrower set than itemKind — an article, document
+   or link are all just "repo" activity to the in-app feed. */
+const NOTIFICATION_KIND: Record<string, string> = {
+  reply: 'reply', thread: 'thread', article: 'repo', document: 'repo', link: 'repo',
+};
+const DEFAULT_APP_ORIGIN = 'https://aqbba-collab.vercel.app';
 const RESEND_BATCH_URL = 'https://api.resend.com/emails/batch';
 const RESEND_BATCH_SIZE = 100;
 
@@ -63,7 +78,8 @@ interface NotifyPayload {
   itemKind?: string;
   itemTitle?: string;
   actorName?: string;
-  url?: string;
+  actorId?: string;
+  path?: string;
   excludeMemberId?: string;
 }
 
@@ -92,12 +108,15 @@ Deno.serve(async (req) => {
     return json({ error: 'Request body must be JSON.' }, 400);
   }
 
-  const { type, id, contextName, itemKind, itemTitle, actorName, url, excludeMemberId } = payload;
+  const { type, id, contextName, itemKind, itemTitle, actorName, actorId, path, excludeMemberId } = payload;
   if (!type || !SUBSCRIBABLE_TYPES.has(type)) return json({ error: 'type must be one of repo, thread, cat.' }, 400);
-  if (!id || !contextName || !itemTitle || !actorName || !url) {
-    return json({ error: 'Missing one of: id, contextName, itemTitle, actorName, url.' }, 400);
+  if (!id || !contextName || !itemTitle || !actorName || !path) {
+    return json({ error: 'Missing one of: id, contextName, itemTitle, actorName, path.' }, 400);
   }
   const itemKindLabel = ITEM_KINDS[itemKind || ''] || 'update';
+  const notificationKind = NOTIFICATION_KIND[itemKind || ''] || 'repo';
+  const appOrigin = req.headers.get('origin') || DEFAULT_APP_ORIGIN;
+  const url = `${appOrigin}/${path}`;
 
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -122,7 +141,22 @@ Deno.serve(async (req) => {
     if (subsErr) throw subsErr;
 
     const memberIds = [...new Set(subs.map((s) => s.member_id))].filter((m) => m !== excludeMemberId);
-    if (!memberIds.length) return json({ sent: 0 });
+    if (!memberIds.length) return json({ notified: 0, sent: 0 });
+
+    // In-app notification rows go to every subscriber regardless of whether
+    // they have an email on file — that's checked separately, below, only
+    // for the email send.
+    const { error: notifErr } = await supabaseAdmin.from('notifications').insert(
+      memberIds.map((memberId) => ({
+        member_id: memberId,
+        actor_id: actorId || null,
+        kind: notificationKind,
+        source_name: contextName,
+        body: `${actorName} added a new ${itemKindLabel}: ${itemTitle}`,
+        link_path: path,
+      })),
+    );
+    if (notifErr) throw notifErr;
 
     const { data: contacts, error: contactsErr } = await supabaseAdmin
       .from('member_contact_details')
@@ -131,12 +165,12 @@ Deno.serve(async (req) => {
     if (contactsErr) throw contactsErr;
 
     const emails = [...new Set(contacts.map((c) => c.email).filter((e): e is string => !!e))];
-    if (!emails.length) return json({ sent: 0 });
+    if (!emails.length) return json({ notified: memberIds.length, sent: 0 });
 
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
     if (!RESEND_API_KEY) {
       console.error('RESEND_API_KEY not set — see this function\'s header comment.');
-      return json({ error: 'Email sending is not configured.' }, 500);
+      return json({ notified: memberIds.length, sent: 0, error: 'Email sending is not configured.' }, 200);
     }
     const from = Deno.env.get('NOTIFY_FROM_EMAIL') || 'AQBBA <notifications@aqbba.org.au>';
 
@@ -168,7 +202,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ sent, failed });
+    return json({ notified: memberIds.length, sent, failed });
   } catch (err) {
     console.error('Unexpected error sending subscriber notifications:', err);
     return json({ error: 'Unexpected error sending notifications.' }, 500);

@@ -7,14 +7,16 @@ migration phases) or because it's low-impact enough to batch with something else
 
 ## Open
 
-- **"Wild Apricot ID" shows "undefined" for a real Wild Apricot sign-in.**
-  `js/views/managers.js`'s `renderManager()` (the individual member detail page)
-  displays `m.wa` under "Wild Apricot ID" — a field that exists on the mock seed
-  members in `js/data.js` (e.g. `wa: 'WA-40118'`) but was never added to the
-  `state.remoteMember` object `loadSignedInMember()` (`js/store.js`) builds for a
-  real signed-in member, so it reads as `undefined`.
-  Fix needs: add `wa_contact_id` to the `members` select in `loadSignedInMember()`
-  and map it onto the returned object (naming it consistently — real
-  `wa_contact_id` is a plain numeric Wild Apricot contact id, not the
-  seed data's `WA-XXXXX`-formatted string, so the display format should probably
-  change too rather than just filling in the same shape).
+(none currently)
+
+## Fixed
+
+- **"Wild Apricot ID" showed "undefined" for a real Wild Apricot sign-in.**
+  Fixed by adding `wa_contact_id` to the `members` select in
+  `loadSignedInMember()` (`js/store.js`) and mapping it onto `state.remoteMember.wa`
+  — shown as-is (the real plain numeric contact id), not reformatted to match the
+  seed data's `WA-XXXXX` string. Only closes the gap for a member's *own* record
+  (`currentUser()`/`renderManager` on yourself); another real member's detail page
+  still reads the un-migrated seed/demo roster (`js/views/managers.js`'s
+  `renderMembers`/`renderManager` for someone else) — a separate, broader gap
+  tracked in the README's "Members directory" section, not this one.

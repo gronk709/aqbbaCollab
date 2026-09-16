@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import {
-  notifications, apiaries, inspections, queenLines,
+  apiaries, inspections, queenLines,
   members as seedMembers, currentUser as seedCurrentUser,
 } from './data.js';
 import { getSupabase } from './supabaseClient.js';
@@ -17,7 +17,9 @@ const defaults = () => ({
      repository is visited — not seeded from anywhere locally, unlike
      before real subscriptions existed. */
   subs: [],
-  read: notifications.filter((n) => !n.unread).map((n) => n.id),
+  /* Loaded fresh from Supabase (loadNotifications) — see the "notifications"
+     section below. Empty until that first resolves, same as subs above. */
+  notifications: [],
   newApiaries: [],
   newHives: [],
   newInspections: [],
@@ -130,7 +132,7 @@ export async function loadSignedInMember() {
     /* member_roles!member_id hints PostgREST at which foreign key to embed
        on — member_roles has two FKs to members (member_id, whose row it
        is, and granted_by, who granted it), which is otherwise ambiguous. */
-    .select('id, name, initials, state, member_since, member_roles!member_id(role_name), member_contact_details(phone, email, address)')
+    .select('id, name, initials, state, member_since, wa_contact_id, member_roles!member_id(role_name), member_contact_details(phone, email, address)')
     .eq('auth_user_id', session.user.id)
     .maybeSingle();
   if (error) {
@@ -148,6 +150,11 @@ export async function loadSignedInMember() {
     initials: row.initials,
     state: row.state,
     since: row.member_since,
+    /* Real wa_contact_id is a plain numeric Wild Apricot contact id, unlike
+       the seed roster's 'WA-XXXXX'-formatted string (js/data.js) — was
+       missing entirely before (BUGS.md: showed as "undefined" wherever a
+       real member's own record displayed it), not reformatted to match. */
+    wa: row.wa_contact_id || '',
     roles: (row.member_roles || []).map((r) => r.role_name),
     phone: contact?.phone || '',
     email: contact?.email || '',
@@ -222,48 +229,80 @@ export async function subscriberCounts(type, ids) {
   return counts;
 }
 
-/* Fires the real subscriber email (supabase/functions/notify-subscribers)
-   after a successful publish — forum thread/reply and repository article/
-   document/link all call this the same way. Fire-and-forget: a broken or
-   unconfigured email provider (e.g. RESEND_API_KEY not set yet) shouldn't
-   stop the publish that already succeeded, so failures just log. */
-async function notifySubscribers({ type, id, contextName, itemKind, itemTitle, url, excludeMemberId }) {
+/* Fires the real subscriber notification (supabase/functions/notify-
+   subscribers) after a successful publish — forum thread/reply and
+   repository article/document/link all call this the same way. It writes
+   the in-app notifications row AND sends the email, both server-side.
+   Fire-and-forget: a broken or unconfigured email provider (e.g.
+   RESEND_API_KEY not set yet) shouldn't stop the publish that already
+   succeeded, so failures just log. `path` is a relative in-app route
+   (e.g. '#/forum/<id>') — the function builds the absolute emailed link
+   from its own request Origin, not from anything passed here. */
+async function notifySubscribers({ type, id, contextName, itemKind, itemTitle, path, excludeMemberId }) {
   try {
+    const me = currentUser();
     const supabase = await getSupabase();
     const { error } = await supabase.functions.invoke('notify-subscribers', {
-      body: { type, id, contextName, itemKind, itemTitle, actorName: currentUser().name, url, excludeMemberId },
+      body: { type, id, contextName, itemKind, itemTitle, actorName: me.name, actorId: me.id, path, excludeMemberId },
     });
-    if (error) console.warn('Notification email failed to send:', error.message || error);
+    if (error) console.warn('Notification failed to send:', error.message || error);
   } catch (err) {
-    console.warn('Notification email failed to send:', err);
+    console.warn('Notification failed to send:', err);
   }
 }
 
-/* --- notifications ------------------------------------------------------- */
+/* --- notifications ---------------------------------------------------------
+   Real now (20260916000000...) — notify-subscribers writes one row per
+   notified subscriber alongside the email it sends. state.notifications is
+   a client-side cache, same pattern as state.subs: loadNotifications() is
+   the '#/notifications' route's `load` (js/app.js), and is also fired
+   fire-and-forget right after a real sign-in resolves, purely so the rail's
+   unread badge (unreadCount(), read synchronously on every render) is
+   accurate from first paint rather than only after visiting the page once. */
 
 export function feed() {
-  /* "You created the topic X" / "Your listing is live" echoes used to be
-     generated here from local newThreads/newListings session state — both
-     removed now that threads and listings are real Supabase rows.
-     Notifications move to Postgres in their own later phase; rebuilding
-     these echoes against real data belongs there — see the plan doc for
-     the phase ordering rationale (feed aggregates activity from every
-     migrated entity, so it's migrated last, once, rather than partially
-     rebuilt after each phase). */
-  return [...notifications]
-    .map((n) => ({ ...n, unread: !state.read.includes(n.id) }))
-    .sort((a, b) => b.at - a.at);
+  return state.notifications.map((n) => ({ ...n, unread: !n.read_at }));
 }
 
-export const unreadCount = () => feed().filter((n) => n.unread).length;
+export const unreadCount = () => state.notifications.filter((n) => !n.read_at).length;
 
-export function markAllRead() {
-  feed().forEach((n) => { if (!state.read.includes(n.id)) state.read.push(n.id); });
+export async function loadNotifications() {
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('id, kind, source_name, body, link_path, created_at, read_at, actor:members(id, name)')
+    .eq('member_id', me.id)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  state.notifications = data;
+  commit();
+  return data;
+}
+
+export async function markAllRead() {
+  const me = requireRealMember();
+  const unread = state.notifications.filter((n) => !n.read_at);
+  if (!unread.length) return;
+  const supabase = await getSupabase();
+  const now = new Date().toISOString();
+  const { error } = await supabase.from('notifications')
+    .update({ read_at: now }).eq('member_id', me.id).is('read_at', null);
+  if (error) throw error;
+  state.notifications = state.notifications.map((n) => (n.read_at ? n : { ...n, read_at: now }));
   commit();
 }
 
-export function markRead(id) {
-  if (!state.read.includes(id)) { state.read.push(id); commit(); }
+export async function markRead(id) {
+  const n = state.notifications.find((x) => x.id === id);
+  if (!n || n.read_at) return;
+  const supabase = await getSupabase();
+  const now = new Date().toISOString();
+  const { error } = await supabase.from('notifications').update({ read_at: now }).eq('id', id);
+  if (error) throw error;
+  n.read_at = now;
+  commit();
 }
 
 /* --- forum -------------------------------------------------------------
@@ -361,7 +400,7 @@ export async function addThread({ title, categoryId, body, links = [], files = [
   await saveAttachments(data.id, null, me.id, links, files);
   notifySubscribers({
     type: 'cat', id: categoryId, contextName: data.category?.name || 'the forum', itemKind: 'thread',
-    itemTitle: title, url: `${location.origin}/#/forum/${data.id}`, excludeMemberId: me.id,
+    itemTitle: title, path: `#/forum/${data.id}`, excludeMemberId: me.id,
   });
   return data;
 }
@@ -378,7 +417,7 @@ export async function addPost(threadId, body, links = [], files = []) {
   notifySubscribers({
     type: 'thread', id: threadId, contextName: data.thread?.title || 'a thread', itemKind: 'reply',
     itemTitle: body.length > 140 ? `${body.slice(0, 140)}…` : body,
-    url: `${location.origin}/#/forum/${threadId}`, excludeMemberId: me.id,
+    path: `#/forum/${threadId}`, excludeMemberId: me.id,
   });
   await saveAttachments(threadId, data.id, me.id, links, files);
   if (!isSubscribed(`thread:${threadId}`)) {
@@ -654,7 +693,7 @@ export async function addRepositoryArticle(subTopicId, { title, summary, body })
   if (error) throw error;
   notifySubscribers({
     type: 'repo', id: subTopicId, contextName: data.sub_topic?.name || 'the repository', itemKind: 'article',
-    itemTitle: title, url: `${location.origin}/#/repository/${subTopicId}/${data.id}`, excludeMemberId: me.id,
+    itemTitle: title, path: `#/repository/${subTopicId}/${data.id}`, excludeMemberId: me.id,
   });
 }
 
@@ -686,7 +725,7 @@ export async function addRepositoryDocument(subTopicId, file) {
   if (error) throw error;
   notifySubscribers({
     type: 'repo', id: subTopicId, contextName: data.sub_topic?.name || 'the repository', itemKind: 'document',
-    itemTitle: file.name, url: `${location.origin}/#/repository/${subTopicId}`, excludeMemberId: me.id,
+    itemTitle: file.name, path: `#/repository/${subTopicId}`, excludeMemberId: me.id,
   });
 }
 
@@ -699,7 +738,7 @@ export async function addRepositoryLink(subTopicId, { name, url }) {
   if (error) throw error;
   notifySubscribers({
     type: 'repo', id: subTopicId, contextName: data.sub_topic?.name || 'the repository', itemKind: 'link',
-    itemTitle: name, url: `${location.origin}/#/repository/${subTopicId}`, excludeMemberId: me.id,
+    itemTitle: name, path: `#/repository/${subTopicId}`, excludeMemberId: me.id,
   });
 }
 
