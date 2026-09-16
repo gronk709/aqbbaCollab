@@ -45,34 +45,62 @@ export async function fetchArticleBody(article) {
    Everything is escaped first; the renderer only reintroduces its own tags.
    -------------------------------------------------------------------------- */
 
-function inline(md) {
+/* Same slugging tools.rebuild_manifest.py-style name → id conversion, used
+   both here (to match a `doc:` link target against a document's display
+   name) and by js/views/repository.js (to build the same document's actual
+   anchor id) — the two have to agree on the exact same string. */
+function slugify(s) {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+/* A `doc:some-slug` link target jumps to (scrolls to and briefly highlights)
+   a document or link already listed in the sub-topic's Documents panel,
+   rather than duplicating its URL in the article body — see README's
+   "Authoring repository content". Matched by slugified display name, not by
+   an opaque id, so an author writing prose can guess it (e.g. the
+   attachment "Larry Connor - 'Queen Rearing Essentials'" is reachable as
+   doc:queen-rearing-essentials, a substring match against its full slug —
+   doesn't need to be exact). `docs` is the same merged file+db attachment
+   list js/views/repository.js already builds (mergedDocuments); passed in
+   here because this module has no idea a "documents panel" exists
+   otherwise — it's just a Markdown renderer. */
+function docLink(href, label, docs) {
+  const target = href.slice(4).toLowerCase();
+  const match = docs.find((d) => slugify(d.name).includes(target));
+  return match ? `<a href="#" data-jump-doc="${esc(match.key)}">${label}</a>` : label;
+}
+
+function inline(md, docs) {
   return esc(md)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, href) =>
-      /^(https?:\/\/|#\/|content\/)/.test(href)
-        ? `<a href="${href}" ${href.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>${label}</a>`
-        : label);
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, href) => {
+      if (/^(https?:\/\/|#\/|content\/)/.test(href)) {
+        return `<a href="${href}" ${href.startsWith('http') ? 'target="_blank" rel="noopener"' : ''}>${label}</a>`;
+      }
+      if (href.startsWith('doc:')) return docLink(href, label, docs);
+      return label;
+    });
 }
 
-export function mdToHtml(md) {
+export function mdToHtml(md, docs = []) {
   const blocks = md.split(/\n{2,}/);
   return blocks.map((block) => {
     const b = block.trim();
     if (!b) return '';
     const h = b.match(/^(#{1,4})\s+(.*)$/);
-    if (h) return `<h3>${inline(h[2])}</h3>`;
+    if (h) return `<h3>${inline(h[2], docs)}</h3>`;
     if (/^>\s?/.test(b)) {
-      return `<blockquote>${inline(b.replace(/^>\s?/gm, '').trim())}</blockquote>`;
+      return `<blockquote>${inline(b.replace(/^>\s?/gm, '').trim(), docs)}</blockquote>`;
     }
     if (/^[-*]\s+/m.test(b) && b.split('\n').every((l) => /^[-*]\s+/.test(l.trim()))) {
-      const items = b.split('\n').map((l) => `<li>${inline(l.trim().replace(/^[-*]\s+/, ''))}</li>`).join('');
+      const items = b.split('\n').map((l) => `<li>${inline(l.trim().replace(/^[-*]\s+/, ''), docs)}</li>`).join('');
       return `<ul>${items}</ul>`;
     }
     if (/^\d+\.\s+/m.test(b) && b.split('\n').every((l) => /^\d+\.\s+/.test(l.trim()))) {
-      const items = b.split('\n').map((l) => `<li>${inline(l.trim().replace(/^\d+\.\s+/, ''))}</li>`).join('');
+      const items = b.split('\n').map((l) => `<li>${inline(l.trim().replace(/^\d+\.\s+/, ''), docs)}</li>`).join('');
       return `<ol style="padding-left:var(--s5);margin:var(--s3) 0">${items}</ol>`;
     }
-    return `<p>${inline(b.replace(/\n/g, ' '))}</p>`;
+    return `<p>${inline(b.replace(/\n/g, ' '), docs)}</p>`;
   }).join('');
 }

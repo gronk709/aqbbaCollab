@@ -211,6 +211,7 @@ function openContribute(eligibleSubs, preselect) {
       <div class="field">
         <label for="c-body">Content</label>
         <textarea id="c-body" placeholder="Write for a member who knows the previous track but not this one."></textarea>
+        <p class="caption" style="margin-top:6px">Markdown — headings, **bold**, lists, links. Jump to a document or link below with [label](doc:some-words-from-its-name).</p>
       </div>
     </div>
     <div id="c-document-fields" hidden>
@@ -318,6 +319,7 @@ function openEditArticleModal(article, onSaved) {
     <div class="field">
       <label for="e-body">Content</label>
       <textarea id="e-body">${esc(article.body)}</textarea>
+      <p class="caption" style="margin-top:6px">Markdown — headings, **bold**, lists, links. Jump to a document or link below with [label](doc:some-words-from-its-name).</p>
     </div>`;
   const actions = `
     <button class="btn btn-ghost" data-close>Cancel</button>
@@ -448,6 +450,32 @@ async function openManageRepoTeamModal(subId, data) {
 
 /* --- shared pieces -------------------------------------------------------- */
 
+/* A doc's key ('file:content/...' or 'db:<uuid>') as a safe HTML id, so an
+   article's `doc:some-slug` link (js/content.js) can scroll to and briefly
+   highlight the matching row here, instead of the reader having to hunt
+   for it by eye in the list below. */
+function docAnchorId(key) {
+  return `doc-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+}
+
+/* Delegated on the article body container (not on each [data-jump-doc]
+   link individually) because a file-based article's body arrives later,
+   asynchronously (hydrateFileArticle's fetch) — long after this container
+   itself exists and this listener was attached. */
+function bindDocJumpLinks(container) {
+  if (!container) return;
+  container.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-jump-doc]');
+    if (!a) return;
+    e.preventDefault();
+    const el = document.getElementById(docAnchorId(a.dataset.jumpDoc));
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.background = 'var(--amber-wash)';
+    setTimeout(() => { el.style.background = ''; }, 1600);
+  });
+}
+
 function attachmentsPanel(docs, canContribute, canManage) {
   if (!docs.length) return '';
   return `
@@ -461,7 +489,7 @@ function attachmentsPanel(docs, canContribute, canManage) {
         ${docs.map((d) => {
           if (d.source === 'file') {
             return `
-              <a class="sub" href="${d.href}" target="_blank" rel="noopener">
+              <a class="sub" id="${docAnchorId(d.key)}" href="${d.href}" target="_blank" rel="noopener">
                 <div class="sub-title">
                   <strong>${esc(d.name)}</strong>
                   <span>${esc(d.meta)}</span>
@@ -469,7 +497,7 @@ function attachmentsPanel(docs, canContribute, canManage) {
               </a>`;
           }
           return `
-            <div class="sub">
+            <div class="sub" id="${docAnchorId(d.key)}">
               <button type="button" class="sub-title" style="text-align:left;background:none;border:none;cursor:pointer" data-open-doc="${d.id}">
                 <strong>${d.isLink ? `${icons.link} ` : ''}${esc(d.name)}</strong>
                 <span>${esc(d.meta)}</span>
@@ -509,13 +537,13 @@ function articleListPanel(s, articles, activeKey = null) {
 }
 
 /* Fetch a file-based article body into the placeholder the page rendered. */
-function hydrateFileArticle(article) {
+function hydrateFileArticle(article, docs) {
   setTimeout(async () => {
     const el = document.getElementById('md-body');
     if (!el) return;
     try {
       const md = await fetchArticleBody(article);
-      el.innerHTML = mdToHtml(md);
+      el.innerHTML = mdToHtml(md, docs);
     } catch {
       el.innerHTML = '<p class="caption">This article could not be loaded. Check that the content files were pushed alongside the manifest.</p>';
     }
@@ -663,10 +691,10 @@ export function renderSubTopic(data) {
     </div>`;
 
   if (newest) {
-    if (newest.source === 'file') hydrateFileArticle(newest.raw);
+    if (newest.source === 'file') hydrateFileArticle(newest.raw, docs);
     else setTimeout(() => {
       const el = document.getElementById('md-body');
-      if (el) el.innerHTML = mdToHtml(newest.raw.body);
+      if (el) el.innerHTML = mdToHtml(newest.raw.body, docs);
     }, 0);
   }
 
@@ -678,6 +706,7 @@ export function renderSubTopic(data) {
     if (teamBtn) teamBtn.addEventListener('click', () => openManageRepoTeamModal(s.id, data));
 
     bindDocButtons(docsById);
+    bindDocJumpLinks(document.getElementById('md-body'));
 
     document.querySelectorAll('[data-edit-article]').forEach((el) => {
       el.addEventListener('click', () => {
@@ -772,15 +801,16 @@ export function renderArticle(data, subId, slug) {
   if (dbArticle) {
     setTimeout(() => {
       const el = document.getElementById('md-body');
-      if (el) el.innerHTML = mdToHtml(dbArticle.body);
+      if (el) el.innerHTML = mdToHtml(dbArticle.body, docs);
     }, 0);
   } else {
-    hydrateFileArticle(fileArticle);
+    hydrateFileArticle(fileArticle, docs);
   }
 
   setTimeout(() => {
     const docsById = Object.fromEntries(docs.filter((d) => d.source === 'db').map((d) => [d.id, d]));
     bindDocButtons(docsById);
+    bindDocJumpLinks(document.getElementById('md-body'));
 
     const editBtn = document.getElementById('edit-this-article');
     if (editBtn) editBtn.addEventListener('click', () => {

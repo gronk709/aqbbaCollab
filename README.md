@@ -286,6 +286,19 @@ To add or change a file-based item:
      Body in Markdown: ## headings, **bold**, *italic*, lists, > quotes, links.
      ```
 
+     Link to a specific document or link attachment already in this sub-topic's
+     Documents panel with `[label](doc:some-slug)` — `some-slug` is matched against
+     the attachment's display name, slugified the same way
+     `tools/rebuild_manifest.py` slugs filenames (lowercased, non-alphanumeric runs
+     collapsed to a single `-`), as a substring so it doesn't need to be exact: the
+     attachment "Larry Connor - 'Queen Rearing Essentials'" is reachable as
+     `doc:queen-rearing-essentials` or even just `doc:connor`. Clicking it scrolls to
+     and briefly highlights that row instead of opening a second copy of the link —
+     works the same way whether the target is a file-based attachment above or one
+     added through the in-app composer below. This is the same Markdown renderer
+     (`js/content.js`'s `mdToHtml`) both kinds of articles use — nothing special
+     about file-based content specifically.
+
    - **Documents** (PDF, Word, Excel, images) go in the same folder and appear as
      download links with type and size. An optional `_names.json` in the folder maps
      filenames to proper display titles.
