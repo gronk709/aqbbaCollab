@@ -471,8 +471,10 @@ function bindDocJumpLinks(container) {
     const el = document.getElementById(docAnchorId(a.dataset.jumpDoc));
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.style.background = 'var(--amber-wash)';
-    setTimeout(() => { el.style.background = ''; }, 1600);
+    /* Same .flash/post-flash convention as the forum's "Jump to post"
+       (js/views/forum.js) — one shared animation, two call sites. */
+    el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 1600);
   });
 }
 

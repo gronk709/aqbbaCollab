@@ -10,7 +10,7 @@
    script, commit, push. See the README's "Authoring repository content".
    ========================================================================== */
 
-import { esc } from './ui.js';
+import { esc, icons } from './ui.js';
 
 let manifest = {};
 
@@ -67,7 +67,13 @@ function slugify(s) {
 function docLink(href, label, docs) {
   const target = href.slice(4).toLowerCase();
   const match = docs.find((d) => slugify(d.name).includes(target));
-  return match ? `<a href="#" data-jump-doc="${esc(match.key)}">${label}</a>` : label;
+  /* class="doc-jump" (css/main.css) plus the same link icon the Documents
+     panel already shows next to a link-type attachment — so the mention in
+     the article visually reads as "this points to that list", not just an
+     ordinary link. */
+  return match
+    ? `<a href="#" class="doc-jump" data-jump-doc="${esc(match.key)}">${icons.link}${label}</a>`
+    : label;
 }
 
 function inline(md, docs) {

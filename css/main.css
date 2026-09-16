@@ -616,7 +616,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .post-body p + p { margin-top: var(--s4); }
 /* Briefly highlights a post scrolled to from the Attachments panel's
    "Jump to post" link, so landing on it doesn't feel like nothing happened. */
-.post.flash { animation: post-flash 1.6s var(--ease); }
+.post.flash, .sub.flash { animation: post-flash 1.6s var(--ease); }
 @keyframes post-flash {
   0%, 100% { background: transparent; }
   15% { background: var(--amber-wash); }
@@ -821,3 +821,14 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   border-left: 2px solid var(--amber);
   font-style: italic; color: var(--propolis-60);
 }
+/* A [label](doc:...) link (js/content.js) — jumps to a row in the sub-topic's
+   Documents panel rather than opening a URL, so it's styled to read as
+   distinct from plain prose at a glance rather than blending in (this
+   site's base `a { color: inherit; text-decoration: none; }` reset leaves
+   an unstyled link looking identical to surrounding text). */
+.doc-jump {
+  color: var(--amber-deep); text-decoration: underline; text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.doc-jump:hover { color: var(--amber); }
+.doc-jump svg { width: 13px; height: 13px; margin-right: 3px; vertical-align: -2px; }
