@@ -60,7 +60,7 @@ function attachFieldsHTML() {
     <div class="field">
       <label>Documents</label>
       <input type="file" data-files multiple accept="${ATTACHMENT_ACCEPT}">
-      <p class="caption" style="margin-top:6px">PDF, Word, text, spreadsheet or slide files — up to 20MB each.</p>
+      <p class="caption" style="margin-top:6px">Supported formats: PDF, Word, Spreadsheet, Slides, Text (Max 20MB)</p>
     </div>`;
 }
 
