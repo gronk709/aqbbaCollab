@@ -1,0 +1,37 @@
+name: Deploy Supabase Edge Functions
+
+# Runs `supabase functions deploy` against every function under
+# supabase/functions/ (the CLI skips the `_shared` helper directory on its
+# own — it isn't itself a function) whenever one changes on main, so a
+# merged PR doesn't also need someone to run the CLI by hand afterward —
+# see README.md's "Wiring up the real integrations" for why this used to
+# be a manual step and what each function does.
+#
+# One-time setup: add a repository secret named SUPABASE_ACCESS_TOKEN
+# (Supabase dashboard → Account → Access Tokens — a personal access token
+# for the Supabase CLI/Management API, not the project's anon/service-role
+# key). The project ref below (dtzegdvjgzmlhtjlzzyp) is already public —
+# it's the same one in js/supabaseClient.js's SUPABASE_CONFIG.url — so it's
+# just inlined here rather than needing its own secret.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy functions
+        run: supabase functions deploy --project-ref dtzegdvjgzmlhtjlzzyp
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
