@@ -29,11 +29,11 @@
 import {
   addRepositoryArticle, updateRepositoryArticle, deleteRepositoryArticle,
   addRepositoryDocument, addRepositoryLink, deleteRepositoryDocument, openRepositoryDocument,
-  setRepositoryTeamMember, removeRepositoryTeamMember, loadRealMembers,
+  setRepositoryTeamMember, removeRepositoryTeamMember, loadRealMembers, loadSubTopicDocuments,
   isSubscribed,
   REPOSITORY_DOC_MAX_BYTES, REPOSITORY_DOC_ACCEPT,
 } from '../store.js';
-import { contentFor, articleFor, fetchArticleBody, mdToHtml } from '../content.js';
+import { contentFor, articleFor, fetchArticleBody, mdToHtml, slugify } from '../content.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 import { members } from '../data.js';
 
@@ -211,7 +211,14 @@ function openContribute(eligibleSubs, preselect) {
       <div class="field">
         <label for="c-body">Content</label>
         <textarea id="c-body" placeholder="Write for a member who knows the previous track but not this one."></textarea>
-        <p class="caption" style="margin-top:6px">Markdown — headings, **bold**, lists, links. Jump to a document or link below with [label](doc:some-words-from-its-name).</p>
+        <p class="caption" style="margin-top:6px">Markdown — headings, **bold**, *italic*, lists, links.</p>
+      </div>
+      <div class="field">
+        <label for="c-doc-picker">Add document or link</label>
+        <select id="c-doc-picker">
+          <option value="">Choose one to insert into the content above…</option>
+        </select>
+        <p class="caption" style="margin-top:6px">Inserts a link that jumps to that item in the Documents list once published — add the document or link itself first if it isn't in the list yet.</p>
       </div>
     </div>
     <div id="c-document-fields" hidden>
@@ -246,6 +253,48 @@ function openContribute(eligibleSubs, preselect) {
     articleFields.hidden = kindSelect.value !== 'article';
     documentFields.hidden = kindSelect.value !== 'document';
     linkFields.hidden = kindSelect.value !== 'link';
+  });
+
+  const subSelect = scrim.querySelector('#c-sub');
+  const docPicker = scrim.querySelector('#c-doc-picker');
+  /* Keyed by the picker's own option value (its index as a string) rather
+     than re-parsing name/slug back out of the option — avoids needing to
+     encode two fields into one attribute value. Refreshed every time the
+     Sub-topic select changes, since each sub-topic has its own Documents
+     list to insert from. */
+  let pickerItems = [];
+  async function refreshDocPicker() {
+    docPicker.disabled = true;
+    docPicker.innerHTML = '<option value="">Loading…</option>';
+    const subId = subSelect.value;
+    let dbDocuments;
+    try {
+      dbDocuments = await loadSubTopicDocuments(subId);
+    } catch {
+      docPicker.innerHTML = '<option value="">Couldn’t load this sub-topic’s documents</option>';
+      return;
+    }
+    pickerItems = mergedDocuments(contentFor(subId), dbDocuments)
+      .map((d) => ({ name: d.name, slug: slugify(d.name) }));
+    docPicker.innerHTML = pickerItems.length
+      ? `<option value="">Choose one to insert into the content above…</option>${
+          pickerItems.map((d, i) => `<option value="${i}">${esc(d.name)}</option>`).join('')}`
+      : '<option value="">Nothing in this sub-topic’s Documents list yet</option>';
+    docPicker.disabled = pickerItems.length === 0;
+  }
+  refreshDocPicker();
+  subSelect.addEventListener('change', refreshDocPicker);
+
+  docPicker.addEventListener('change', () => {
+    if (!docPicker.value) return;
+    const item = pickerItems[Number(docPicker.value)];
+    const bodyField = scrim.querySelector('#c-body');
+    const snippet = `[${item.name}](doc:${item.slug})`;
+    const start = bodyField.selectionStart ?? bodyField.value.length;
+    const end = bodyField.selectionEnd ?? bodyField.value.length;
+    bodyField.setRangeText(snippet, start, end, 'end');
+    bodyField.focus();
+    docPicker.value = '';
   });
 
   const btn = scrim.querySelector('#pub-contrib');

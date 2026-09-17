@@ -683,6 +683,22 @@ export async function loadSubTopic(id) {
   };
 }
 
+/* Just the db-authored documents (no articles/team/access) — used by the
+   Contribute composer's "insert a document/link" picker (js/views/
+   repository.js), which needs a sub-topic's document list on demand as the
+   composer's own Sub-topic select changes, without the rest of loadSubTopic's
+   page-load work. */
+export async function loadSubTopicDocuments(subTopicId) {
+  requireRealMember();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('repository_documents')
+    .select('id, filename, storage_path, mime_type, size_bytes, external_url')
+    .eq('sub_topic_id', subTopicId);
+  if (error) throw error;
+  return data;
+}
+
 export async function addRepositoryArticle(subTopicId, { title, summary, body }) {
   const me = requireRealMember();
   const supabase = await getSupabase();

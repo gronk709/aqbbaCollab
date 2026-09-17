@@ -47,9 +47,10 @@ export async function fetchArticleBody(article) {
 
 /* Same slugging tools.rebuild_manifest.py-style name → id conversion, used
    both here (to match a `doc:` link target against a document's display
-   name) and by js/views/repository.js (to build the same document's actual
-   anchor id) — the two have to agree on the exact same string. */
-function slugify(s) {
+   name) and by js/views/repository.js's Contribute composer (to build that
+   exact target when its "Add document or link" picker inserts one, so
+   what it writes is guaranteed to match here later). */
+export function slugify(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
