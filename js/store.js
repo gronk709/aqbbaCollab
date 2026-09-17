@@ -271,7 +271,11 @@ export async function loadNotifications() {
   const supabase = await getSupabase();
   const { data, error } = await supabase
     .from('notifications')
-    .select('id, kind, source_name, body, link_path, created_at, read_at, actor:members(id, name)')
+    /* actor:members!actor_id hints PostgREST at which foreign key to embed
+       on — notifications has two FKs to members (member_id, the
+       recipient, and actor_id, who triggered it), otherwise ambiguous.
+       Same class of bug as the Phase 3 member_roles embed fix. */
+    .select('id, kind, source_name, body, link_path, created_at, read_at, actor:members!actor_id(id, name)')
     .eq('member_id', me.id)
     .order('created_at', { ascending: false })
     .limit(100);
