@@ -346,6 +346,14 @@ real usage says otherwise. Setup, once you're ready to move off `serve.py`:
 3. Add the Supabase and Wild Apricot environment variables to the Vercel project's
    Settings → Environment Variables (not committed to the repo — that's what
    `.env.example` documents instead of real values).
+4. **Edge Functions deploy themselves** — `.github/workflows/deploy-supabase-functions.yml`
+   runs `supabase functions deploy` on every push to `main` that touches
+   `supabase/functions/`, so merging a PR is enough; nobody needs to run the CLI by hand
+   afterward. One-time setup: add a `SUPABASE_ACCESS_TOKEN` repository secret (Supabase
+   dashboard → Account → Access Tokens — a personal CLI/Management API token, not the
+   project's anon/service-role key). Each function's own header comment still shows the
+   one-off manual command (`supabase functions deploy <name>`) too, useful for deploying
+   a single function immediately without waiting on a push.
 
 **Backend migration, in progress.** The app is moving off mock data + localStorage onto
 real Postgres tables with Row Level Security, entity by entity — see
