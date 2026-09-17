@@ -225,7 +225,7 @@ function openContribute(eligibleSubs, preselect) {
       <div class="field">
         <label for="c-file">File</label>
         <input type="file" id="c-file" accept="${REPOSITORY_DOC_ACCEPT}">
-        <p class="caption" style="margin-top:6px">PDF, Word, text, spreadsheet, slide or image files — up to 20MB.</p>
+        <p class="caption" style="margin-top:6px">Supported formats: PDF, Word, Spreadsheet, Slides, Text, Images/JPG (Max 20MB)</p>
       </div>
     </div>
     <div id="c-link-fields" hidden>
