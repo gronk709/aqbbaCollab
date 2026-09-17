@@ -121,6 +121,11 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   background: var(--comb);
 }
 
+/* Single-panel variant — js/views/setPassword.js has no "stage" side, just
+   the form, so it needs the full width rather than being squeezed into the
+   grid's first (1.05fr) column. */
+.gate--single { grid-template-columns: 1fr; }
+
 .gate-stage {
   position: relative;
   overflow: hidden;

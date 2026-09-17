@@ -455,15 +455,34 @@ access afterward via the roles editor, same as any other member), and `auth.user
 creation all happen server-side in the Edge Function now, against real tables, gated by
 real RLS, instead of client-side against a local array.
 
-**Members directory** (`#/members`, Web Admin only) — for now, still reads the same
-seed/demo roster plus anyone provisioned via the *old* client-side path (kept for
-backward compatibility until this view itself migrates to Postgres in a later phase). A
-member who signs in for the first time via the new Phase-1 auth bridge resolves
-correctly for their own session (`currentUser`, roles, contact details) but won't yet
-appear as a row in this directory unless they also happen to match an existing seed
-member by email — a known, temporary gap that closes once the members directory itself
-moves to Postgres. (See `BUGS.md` for the related "Wild Apricot ID: undefined" issue on
-a real member's own detail page.)
+**Members directory** (`#/members`, Web Admin only) — fully migrated to Postgres: every
+row is a real `members` table read (`loadMembersDirectory`/`loadMemberDetail`, `js/
+store.js`), no seed/demo roster involved any more. The directory's "Sign-in" column is
+tri-state: "Signed in via Wild Apricot" (`wa_contact_id` set), "Signed in directly" (a
+collaborator invited straight from this site — see below), or "Not yet signed in".
+
+**Direct (non–Wild Apricot) sign-in** — lets someone collaborate on this site without a
+Wild Apricot membership (and the license seat that comes with one). A Web Admin invites
+them from the Members page ("Invite collaborator"): `inviteCollaborator` (`js/store.js`)
+calls `supabase/functions/invite-collaborator`, a Web-Admin-only Edge Function that
+provisions `members`/`member_contact_details`/`member_roles` and has Supabase email an
+invite link via `auth.admin.inviteUserByEmail`. That link redirects back with real
+session tokens in the URL hash (`#access_token=...&type=invite` — Supabase's standard
+shape for every email-based auth link); `js/inviteAuth.js` intercepts and clears that hash
+at boot, ahead of the app's own hash router, then `js/views/setPassword.js` walks them
+through setting a password before they land in the app. Returning collaborators sign in
+for real via the gate's email/password form (`js/views/gate.js`'s `#creds`, now wired to
+`supabase.auth.signInWithPassword`; leaving both fields blank still falls back to the
+quick demo sign-in for testing). No schema changes were needed for this — `members.
+auth_user_id` and `wa_contact_id` are independent nullable columns, and every RLS
+policy/role check already keyed off `auth_user_id`/`current_member_id()` only, never
+Wild Apricot specifically.
+
+Known limitation: if someone abandons the tab between clicking the invite link and
+setting a password, their session (already established by the link) persists as normal
+via `supabase-js`'s own storage, so a later reload treats them as signed in without ever
+setting one — not a security gap, just a UX rough edge, closed by adding a "forgot
+password" entry point later.
 
 **Notification email** — real now, not simulated: forum topic publish, forum reply, and
 repository contribution (article/document/link) each call `notifySubscribers` (`js/

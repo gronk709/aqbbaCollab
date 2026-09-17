@@ -34,7 +34,16 @@ let clientPromise = null;
 export function getSupabase() {
   if (!clientPromise) {
     clientPromise = import('https://esm.sh/@supabase/supabase-js@2')
-      .then(({ createClient }) => createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey));
+      .then(({ createClient }) => createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+        /* Both real sign-in paths (Wild Apricot and collaborator invites)
+           hand this client tokens explicitly via auth.setSession() after
+           manually parsing their own callback shape (query string for WA,
+           hash fragment for invites — see js/waAuth.js / js/inviteAuth.js).
+           Leaving the library's own automatic detectSessionInUrl on would
+           race that manual handling and, worse, misread an invite link's
+           #access_token=... hash as this app's own #/route hash router. */
+        auth: { detectSessionInUrl: false },
+      }));
   }
   return clientPromise;
 }
