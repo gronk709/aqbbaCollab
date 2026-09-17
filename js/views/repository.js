@@ -256,46 +256,7 @@ function openContribute(eligibleSubs, preselect) {
   });
 
   const subSelect = scrim.querySelector('#c-sub');
-  const docPicker = scrim.querySelector('#c-doc-picker');
-  /* Keyed by the picker's own option value (its index as a string) rather
-     than re-parsing name/slug back out of the option — avoids needing to
-     encode two fields into one attribute value. Refreshed every time the
-     Sub-topic select changes, since each sub-topic has its own Documents
-     list to insert from. */
-  let pickerItems = [];
-  async function refreshDocPicker() {
-    docPicker.disabled = true;
-    docPicker.innerHTML = '<option value="">Loading…</option>';
-    const subId = subSelect.value;
-    let dbDocuments;
-    try {
-      dbDocuments = await loadSubTopicDocuments(subId);
-    } catch {
-      docPicker.innerHTML = '<option value="">Couldn’t load this sub-topic’s documents</option>';
-      return;
-    }
-    pickerItems = mergedDocuments(contentFor(subId), dbDocuments)
-      .map((d) => ({ name: d.name, slug: slugify(d.name) }));
-    docPicker.innerHTML = pickerItems.length
-      ? `<option value="">Choose one to insert into the content above…</option>${
-          pickerItems.map((d, i) => `<option value="${i}">${esc(d.name)}</option>`).join('')}`
-      : '<option value="">Nothing in this sub-topic’s Documents list yet</option>';
-    docPicker.disabled = pickerItems.length === 0;
-  }
-  refreshDocPicker();
-  subSelect.addEventListener('change', refreshDocPicker);
-
-  docPicker.addEventListener('change', () => {
-    if (!docPicker.value) return;
-    const item = pickerItems[Number(docPicker.value)];
-    const bodyField = scrim.querySelector('#c-body');
-    const snippet = `[${item.name}](doc:${item.slug})`;
-    const start = bodyField.selectionStart ?? bodyField.value.length;
-    const end = bodyField.selectionEnd ?? bodyField.value.length;
-    bodyField.setRangeText(snippet, start, end, 'end');
-    bodyField.focus();
-    docPicker.value = '';
-  });
+  bindDocPicker(scrim, 'c-doc-picker', 'c-body', () => subSelect.value, subSelect);
 
   const btn = scrim.querySelector('#pub-contrib');
   btn.addEventListener('click', async () => {
@@ -355,7 +316,7 @@ function openContribute(eligibleSubs, preselect) {
   });
 }
 
-function openEditArticleModal(article, onSaved) {
+function openEditArticleModal(article, subId, onSaved) {
   const body = `
     <div class="field">
       <label for="e-title">Title</label>
@@ -368,12 +329,21 @@ function openEditArticleModal(article, onSaved) {
     <div class="field">
       <label for="e-body">Content</label>
       <textarea id="e-body">${esc(article.body)}</textarea>
-      <p class="caption" style="margin-top:6px">Markdown — headings, **bold**, lists, links. Jump to a document or link below with [label](doc:some-words-from-its-name).</p>
+      <p class="caption" style="margin-top:6px">Markdown — headings, **bold**, *italic*, lists, links.</p>
+    </div>
+    <div class="field">
+      <label for="e-doc-picker">Add document or link</label>
+      <select id="e-doc-picker">
+        <option value="">Choose one to insert into the content above…</option>
+      </select>
+      <p class="caption" style="margin-top:6px">Inserts a link that jumps to that item in the Documents list once published — add the document or link itself first if it isn't in the list yet.</p>
     </div>`;
   const actions = `
     <button class="btn btn-ghost" data-close>Cancel</button>
     <button class="btn btn-primary" id="save-article">Save</button>`;
   const scrim = modal({ title: 'Edit article', body, actions });
+
+  bindDocPicker(scrim, 'e-doc-picker', 'e-body', () => subId);
 
   scrim.querySelector('#save-article').addEventListener('click', async (e) => {
     const title = scrim.querySelector('#e-title').value.trim();
@@ -524,6 +494,57 @@ function bindDocJumpLinks(container) {
        (js/views/forum.js) — one shared animation, two call sites. */
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1600);
+  });
+}
+
+/* Wires an "Add document or link" <select> (id=pickerId) that inserts
+   [name](doc:slug) into a textarea (id=bodyFieldId) at the cursor on
+   selection — shared by the Contribute composer's article fields and the
+   Edit article modal. subIdOf is a function so Contribute (whose own
+   Sub-topic select can change) can re-resolve it on each refresh; Edit
+   article's sub-topic is fixed, so it just passes () => subId. Pass
+   watchEl (an element to listen for 'change' on) to refetch when the
+   available documents could differ — only Contribute needs this, since
+   only its sub-topic can change after the modal opens. */
+function bindDocPicker(scrim, pickerId, bodyFieldId, subIdOf, watchEl) {
+  const picker = scrim.querySelector(`#${pickerId}`);
+  const bodyField = scrim.querySelector(`#${bodyFieldId}`);
+  /* Keyed by the picker's own option value (its index as a string) rather
+     than re-parsing name/slug back out of the option — avoids needing to
+     encode two fields into one attribute value. */
+  let pickerItems = [];
+
+  async function refresh() {
+    picker.disabled = true;
+    picker.innerHTML = '<option value="">Loading…</option>';
+    const subId = subIdOf();
+    let dbDocuments;
+    try {
+      dbDocuments = await loadSubTopicDocuments(subId);
+    } catch {
+      picker.innerHTML = '<option value="">Couldn’t load this sub-topic’s documents</option>';
+      return;
+    }
+    pickerItems = mergedDocuments(contentFor(subId), dbDocuments)
+      .map((d) => ({ name: d.name, slug: slugify(d.name) }));
+    picker.innerHTML = pickerItems.length
+      ? `<option value="">Choose one to insert into the content above…</option>${
+          pickerItems.map((d, i) => `<option value="${i}">${esc(d.name)}</option>`).join('')}`
+      : '<option value="">Nothing in this sub-topic’s Documents list yet</option>';
+    picker.disabled = pickerItems.length === 0;
+  }
+  refresh();
+  if (watchEl) watchEl.addEventListener('change', refresh);
+
+  picker.addEventListener('change', () => {
+    if (!picker.value) return;
+    const item = pickerItems[Number(picker.value)];
+    const snippet = `[${item.name}](doc:${item.slug})`;
+    const start = bodyField.selectionStart ?? bodyField.value.length;
+    const end = bodyField.selectionEnd ?? bodyField.value.length;
+    bodyField.setRangeText(snippet, start, end, 'end');
+    bodyField.focus();
+    picker.value = '';
   });
 }
 
@@ -761,7 +782,7 @@ export function renderSubTopic(data) {
 
     document.querySelectorAll('[data-edit-article]').forEach((el) => {
       el.addEventListener('click', () => {
-        openEditArticleModal(newest.raw, () => {
+        openEditArticleModal(newest.raw, s.id, () => {
           window.__aqbba_invalidateData();
           window.__aqbba_render();
         });
@@ -865,7 +886,7 @@ export function renderArticle(data, subId, slug) {
 
     const editBtn = document.getElementById('edit-this-article');
     if (editBtn) editBtn.addEventListener('click', () => {
-      openEditArticleModal(dbArticle, () => {
+      openEditArticleModal(dbArticle, s.id, () => {
         window.__aqbba_invalidateData();
         window.__aqbba_render();
       });
