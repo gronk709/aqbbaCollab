@@ -19,6 +19,7 @@ import {
   allApiaries, contactFor, hasContact, setContact,
   roleLabel, rolesFor, setRoles, isWebAdmin, managersFor, setManagedApiaries,
   memberById, currentUser, allMembers, state,
+  loadRealMembers, loadMemberRoles, setMemberRoles,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
@@ -76,11 +77,14 @@ export function renderMembers() {
       </tr>`;
   }).join('');
 
-  return `
+  const html = `
     <div class="topbar">
       <div style="width:100%">
         <div class="eyebrow">${members.length} people with access</div>
         <h1>Members</h1>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" id="manage-member-roles">${icons.pen} Manage roles</button>
       </div>
     </div>
 
@@ -103,6 +107,95 @@ export function renderMembers() {
         not real Wild Apricot members.
       </p>
     </div>`;
+
+  setTimeout(() => {
+    const btn = document.getElementById('manage-member-roles');
+    if (btn) btn.addEventListener('click', openManageMemberRolesModal);
+  }, 0);
+
+  return html;
+}
+
+/* Real role-tag grant/revoke (member_roles — see setMemberRoles' own
+   comment in js/store.js for why this exists as its own panel rather than
+   fixing the roles checklist already sitting on a member's own page below:
+   that one only ever wrote to local prototype state, and the Members
+   directory it lives on can't see a real member who isn't the one
+   currently signed in anyway. This panel sidesteps both — loadRealMembers
+   fetches every real member directly, the same way Repository/Project
+   team assignment already do. */
+function openManageMemberRolesModal() {
+  const body = `
+    <div class="field">
+      <label for="mr-member">Member</label>
+      <select id="mr-member"><option value="">Loading…</option></select>
+    </div>
+    <div class="field" id="mr-roles-field" hidden>
+      <label>Roles</label>
+      <div id="mr-roles-checks"></div>
+    </div>`;
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-member-roles" disabled>Save</button>`;
+  const scrim = modal({ title: 'Manage roles', body, actions });
+
+  const memberSelect = scrim.querySelector('#mr-member');
+  const rolesField = scrim.querySelector('#mr-roles-field');
+  const rolesChecks = scrim.querySelector('#mr-roles-checks');
+  const saveBtn = scrim.querySelector('#save-member-roles');
+  let currentRoles = [];
+
+  async function loadRolesForSelected() {
+    rolesField.hidden = true;
+    saveBtn.disabled = true;
+    const memberId = memberSelect.value;
+    if (!memberId) return;
+    try {
+      currentRoles = await loadMemberRoles(memberId);
+    } catch (err) {
+      toast(`Couldn't load roles: ${err.message}`);
+      return;
+    }
+    rolesChecks.innerHTML = roleOptions.map((r) => `
+      <label class="row" style="align-items:flex-start;gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:8px">
+        <input type="checkbox" value="${esc(r.name)}" class="mr-role" style="margin-top:3px" ${currentRoles.includes(r.name) ? 'checked' : ''}>
+        <span>
+          <span style="display:block">${esc(r.name)}</span>
+          <span class="caption" style="display:block">${esc(r.description)}</span>
+        </span>
+      </label>`).join('');
+    rolesField.hidden = false;
+    saveBtn.disabled = false;
+  }
+
+  loadRealMembers()
+    .then((members) => {
+      memberSelect.innerHTML = `<option value="">Choose a member…</option>${
+        members.map((m) => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}`;
+    })
+    .catch((err) => {
+      memberSelect.innerHTML = '<option value="">Couldn’t load members</option>';
+      toast(`Couldn't load members: ${err.message}`);
+    });
+
+  memberSelect.addEventListener('change', loadRolesForSelected);
+
+  saveBtn.addEventListener('click', async () => {
+    const memberId = memberSelect.value;
+    if (!memberId) return;
+    const roles = [...scrim.querySelectorAll('.mr-role:checked')].map((c) => c.value);
+    const memberName = memberSelect.options[memberSelect.selectedIndex].text;
+    saveBtn.disabled = true;
+    try {
+      await setMemberRoles(memberId, currentRoles, roles);
+    } catch (err) {
+      toast(`Couldn't save roles: ${err.message}`);
+      saveBtn.disabled = false;
+      return;
+    }
+    closeModal();
+    toast(`Roles updated for ${memberName}.`);
+  });
 }
 
 export function renderManager(id) {
@@ -302,9 +395,11 @@ function openRolesForm(m) {
     </label>`).join('');
 
   const body = `
-    <p class="caption" style="margin-bottom:var(--s5)">
-      Site access is separate from the role tag — holding "Apiary Manager" doesn't by
-      itself grant edit access anywhere. Check the specific sites below.
+    <p class="caption" style="margin-bottom:var(--s5);color:var(--amber-deep)">
+      Prototype only — this form doesn't save to a shared record; it won't affect what
+      ${esc(m.name.split(' ')[0])} or anyone else can actually do. For a real member, use
+      Members → Manage roles instead. Site access below has no real backing yet either
+      (apiaries aren't real data until a later phase).
     </p>
     <div class="field">
       <label>Roles</label>

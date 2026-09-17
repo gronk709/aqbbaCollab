@@ -1235,6 +1235,39 @@ export function setRoles(memberId, roles) {
   commit();
 }
 
+/* Real role-tag grant/revoke — member_roles is a real Phase 1 table (RLS:
+   only a Web Admin can write), but nothing wrote to it until now; setRoles
+   above is local-only (state.roleOverrides), a prototype stand-in that
+   predates real per-member sessions and never got wired to Supabase once
+   they existed. Used by managers.js's "Manage roles" panel — deliberately
+   separate from the Members directory itself, which still can't see a real
+   member who isn't the one currently signed in (see allMembers' comment;
+   loadRealMembers below is how this panel finds them instead). */
+export async function loadMemberRoles(memberId) {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('member_roles').select('role_name').eq('member_id', memberId);
+  if (error) throw error;
+  return data.map((r) => r.role_name);
+}
+
+export async function setMemberRoles(memberId, currentRoles, roles) {
+  const me = requireRealMember();
+  if (!isWebAdmin(me.id)) throw new Error('Only a Web Admin can change roles.');
+  const supabase = await getSupabase();
+  const toRemove = currentRoles.filter((r) => !roles.includes(r));
+  const toAdd = roles.filter((r) => !currentRoles.includes(r));
+  if (toRemove.length) {
+    const { error } = await supabase.from('member_roles').delete()
+      .eq('member_id', memberId).in('role_name', toRemove);
+    if (error) throw error;
+  }
+  if (toAdd.length) {
+    const { error } = await supabase.from('member_roles')
+      .insert(toAdd.map((role_name) => ({ member_id: memberId, role_name, granted_by: me.id })));
+    if (error) throw error;
+  }
+}
+
 /* Reads the raw seed + member-added apiary lists directly (never
    allApiaries()) so this can't recurse through withMemberHives, which calls
    this function to build each apiary's live .managers field. */
