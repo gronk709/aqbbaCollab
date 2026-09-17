@@ -10,6 +10,7 @@ import {
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
+import { renderSetPassword } from './views/setPassword.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderApiaries, renderApiary } from './views/apiaries.js';
 import { renderManager, renderMembers } from './views/managers.js';
@@ -20,6 +21,8 @@ import { renderMarketplace } from './views/marketplace.js';
 import { renderNotifications } from './views/notifications.js';
 import { loadContent } from './content.js';
 import { isWildApricotCallback, consumeWildApricotCallback, completeWildApricotLogin } from './waAuth.js';
+import { isInviteAuthCallback, consumeInviteAuthCallback } from './inviteAuth.js';
+import { getSupabase } from './supabaseClient.js';
 
 const app = document.getElementById('app');
 
@@ -161,6 +164,12 @@ const notFoundPanel = () => `
 async function render() {
   const myGen = ++renderGen;
 
+  if (state.awaitingPasswordSetup) {
+    app.innerHTML = renderSetPassword();
+    bindGlobal();
+    return;
+  }
+
   if (!state.signedIn) {
     app.innerHTML = renderGate();
     bindGlobal();
@@ -288,7 +297,33 @@ window.__aqbba_render = render;
    Supabase session from its result; loadSignedInMember() (js/store.js) then
    reads that signed-in member's own row so currentUser() resolves to them
    from here on. */
-if (isWildApricotCallback()) {
+/* A collaborator invite link (js/inviteAuth.js) redirects back with real
+   session tokens already minted — in the URL hash, not the query string —
+   so this also has to run ahead of the hash router, same reasoning as the
+   Wild Apricot check just below. Checked first since it's a hash-based
+   callback the router would otherwise try (and fail) to match as a route. */
+if (isInviteAuthCallback()) {
+  const result = consumeInviteAuthCallback();
+  if (result.error) {
+    toast(`Invite link problem: ${result.error}`);
+  } else {
+    try {
+      const supabase = await getSupabase();
+      const { error } = await supabase.auth.setSession({
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+      });
+      if (error) throw error;
+      /* Deliberately not committed to localStorage — this flag only needs
+         to survive until the set-password form submits, right here in this
+         same page load; see the plan doc's "known limitation" note for why
+         that's an acceptable trade-off. */
+      state.awaitingPasswordSetup = true;
+    } catch (err) {
+      toast(`Could not open your invite: ${err.message}`);
+    }
+  }
+} else if (isWildApricotCallback()) {
   const result = consumeWildApricotCallback();
   if (result.error) {
     toast(`Wild Apricot sign-in failed: ${result.error}`);

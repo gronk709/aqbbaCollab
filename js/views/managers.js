@@ -18,15 +18,23 @@ import { roleOptions } from '../data.js';
 import {
   allApiaries, isWebAdmin, managersFor, setManagedApiaries,
   currentUser, loadRealMembers, loadMemberRoles, setMemberRoles, setMemberContact,
+  inviteCollaborator,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
 /* Members directory — every real member (js/store.js's loadMembersDirectory
    / loadMemberDetail), not the old seed/demo roster this used to fall back
-   to. "Signed in" reflects whether that member has ever actually completed
-   a real Wild Apricot sign-in (members.auth_user_id set) — a Web Admin can
-   pre-provision a member row (e.g. importing the roster ahead of time)
-   before that's happened, and this is the cross-check for it. */
+   to. Sign-in status is now tri-state, not just "signed in or not" — a
+   member can authenticate two different ways: Wild Apricot OAuth (m.wa —
+   members.wa_contact_id — is only ever set by that path) or a direct
+   invited account (m.hasSignedIn — members.auth_user_id — set with no
+   wa_contact_id). Either still leaves the member row otherwise completely
+   ordinary; this column is purely informational, not a permission. */
+function signInStatus(m) {
+  if (m.wa) return { label: 'Signed in via Wild Apricot', tag: 'tag-green' };
+  if (m.hasSignedIn) return { label: 'Signed in directly', tag: 'tag-green' };
+  return { label: 'Not yet signed in', tag: 'tag' };
+}
 export function renderMembers(members) {
   const canManage = isWebAdmin(currentUser().id);
   if (!canManage) {
@@ -44,7 +52,9 @@ export function renderMembers(members) {
       </div>`;
   }
 
-  const rows = members.map((m) => `
+  const rows = members.map((m) => {
+    const sign = signInStatus(m);
+    return `
       <tr>
         <td>
           <a class="row" style="gap:var(--s3)" href="#/managers/${m.id}">
@@ -59,12 +69,13 @@ export function renderMembers(members) {
           ${m.roles.length ? m.roles.map((r) => `<span class="tag tag-outline" style="margin:2px 3px 2px 0">${esc(r)}</span>`).join('') : '<span class="caption">No roles set.</span>'}
         </td>
         <td>
-          <span class="tag ${m.hasSignedIn ? 'tag-green' : 'tag'}">${m.hasSignedIn ? 'Signed in' : 'Not yet signed in'}</span>
+          <span class="tag ${sign.tag}">${sign.label}</span>
         </td>
         <td>
           ${m.phone && m.email ? '<span class="caption">On file</span>' : '<span class="tag tag-amber">Missing</span>'}
         </td>
-      </tr>`).join('');
+      </tr>`;
+  }).join('');
 
   const html = `
     <div class="topbar">
@@ -73,6 +84,7 @@ export function renderMembers(members) {
         <h1>Members</h1>
       </div>
       <div class="topbar-actions">
+        <button class="btn btn-ghost btn-sm" id="invite-collaborator">${icons.mail} Invite collaborator</button>
         <button class="btn btn-primary btn-sm" id="manage-member-roles">${icons.pen} Manage roles</button>
       </div>
     </div>
@@ -82,7 +94,7 @@ export function renderMembers(members) {
         <div class="tbl-scroll">
           <table class="tbl">
             <thead>
-              <tr><th>Member</th><th>Roles</th><th>Wild Apricot</th><th>Contact</th></tr>
+              <tr><th>Member</th><th>Roles</th><th>Sign-in</th><th>Contact</th></tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
@@ -90,15 +102,19 @@ export function renderMembers(members) {
       </div>
       <p class="caption" style="margin-top:var(--s4)">
         "Not yet signed in" means a Web Admin has added this member's record but they
-        haven't actually authenticated through Wild Apricot yet — the intended cross-check
-        against drift between the two systems (a lapsed member who still has a role here,
-        or a current member with none).
+        haven't actually authenticated yet — the intended cross-check against drift
+        between the two systems (a lapsed member who still has a role here, or a current
+        member with none). "Signed in directly" is a collaborator who isn't a Wild
+        Apricot member at all — invited straight from this site instead, so they don't
+        need a Wild Apricot license seat.
       </p>
     </div>`;
 
   setTimeout(() => {
     const btn = document.getElementById('manage-member-roles');
     if (btn) btn.addEventListener('click', openManageMemberRolesModal);
+    const inviteBtn = document.getElementById('invite-collaborator');
+    if (inviteBtn) inviteBtn.addEventListener('click', openInviteCollaboratorModal);
   }, 0);
 
   return html;
@@ -183,6 +199,74 @@ function openManageMemberRolesModal() {
     }
     closeModal();
     toast(`Roles updated for ${memberName}.`);
+    window.__aqbba_invalidateData();
+    window.__aqbba_render();
+  });
+}
+
+/* Invites a non–Wild Apricot collaborator — someone who should be able to
+   use this site without holding (or paying for) a Wild Apricot membership.
+   inviteCollaborator (js/store.js) calls a Web-Admin-only Edge Function
+   that provisions the members/member_contact_details/member_roles rows and
+   has Supabase email them a "set your password" link; see js/inviteAuth.js
+   and js/views/setPassword.js for what happens when they click it. */
+function openInviteCollaboratorModal() {
+  const body = `
+    <div class="field">
+      <label for="ic-name">Name</label>
+      <input id="ic-name" type="text" required placeholder="Full name">
+    </div>
+    <div class="field">
+      <label for="ic-email">Email</label>
+      <input id="ic-email" type="email" required placeholder="name@example.com">
+    </div>
+    <div class="field">
+      <label>Roles</label>
+      <div>
+        ${roleOptions.map((r) => `
+          <label class="row" style="align-items:flex-start;gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:8px">
+            <input type="checkbox" value="${esc(r.name)}" class="ic-role" style="margin-top:3px">
+            <span>
+              <span style="display:block">${esc(r.name)}</span>
+              <span class="caption" style="display:block">${esc(r.description)}</span>
+            </span>
+          </label>`).join('')}
+      </div>
+    </div>
+    <p class="caption">They'll get an email with a link to set their own password. No Wild
+      Apricot account or license seat is needed.</p>`;
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="send-invite">Send invite</button>`;
+  const scrim = modal({ title: 'Invite collaborator', body, actions });
+  const saveBtn = scrim.querySelector('#send-invite');
+
+  saveBtn.addEventListener('click', async () => {
+    const name = scrim.querySelector('#ic-name').value.trim();
+    const email = scrim.querySelector('#ic-email').value.trim();
+    const roles = [...scrim.querySelectorAll('.ic-role:checked')].map((c) => c.value);
+
+    if (!name || !email) {
+      toast('Name and email are required.');
+      return;
+    }
+    if (!roles.length) {
+      toast('Pick at least one role.');
+      return;
+    }
+
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Sending…';
+    try {
+      await inviteCollaborator({ name, email, roles });
+    } catch (err) {
+      toast(`Couldn't send the invite: ${err.message}`);
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Send invite';
+      return;
+    }
+    closeModal();
+    toast(`Invite sent to ${email}.`);
     window.__aqbba_invalidateData();
     window.__aqbba_render();
   });
