@@ -16,23 +16,18 @@
 
 import { roleOptions } from '../data.js';
 import {
-  allApiaries, contactFor, hasContact, setContact,
-  roleLabel, rolesFor, setRoles, isWebAdmin, managersFor, setManagedApiaries,
-  memberById, currentUser, allMembers, state,
-  loadRealMembers, loadMemberRoles, setMemberRoles,
+  allApiaries, isWebAdmin, managersFor, setManagedApiaries,
+  currentUser, loadRealMembers, loadMemberRoles, setMemberRoles, setMemberContact,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
-/* Members directory — lets Web Admin see everyone who has access at a
-   glance, and cross-check who actually signed in via real Wild Apricot
-   sign-in against this prototype's seed/demo roster, which is otherwise
-   indistinguishable in the rest of the app. Real Wild Apricot identity is
-   state.remoteMember (Phase 1 of the backend migration) — this directory
-   itself hasn't moved to Postgres yet, so a member who's only ever signed
-   in for real (never part of the original seed roster) shows up here as
-   one extra row alongside it, sourced from their real member/member_roles
-   rows rather than js/data.js. */
-export function renderMembers() {
+/* Members directory — every real member (js/store.js's loadMembersDirectory
+   / loadMemberDetail), not the old seed/demo roster this used to fall back
+   to. "Signed in" reflects whether that member has ever actually completed
+   a real Wild Apricot sign-in (members.auth_user_id set) — a Web Admin can
+   pre-provision a member row (e.g. importing the roster ahead of time)
+   before that's happened, and this is the cross-check for it. */
+export function renderMembers(members) {
   const canManage = isWebAdmin(currentUser().id);
   if (!canManage) {
     return `
@@ -49,12 +44,7 @@ export function renderMembers() {
       </div>`;
   }
 
-  const members = allMembers().slice().sort((a, b) => a.name.localeCompare(b.name));
-
-  const rows = members.map((m) => {
-    const roles = rolesFor(m.id);
-    const viaWA = state.remoteMember?.id === m.id;
-    return `
+  const rows = members.map((m) => `
       <tr>
         <td>
           <a class="row" style="gap:var(--s3)" href="#/managers/${m.id}">
@@ -66,16 +56,15 @@ export function renderMembers() {
           </a>
         </td>
         <td>
-          ${roles.length ? roles.map((r) => `<span class="tag tag-outline" style="margin:2px 3px 2px 0">${esc(r)}</span>`).join('') : '<span class="caption">No roles set.</span>'}
+          ${m.roles.length ? m.roles.map((r) => `<span class="tag tag-outline" style="margin:2px 3px 2px 0">${esc(r)}</span>`).join('') : '<span class="caption">No roles set.</span>'}
         </td>
         <td>
-          <span class="tag ${viaWA ? 'tag-green' : 'tag'}">${viaWA ? 'Wild Apricot sign-in' : 'Seed / demo data'}</span>
+          <span class="tag ${m.hasSignedIn ? 'tag-green' : 'tag'}">${m.hasSignedIn ? 'Signed in' : 'Not yet signed in'}</span>
         </td>
         <td>
-          ${hasContact(m.id) ? '<span class="caption">On file</span>' : '<span class="tag tag-amber">Missing</span>'}
+          ${m.phone && m.email ? '<span class="caption">On file</span>' : '<span class="tag tag-amber">Missing</span>'}
         </td>
-      </tr>`;
-  }).join('');
+      </tr>`).join('');
 
   const html = `
     <div class="topbar">
@@ -93,18 +82,17 @@ export function renderMembers() {
         <div class="tbl-scroll">
           <table class="tbl">
             <thead>
-              <tr><th>Member</th><th>Roles</th><th>Source</th><th>Contact</th></tr>
+              <tr><th>Member</th><th>Roles</th><th>Wild Apricot</th><th>Contact</th></tr>
             </thead>
             <tbody>${rows}</tbody>
           </table>
         </div>
       </div>
       <p class="caption" style="margin-top:var(--s4)">
-        "Wild Apricot sign-in" means this person has actually authenticated through Wild
-        Apricot at least once — the intended cross-check against drift between the two
-        systems (a lapsed member who still has a role here, or a current member with no
-        role at all). "Seed / demo data" rows are this prototype's placeholder roster,
-        not real Wild Apricot members.
+        "Not yet signed in" means a Web Admin has added this member's record but they
+        haven't actually authenticated through Wild Apricot yet — the intended cross-check
+        against drift between the two systems (a lapsed member who still has a role here,
+        or a current member with none).
       </p>
     </div>`;
 
@@ -195,28 +183,35 @@ function openManageMemberRolesModal() {
     }
     closeModal();
     toast(`Roles updated for ${memberName}.`);
+    window.__aqbba_invalidateData();
+    window.__aqbba_render();
   });
 }
 
-export function renderManager(id) {
-  const m = memberById(id);
+export function renderManager(m) {
   if (!m) return '';
 
-  const contact = contactFor(id);
-  const complete = hasContact(id);
-  const manages = allApiaries().filter((a) => a.managers.includes(id));
-  const roles = rolesFor(id);
+  const complete = Boolean(m.phone && m.email);
+  const manages = allApiaries().filter((a) => a.managers.includes(m.id));
+  const roleLabelText = m.roles.join(' & ') || '—';
   const canManageRoles = isWebAdmin(currentUser().id);
+  /* Own record or Web Admin — matches member_contact_details' real RLS
+     (member_id = current_member_id() or is_web_admin()), so this button
+     never opens a form that would just fail to save. A non-privileged
+     viewer looking at someone else's page also simply never receives
+     their contact fields at all (the same RLS applies to the read this
+     page's loader did), not just here. */
+  const canEditContact = m.id === currentUser().id || canManageRoles;
 
   const html = `
     <div class="topbar">
       <div style="width:100%">
-        <div class="crumb"><a href="#/apiaries">Apiaries</a> ${icons.chevron} <span>Manager</span></div>
-        <div class="eyebrow">${esc(roleLabel(id))} · ${m.state}</div>
+        <div class="crumb"><a href="#/members">Members</a> ${icons.chevron} <span>Member</span></div>
+        <div class="eyebrow">${esc(roleLabelText)} · ${esc(m.state || '—')}</div>
         <h1>${esc(m.name)}</h1>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-primary btn-sm" id="edit-contact">${icons.pen} ${complete ? 'Edit details' : 'Add contact details'}</button>
+        ${canEditContact ? `<button class="btn btn-primary btn-sm" id="edit-contact">${icons.pen} ${complete ? 'Edit details' : 'Add contact details'}</button>` : ''}
       </div>
     </div>
 
@@ -230,23 +225,25 @@ export function renderManager(id) {
                 <dl class="readout-metrics" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
                   <div>
                     <dt>Phone</dt>
-                    <dd><a href="tel:${esc(contact.phone)}" style="font-size:1rem">${esc(contact.phone)}</a></dd>
+                    <dd><a href="tel:${esc(m.phone)}" style="font-size:1rem">${esc(m.phone)}</a></dd>
                   </div>
                   <div>
                     <dt>Email</dt>
-                    <dd><a href="mailto:${esc(contact.email)}" style="font-size:1rem;overflow-wrap:anywhere">${esc(contact.email)}</a></dd>
+                    <dd><a href="mailto:${esc(m.email)}" style="font-size:1rem;overflow-wrap:anywhere">${esc(m.email)}</a></dd>
                   </div>
-                  ${contact.address ? `
+                  ${m.address ? `
                   <div>
                     <dt>Address</dt>
-                    <dd style="font-size:0.95rem;font-family:var(--ui)">${esc(contact.address)}</dd>
+                    <dd style="font-size:0.95rem;font-family:var(--ui)">${esc(m.address)}</dd>
                   </div>` : ''}
                 </dl>
               ` : `
                 <div class="empty" style="padding:var(--s6) 0">
                   <h3>No contact details on file</h3>
-                  <p>Phone and email are needed so other members and the coordinator can reach ${esc(m.name.split(' ')[0])} directly about the sites they manage.</p>
-                  <button class="btn btn-primary" id="empty-contact">Add contact details</button>
+                  <p>${canEditContact
+                    ? `Phone and email are needed so other members and the coordinator can reach ${esc(m.name.split(' ')[0])} directly about the sites they manage.`
+                    : 'Contact details are restricted to the member themselves and Web Admin.'}</p>
+                  ${canEditContact ? `<button class="btn btn-primary" id="empty-contact">Add contact details</button>` : ''}
                 </div>
               `}
             </div>
@@ -261,7 +258,7 @@ export function renderManager(id) {
             <div class="panel-body">
               <div class="eyebrow" style="margin-bottom:var(--s2)">Roles</div>
               <div class="row row-wrap" style="gap:6px;margin-bottom:var(--s5)">
-                ${roles.length ? roles.map((r) => `<span class="tag tag-outline">${esc(r)}</span>`).join('')
+                ${m.roles.length ? m.roles.map((r) => `<span class="tag tag-outline">${esc(r)}</span>`).join('')
                   : '<span class="caption">No roles set.</span>'}
               </div>
               <div class="eyebrow" style="margin-bottom:var(--s2)">Can add hives / log inspections at</div>
@@ -269,7 +266,9 @@ export function renderManager(id) {
                 ${manages.length ? manages.map((a) => `<a class="tag tag-amber" href="#/apiaries/${a.id}">${a.code} · ${esc(a.name)}</a>`).join('')
                   : '<span class="caption">No sites granted.</span>'}
               </div>
-              ${!canManageRoles ? `<p class="caption" style="margin-top:var(--s4)">Only Web Admin can change roles and site access.</p>` : ''}
+              <p class="caption" style="margin-top:var(--s4)">
+                ${canManageRoles ? 'Site access is a separate, still-prototype-only grant — apiaries aren\'t real data yet.' : 'Only Web Admin can change roles and site access.'}
+              </p>
             </div>
           </div>
         </div>
@@ -282,16 +281,16 @@ export function renderManager(id) {
                 ${avatar(m)}
                 <div>
                   <div style="font-size:13.5px;font-weight:600">${esc(m.name)}</div>
-                  <div class="caption">${esc(roleLabel(id))} · member since ${m.since}</div>
+                  <div class="caption">${esc(roleLabelText)} · member since ${esc(m.since ?? '—')}</div>
                 </div>
               </div>
               <div class="row" style="justify-content:space-between;margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
                 <span style="font-size:13px">State</span>
-                <span class="mono" style="font-size:13px">${m.state}</span>
+                <span class="mono" style="font-size:13px">${esc(m.state || '—')}</span>
               </div>
               <div class="row" style="justify-content:space-between;margin-top:var(--s2)">
                 <span style="font-size:13px">Wild Apricot ID</span>
-                <span class="mono" style="font-size:13px">${m.wa}</span>
+                <span class="mono" style="font-size:13px">${esc(m.wa || '—')}</span>
               </div>
             </div>
           </div>
@@ -321,7 +320,7 @@ export function renderManager(id) {
   setTimeout(() => {
     ['edit-contact', 'empty-contact'].forEach((elId) => {
       const btn = document.getElementById(elId);
-      if (btn) btn.addEventListener('click', () => openContactForm(m, contact));
+      if (btn) btn.addEventListener('click', () => openContactForm(m));
     });
     const rolesBtn = document.getElementById('edit-roles');
     if (rolesBtn) rolesBtn.addEventListener('click', () => openRolesForm(m));
@@ -330,20 +329,20 @@ export function renderManager(id) {
   return html;
 }
 
-function openContactForm(m, contact) {
+function openContactForm(m) {
   const body = `
     <form id="contact-form">
       <div class="field">
         <label for="c-phone">Phone <span style="color:var(--amber-deep)">*</span></label>
-        <input id="c-phone" type="tel" required value="${esc(contact.phone)}" placeholder="04xx xxx xxx">
+        <input id="c-phone" type="tel" required value="${esc(m.phone)}" placeholder="04xx xxx xxx">
       </div>
       <div class="field">
         <label for="c-email">Email <span style="color:var(--amber-deep)">*</span></label>
-        <input id="c-email" type="email" required value="${esc(contact.email)}" placeholder="name@example.com">
+        <input id="c-email" type="email" required value="${esc(m.email)}" placeholder="name@example.com">
       </div>
       <div class="field">
         <label for="c-address">Address (optional)</label>
-        <textarea id="c-address" placeholder="Street, suburb, state, postcode">${esc(contact.address)}</textarea>
+        <textarea id="c-address" placeholder="Street, suburb, state, postcode">${esc(m.address)}</textarea>
       </div>
     </form>`;
 
@@ -352,8 +351,9 @@ function openContactForm(m, contact) {
     <button class="btn btn-primary" id="save-contact">Save details</button>`;
 
   const scrim = modal({ title: `Contact details — ${m.name}`, body, actions });
+  const saveBtn = scrim.querySelector('#save-contact');
 
-  scrim.querySelector('#save-contact').addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     const phone = scrim.querySelector('#c-phone').value.trim();
     const email = scrim.querySelector('#c-email').value.trim();
     const address = scrim.querySelector('#c-address').value.trim();
@@ -368,15 +368,25 @@ function openContactForm(m, contact) {
       return;
     }
 
-    setContact(m.id, { phone, email, address });
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      await setMemberContact(m.id, { phone, email, address });
+    } catch (err) {
+      toast(`Couldn't save contact details: ${err.message}`);
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save details';
+      return;
+    }
     closeModal();
     toast('Contact details saved.');
+    window.__aqbba_invalidateData();
     window.__aqbba_render();
   });
 }
 
 function openRolesForm(m) {
-  const currentRoles = rolesFor(m.id);
+  const currentRoles = m.roles;
   const apiaries = allApiaries();
 
   const roleChecks = roleOptions.map((r) => `
@@ -396,10 +406,8 @@ function openRolesForm(m) {
 
   const body = `
     <p class="caption" style="margin-bottom:var(--s5);color:var(--amber-deep)">
-      Prototype only — this form doesn't save to a shared record; it won't affect what
-      ${esc(m.name.split(' ')[0])} or anyone else can actually do. For a real member, use
-      Members → Manage roles instead. Site access below has no real backing yet either
-      (apiaries aren't real data until a later phase).
+      Site access below is still prototype-only — it doesn't save to a shared record,
+      since apiaries aren't real data yet. Roles above save for real.
     </p>
     <div class="field">
       <label>Roles</label>
@@ -415,15 +423,26 @@ function openRolesForm(m) {
     <button class="btn btn-primary" id="save-roles">Save</button>`;
 
   const scrim = modal({ title: `Roles & access — ${m.name}`, body, actions });
+  const saveBtn = scrim.querySelector('#save-roles');
 
-  scrim.querySelector('#save-roles').addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     const roles = [...scrim.querySelectorAll('.r-role:checked')].map((c) => c.value);
     const sites = [...scrim.querySelectorAll('.r-site:checked')].map((c) => c.value);
 
-    setRoles(m.id, roles);
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      await setMemberRoles(m.id, currentRoles, roles);
+    } catch (err) {
+      toast(`Couldn't save roles: ${err.message}`);
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+      return;
+    }
     setManagedApiaries(m.id, sites);
     closeModal();
     toast(`Roles and site access updated for ${m.name}.`);
+    window.__aqbba_invalidateData();
     window.__aqbba_render();
   });
 }

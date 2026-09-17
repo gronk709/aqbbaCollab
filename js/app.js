@@ -6,7 +6,7 @@ import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
   roleLabel, currentUser, loadSignedInMember, loadNotifications,
   isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
-  loadProjects, loadProject,
+  loadProjects, loadProject, loadMembersDirectory, loadMemberDetail,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
@@ -45,8 +45,8 @@ const ROUTES = [
   /* Loads the project list too (Phase 6), just for the "Running here"
      panel — which projects are running at this site. */
   { test: /^#\/apiaries\/(.+)$/,       view: renderApiary, load: loadProjects },
-  { test: /^#\/members\/?$/,           view: renderMembers },
-  { test: /^#\/managers\/(.+)$/,       view: renderManager },
+  { test: /^#\/members\/?$/,           view: renderMembers, load: loadMembersDirectory },
+  { test: /^#\/managers\/(.+)$/,       view: renderManager, load: (id) => loadMemberDetail(id) },
   { test: /^#\/projects\/?$/,          view: renderProjects, load: loadProjects },
   /* The dashboard is a topic area of the VSH program (PRJ-00), not a page in
      its own right — hence the project-scoped route. Must precede the generic

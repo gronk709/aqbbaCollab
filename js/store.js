@@ -96,6 +96,40 @@ export async function loadRealMembers() {
   return data;
 }
 
+/* --- members directory -------------------------------------------------
+   The #/members directory and #/managers/:id detail page (js/views/
+   managers.js) — unlike the callers above, these show every real member
+   in full (roles, contact details, Wild Apricot sign-in status), not a
+   name-only picker, so they use the same normalizeMemberRow() shape
+   loadSignedInMember() does rather than loadRealMembers()'s lean one. */
+
+export async function loadMembersDirectory() {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('members').select(MEMBER_ROW_FIELDS).order('name');
+  if (error) throw error;
+  return data.map(normalizeMemberRow);
+}
+
+export async function loadMemberDetail(id) {
+  const supabase = await getSupabase();
+  const { data: row, error } = await supabase.from('members').select(MEMBER_ROW_FIELDS).eq('id', id).single();
+  if (error) throw error;
+  return normalizeMemberRow(row);
+}
+
+/* Upserts (member_id is member_contact_details' own primary key) rather
+   than insert-or-update, since a Web Admin editing someone else's page —
+   or the member themselves, first time — may or may not have a row yet.
+   RLS (member_id = current_member_id() or is_web_admin()) governs both
+   the insert and the update path this can take. */
+export async function setMemberContact(memberId, { phone, email, address }) {
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('member_contact_details')
+    .upsert({ member_id: memberId, phone, email, address: address || null }, { onConflict: 'member_id' });
+  if (error) throw error;
+}
+
 export function memberById(id) {
   if (state.remoteMember && state.remoteMember.id === id) return state.remoteMember;
   return allMembers().find((m) => m.id === id) || seedCurrentUser;
@@ -104,6 +138,30 @@ export function memberById(id) {
 export function currentUser() {
   if (state.remoteMember) return state.remoteMember;
   return memberById(state.currentUserId || seedCurrentUser.id);
+}
+
+/* Shared shape for a real `members` row, how every real-data caller
+   (loadSignedInMember, loadMembersDirectory, loadMemberDetail) presents
+   one — matches the seed roster's own field names (state/since/wa/roles)
+   so view code didn't need to change field names when it moved off mock
+   data, just where the data came from. */
+const MEMBER_ROW_FIELDS = 'id, name, initials, state, member_since, wa_contact_id, auth_user_id, member_roles!member_id(role_name), member_contact_details(phone, email, address)';
+
+function normalizeMemberRow(row) {
+  const contact = Array.isArray(row.member_contact_details) ? row.member_contact_details[0] : row.member_contact_details;
+  return {
+    id: row.id,
+    name: row.name,
+    initials: row.initials,
+    state: row.state,
+    since: row.member_since,
+    wa: row.wa_contact_id || '',
+    hasSignedIn: !!row.auth_user_id,
+    roles: (row.member_roles || []).map((r) => r.role_name),
+    phone: contact?.phone || '',
+    email: contact?.email || '',
+    address: contact?.address || '',
+  };
 }
 
 /* Reads the signed-in member's own row from Supabase and caches it as
@@ -129,10 +187,7 @@ export async function loadSignedInMember() {
 
   const { data: row, error } = await supabase
     .from('members')
-    /* member_roles!member_id hints PostgREST at which foreign key to embed
-       on — member_roles has two FKs to members (member_id, whose row it
-       is, and granted_by, who granted it), which is otherwise ambiguous. */
-    .select('id, name, initials, state, member_since, wa_contact_id, member_roles!member_id(role_name), member_contact_details(phone, email, address)')
+    .select(MEMBER_ROW_FIELDS)
     .eq('auth_user_id', session.user.id)
     .maybeSingle();
   if (error) {
@@ -143,23 +198,7 @@ export async function loadSignedInMember() {
     throw new Error('Signed in, but no member record is linked to this account. Contact your Web Admin.');
   }
 
-  const contact = Array.isArray(row.member_contact_details) ? row.member_contact_details[0] : row.member_contact_details;
-  state.remoteMember = {
-    id: row.id,
-    name: row.name,
-    initials: row.initials,
-    state: row.state,
-    since: row.member_since,
-    /* Real wa_contact_id is a plain numeric Wild Apricot contact id, unlike
-       the seed roster's 'WA-XXXXX'-formatted string (js/data.js) — was
-       missing entirely before (BUGS.md: showed as "undefined" wherever a
-       real member's own record displayed it), not reformatted to match. */
-    wa: row.wa_contact_id || '',
-    roles: (row.member_roles || []).map((r) => r.role_name),
-    phone: contact?.phone || '',
-    email: contact?.email || '',
-    address: contact?.address || '',
-  };
+  state.remoteMember = normalizeMemberRow(row);
   state.signedIn = true;
   commit();
   return state.remoteMember;
