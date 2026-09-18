@@ -5,7 +5,7 @@
 
 import { apiaries, queenLines, members } from '../data.js';
 import { signIn, signInWithPassword, loadSignedInMember, requestPasswordReset } from '../store.js';
-import { brandMark, icons, esc, toast, modal, closeModal } from '../ui.js';
+import { brandMark, icons, toast, modal, closeModal } from '../ui.js';
 import { isConfigured, startWildApricotLogin } from '../waAuth.js';
 
 /* A field of hexes drawn behind the headline. Pointy-top cells tile at
@@ -104,13 +104,10 @@ export function renderGate() {
               derived from Wild Apricot Membership Level or Groups, since neither maps
               cleanly onto this site's roles. An admin assigns real roles afterward via
               the roles editor. The form above is for a direct (non–Wild Apricot) account
-              — a Web Admin invites those from the Members page — or, with nothing typed
-              in, falls back to a quick demo sign-in as <code>${esc(members[0].name)}</code>.
+              — a Web Admin invites those from the Members page.
             ` : `
-              Wild Apricot is not connected yet. Leave the form above blank and submit it
-              to sign in as <code>${esc(members[0].name)}</code> — Web Admin, full
-              access — or fill in a direct account's real email/password if one has been
-              set up.
+              Wild Apricot is not connected yet. Fill in a direct account's real
+              email/password if one has been set up.
             `}
             Notification emails are shown on screen instead of being sent.
           </div>
@@ -215,12 +212,8 @@ document.addEventListener('submit', async (e) => {
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('pw').value;
 
-  if (!email && !password) {
-    /* Nothing typed — keep the existing quick demo sign-in for testing,
-       exactly as before. */
-    signIn();
-    location.hash = '#/';
-    window.__aqbba_render();
+  if (!email || !password) {
+    toast('Enter your email and password.');
     return;
   }
 
