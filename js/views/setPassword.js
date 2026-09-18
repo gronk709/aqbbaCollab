@@ -1,14 +1,19 @@
 /* ==========================================================================
    "Set your password" — shown once, right after a collaborator accepts an
-   email invite (js/inviteAuth.js), before they see anything else. Gated in
-   js/app.js's render() on state.awaitingPasswordSetup, the same way
-   js/views/gate.js is gated on !state.signedIn.
+   email invite (js/inviteAuth.js) or follows a "forgot password" recovery
+   link, before they see anything else. Gated in js/app.js's render() on
+   state.awaitingPasswordSetup / state.awaitingPasswordReset, the same way
+   js/views/gate.js is gated on !state.signedIn — mode picks which of those
+   two put the member here, purely for the page copy below; the form and
+   the completeCollaboratorPasswordSetup() call it submits to are identical
+   either way.
    ========================================================================== */
 
 import { brandMark, toast } from '../ui.js';
 import { completeCollaboratorPasswordSetup } from '../store.js';
 
-export function renderSetPassword() {
+export function renderSetPassword(mode = 'invite') {
+  const isRecovery = mode === 'recovery';
   return `
     <div class="gate gate--single">
       <section class="gate-form">
@@ -17,10 +22,11 @@ export function renderSetPassword() {
             ${brandMark(44)}
             <span>AQBBA</span>
           </a>
-          <h2>Set your password</h2>
+          <h2>${isRecovery ? 'Reset your password' : 'Set your password'}</h2>
           <p class="caption">
-            You've been invited to collaborate on this site. Choose a password to finish
-            setting up sign-in — you'll use it (with your email) to sign in next time.
+            ${isRecovery
+              ? 'Choose a new password for your account.'
+              : 'You\'ve been invited to collaborate on this site. Choose a password to finish setting up sign-in — you\'ll use it (with your email) to sign in next time.'}
           </p>
 
           <form id="set-password" novalidate>
@@ -34,7 +40,7 @@ export function renderSetPassword() {
               <input type="password" id="sp-pw2" name="pw2" autocomplete="new-password"
                      placeholder="••••••••" minlength="8" required>
             </div>
-            <button type="submit" class="btn btn-primary btn-block" id="sp-submit">Continue</button>
+            <button type="submit" class="btn btn-primary btn-block" id="sp-submit">${isRecovery ? 'Reset password' : 'Continue'}</button>
           </form>
         </div>
       </section>
@@ -51,6 +57,7 @@ document.addEventListener('submit', async (e) => {
   if (pw !== pw2) return toast('Passwords don\'t match.');
 
   const btn = document.getElementById('sp-submit');
+  const idleLabel = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Saving…';
   try {
@@ -58,7 +65,7 @@ document.addEventListener('submit', async (e) => {
   } catch (err) {
     toast(`Couldn't set your password: ${err.message}`);
     btn.disabled = false;
-    btn.textContent = 'Continue';
+    btn.textContent = idleLabel;
     return;
   }
   location.hash = '#/';
