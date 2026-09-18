@@ -91,7 +91,8 @@ export function allMembers() {
    table directly instead. */
 export async function loadRealMembers() {
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from('members').select('id, name, initials').order('name');
+  const { data, error } = await supabase.from('members').select('id, name, initials')
+    .is('deactivated_at', null).order('name');
   if (error) throw error;
   return data;
 }
@@ -145,7 +146,7 @@ export function currentUser() {
    one — matches the seed roster's own field names (state/since/wa/roles)
    so view code didn't need to change field names when it moved off mock
    data, just where the data came from. */
-const MEMBER_ROW_FIELDS = 'id, name, initials, state, member_since, wa_contact_id, auth_user_id, member_roles!member_id(role_name), member_contact_details(phone, email, address)';
+const MEMBER_ROW_FIELDS = 'id, name, initials, state, member_since, wa_contact_id, auth_user_id, deactivated_at, member_roles!member_id(role_name), member_contact_details(phone, email, address)';
 
 function normalizeMemberRow(row) {
   const contact = Array.isArray(row.member_contact_details) ? row.member_contact_details[0] : row.member_contact_details;
@@ -157,6 +158,7 @@ function normalizeMemberRow(row) {
     since: row.member_since,
     wa: row.wa_contact_id || '',
     hasSignedIn: !!row.auth_user_id,
+    deactivated: !!row.deactivated_at,
     roles: (row.member_roles || []).map((r) => r.role_name),
     phone: contact?.phone || '',
     email: contact?.email || '',
@@ -1309,6 +1311,46 @@ export async function setMemberRoles(memberId, currentRoles, roles) {
       .insert(toAdd.map((role_name) => ({ member_id: memberId, role_name, granted_by: me.id })));
     if (error) throw error;
   }
+}
+
+/* "Delete a member" (Members directory) is a soft delete — see this
+   migration's comment (20260918000000_member_deactivation.sql) for why a
+   real row delete isn't viable. Removes the roles and apiary access first,
+   in that order and each as its own request, so a failure (most likely
+   member_roles_protect_last_admin blocking removal of the last Web Admin)
+   surfaces before anything else — contact details in particular — has
+   already been erased. */
+export async function deactivateMember(memberId) {
+  const me = requireRealMember();
+  if (!isWebAdmin(me.id)) throw new Error('Only a Web Admin can delete a member.');
+  if (memberId === me.id) throw new Error("You can't delete your own member record.");
+  const supabase = await getSupabase();
+
+  const roles = await supabase.from('member_roles').delete().eq('member_id', memberId);
+  if (roles.error) throw roles.error;
+
+  const access = await supabase.from('apiary_managers').delete().eq('member_id', memberId);
+  if (access.error) throw access.error;
+
+  const contact = await supabase.from('member_contact_details').delete().eq('member_id', memberId);
+  if (contact.error) throw contact.error;
+
+  const { error } = await supabase.from('members')
+    .update({ deactivated_at: new Date().toISOString() }).eq('id', memberId);
+  if (error) throw error;
+}
+
+/* Un-does deactivated_at only — roles, apiary access and contact details
+   were deleted, not archived, so a Web Admin re-grants them from scratch
+   (the same "Manage roles"/contact-form flows used for any other member)
+   rather than this trying to restore what was there before. */
+export async function reactivateMember(memberId) {
+  const me = requireRealMember();
+  if (!isWebAdmin(me.id)) throw new Error('Only a Web Admin can reactivate a member.');
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('members')
+    .update({ deactivated_at: null }).eq('id', memberId);
+  if (error) throw error;
 }
 
 /* Reads the raw seed + member-added apiary lists directly (never
