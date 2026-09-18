@@ -4,8 +4,8 @@
    ========================================================================== */
 
 import { apiaries, queenLines, members } from '../data.js';
-import { signIn, signInWithPassword, loadSignedInMember } from '../store.js';
-import { brandMark, icons, esc, toast } from '../ui.js';
+import { signIn, signInWithPassword, loadSignedInMember, requestPasswordReset } from '../store.js';
+import { brandMark, icons, esc, toast, modal, closeModal } from '../ui.js';
 import { isConfigured, startWildApricotLogin } from '../waAuth.js';
 
 /* A field of hexes drawn behind the headline. Pointy-top cells tile at
@@ -90,6 +90,10 @@ export function renderGate() {
               <input type="password" id="pw" name="pw" autocomplete="current-password"
                      placeholder="••••••••">
             </div>
+            <button type="button" id="forgot-password" class="caption"
+                    style="display:block;margin:calc(var(--s3) * -1) 0 var(--s5);background:none;border:none;padding:0;text-decoration:underline;cursor:pointer">
+              Forgot password?
+            </button>
             <button type="submit" class="btn btn-primary btn-block" id="creds-submit">Sign in</button>
           </form>
 
@@ -115,8 +119,74 @@ export function renderGate() {
     </div>`;
 }
 
+/* "Forgot password?" — collects an email, then routing on what comes back
+   from requestPasswordReset (js/store.js) is the whole point of this
+   two-step modal: a Wild-Apricot-linked member never gets a reset email at
+   all (see the forgot-password Edge Function's own header comment for why),
+   they just get told to use Wild Apricot's own password reset instead. A
+   direct/collaborator account — or an email that doesn't match anything —
+   both just get the same "check your email" toast, so this can't be used to
+   probe which emails have an account. */
+function openForgotPasswordModal() {
+  const body = `
+    <p class="caption" style="margin-bottom:var(--s5)">
+      Enter the email on your member record. If it's a direct sign-in account (not
+      Wild Apricot), we'll email you a link to reset your password.
+    </p>
+    <div class="field">
+      <label for="fp-email">Email</label>
+      <input id="fp-email" type="email" required placeholder="you@example.com">
+    </div>`;
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="fp-submit">Send reset link</button>`;
+  const scrim = modal({ title: 'Reset your password', body, actions });
+  const emailInput = scrim.querySelector('#fp-email');
+  const submitBtn = scrim.querySelector('#fp-submit');
+
+  submitBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast('Enter a valid email address.');
+      return;
+    }
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sending…';
+    let result;
+    try {
+      result = await requestPasswordReset(email);
+    } catch (err) {
+      toast(`Couldn't process that: ${err.message}`);
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Send reset link';
+      return;
+    }
+    closeModal();
+    if (result.method === 'wildapricot') {
+      openWildApricotPasswordModal();
+    } else {
+      toast('If that email has a direct sign-in account, a reset link has been sent to it.');
+    }
+  });
+}
+
+function openWildApricotPasswordModal() {
+  const body = `
+    <p>This account signs in through Wild Apricot, so its password can't be reset
+    here. Use Wild Apricot's own "Forgot password" link to change it there, then
+    come back and sign in the same way you always do — "Continue with Wild
+    Apricot" above.</p>`;
+  const actions = `<button class="btn btn-primary" data-close>Got it</button>`;
+  modal({ title: 'Managed through Wild Apricot', body, actions });
+}
+
 /* Wire the gate after each render. Called from the shell's bindGlobal via DOM events. */
 document.addEventListener('click', (e) => {
+  if (e.target.closest('#forgot-password')) {
+    openForgotPasswordModal();
+    return;
+  }
+
   if (e.target.closest('#sso')) {
     const btn = e.target.closest('#sso');
 

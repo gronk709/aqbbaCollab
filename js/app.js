@@ -21,7 +21,10 @@ import { renderMarketplace } from './views/marketplace.js';
 import { renderNotifications } from './views/notifications.js';
 import { loadContent } from './content.js';
 import { isWildApricotCallback, consumeWildApricotCallback, completeWildApricotLogin } from './waAuth.js';
-import { isInviteAuthCallback, consumeInviteAuthCallback } from './inviteAuth.js';
+import {
+  isInviteAuthCallback, consumeInviteAuthCallback,
+  isPasswordRecoveryCallback, consumePasswordRecoveryCallback,
+} from './inviteAuth.js';
 import { getSupabase } from './supabaseClient.js';
 
 const app = document.getElementById('app');
@@ -164,8 +167,8 @@ const notFoundPanel = () => `
 async function render() {
   const myGen = ++renderGen;
 
-  if (state.awaitingPasswordSetup) {
-    app.innerHTML = renderSetPassword();
+  if (state.awaitingPasswordSetup || state.awaitingPasswordReset) {
+    app.innerHTML = renderSetPassword(state.awaitingPasswordReset ? 'recovery' : 'invite');
     bindGlobal();
     return;
   }
@@ -321,6 +324,28 @@ if (isInviteAuthCallback()) {
       state.awaitingPasswordSetup = true;
     } catch (err) {
       toast(`Could not open your invite: ${err.message}`);
+    }
+  }
+} else if (isPasswordRecoveryCallback()) {
+  /* A "forgot password" recovery link (js/store.js's requestPasswordReset,
+     supabase/functions/forgot-password) — same hash-based callback shape as
+     the invite link just above, just a different `type`, so this mirrors
+     it exactly down to state.awaitingPasswordReset being left out of
+     localStorage for the same reason. */
+  const result = consumePasswordRecoveryCallback();
+  if (result.error) {
+    toast(`Password reset link problem: ${result.error}`);
+  } else {
+    try {
+      const supabase = await getSupabase();
+      const { error } = await supabase.auth.setSession({
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+      });
+      if (error) throw error;
+      state.awaitingPasswordReset = true;
+    } catch (err) {
+      toast(`Could not open your password reset link: ${err.message}`);
     }
   }
 } else if (isWildApricotCallback()) {

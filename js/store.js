@@ -206,15 +206,20 @@ export async function loadSignedInMember() {
   return state.remoteMember;
 }
 
-/* Called once, right after a collaborator accepts an email invite (see
-   js/inviteAuth.js / js/views/setPassword.js) — the invite link already
-   established a real Supabase session, this just gives it a password so
-   they can sign in again later without repeating the invite flow. */
+/* Called once, right after a collaborator accepts an email invite, or sets
+   a new password from a "forgot password" recovery link (js/inviteAuth.js /
+   js/views/setPassword.js) — either link already established a real
+   Supabase session on its own, this just gives it a password so they can
+   sign in again later without repeating that link flow. Shared by both,
+   since the underlying operation (and the account this runs against) is
+   identical either way — only the page copy leading up to it differs (see
+   setPassword.js's own mode param). */
 export async function completeCollaboratorPasswordSetup(password) {
   const supabase = await getSupabase();
   const { error } = await supabase.auth.updateUser({ password });
   if (error) throw error;
   state.awaitingPasswordSetup = false;
+  state.awaitingPasswordReset = false;
   await loadSignedInMember();
 }
 
@@ -226,6 +231,35 @@ export async function signInWithPassword(email, password) {
   const supabase = await getSupabase();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
+}
+
+/* js/views/gate.js's "Forgot password?" link — public and unauthenticated
+   by design, same shape as wildapricot-auth, since nobody asking to reset a
+   password is signed in yet. Nothing client-side can tell whether this
+   email belongs to a Wild-Apricot-linked member (RLS blocks every read of
+   members/member_contact_details for a signed-out session), so that check
+   has to happen in the forgot-password Edge Function, with the service role
+   key — see its own header comment for why a Wild-Apricot-linked member
+   never gets an actual reset email (their auth.users row has no password
+   at all; sending one would open a second, WA-independent way to sign in).
+   Resolves to { method: 'wildapricot' } (gate.js shows a "manage this
+   through Wild Apricot" dialog and stops) or { method: 'email' } (the
+   function has already asked Supabase to send a real recovery email — a
+   silent no-op if the address doesn't match a real account, Supabase's own
+   anti-enumeration behaviour, not anything this app adds itself). */
+export async function requestPasswordReset(email) {
+  const res = await fetch(`${SUPABASE_CONFIG.url}/functions/v1/forgot-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${SUPABASE_CONFIG.anonKey}`,
+      apikey: SUPABASE_CONFIG.anonKey,
+    },
+    body: JSON.stringify({ email }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'Could not process that request.');
+  return body;
 }
 
 export function signIn() {
