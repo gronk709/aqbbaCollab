@@ -18,7 +18,7 @@ import { roleOptions } from '../data.js';
 import {
   allApiaries, isWebAdmin, managersFor, setManagedApiaries,
   currentUser, loadRealMembers, loadMemberRoles, setMemberRoles, setMemberContact,
-  inviteCollaborator,
+  deactivateMember, reactivateMember, inviteCollaborator,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
@@ -55,7 +55,7 @@ export function renderMembers(members) {
   const rows = members.map((m) => {
     const sign = signInStatus(m);
     return `
-      <tr>
+      <tr${m.deactivated ? ' style="opacity:0.6"' : ''}>
         <td>
           <a class="row" style="gap:var(--s3)" href="#/managers/${m.id}">
             ${avatar(m)}
@@ -69,7 +69,9 @@ export function renderMembers(members) {
           ${m.roles.length ? m.roles.map((r) => `<span class="tag tag-outline" style="margin:2px 3px 2px 0">${esc(r)}</span>`).join('') : '<span class="caption">No roles set.</span>'}
         </td>
         <td>
-          <span class="tag ${sign.tag}">${sign.label}</span>
+          ${m.deactivated
+            ? '<span class="tag tag-red">Deactivated</span>'
+            : `<span class="tag ${sign.tag}">${sign.label}</span>`}
         </td>
         <td>
           ${m.phone && m.email ? '<span class="caption">On file</span>' : '<span class="tag tag-amber">Missing</span>'}
@@ -285,17 +287,21 @@ export function renderManager(m) {
      viewer looking at someone else's page also simply never receives
      their contact fields at all (the same RLS applies to the read this
      page's loader did), not just here. */
-  const canEditContact = m.id === currentUser().id || canManageRoles;
+  const canEditContact = (m.id === currentUser().id || canManageRoles) && !m.deactivated;
+  const canDeleteMember = canManageRoles && m.id !== currentUser().id;
 
   const html = `
     <div class="topbar">
       <div style="width:100%">
         <div class="crumb"><a href="#/members">Members</a> ${icons.chevron} <span>Member</span></div>
-        <div class="eyebrow">${esc(roleLabelText)} · ${esc(m.state || '—')}</div>
+        <div class="eyebrow">${esc(roleLabelText)} · ${esc(m.state || '—')} ${m.deactivated ? '· <span class="tag tag-red" style="vertical-align:middle">Deactivated</span>' : ''}</div>
         <h1>${esc(m.name)}</h1>
       </div>
       <div class="topbar-actions">
         ${canEditContact ? `<button class="btn btn-primary btn-sm" id="edit-contact">${icons.pen} ${complete ? 'Edit details' : 'Add contact details'}</button>` : ''}
+        ${canDeleteMember ? (m.deactivated
+          ? `<button class="btn btn-ghost btn-sm" id="reactivate-member">Reactivate member</button>`
+          : `<button class="btn btn-ghost btn-sm" id="delete-member">${icons.x} Delete member</button>`) : ''}
       </div>
     </div>
 
@@ -326,7 +332,9 @@ export function renderManager(m) {
                   <h3>No contact details on file</h3>
                   <p>${canEditContact
                     ? `Phone and email are needed so other members and the coordinator can reach ${esc(m.name.split(' ')[0])} directly about the sites they manage.`
-                    : 'Contact details are restricted to the member themselves and Web Admin.'}</p>
+                    : m.deactivated
+                      ? 'Contact details were removed when this member was deleted.'
+                      : 'Contact details are restricted to the member themselves and Web Admin.'}</p>
                   ${canEditContact ? `<button class="btn btn-primary" id="empty-contact">Add contact details</button>` : ''}
                 </div>
               `}
@@ -337,7 +345,7 @@ export function renderManager(m) {
             <div class="panel-head">
               <h2>Roles &amp; apiary access</h2>
               <span class="spacer"></span>
-              ${canManageRoles ? `<button class="btn btn-ghost btn-sm" id="edit-roles">${icons.pen} Edit</button>` : ''}
+              ${canManageRoles && !m.deactivated ? `<button class="btn btn-ghost btn-sm" id="edit-roles">${icons.pen} Edit</button>` : ''}
             </div>
             <div class="panel-body">
               <div class="eyebrow" style="margin-bottom:var(--s2)">Roles</div>
@@ -351,7 +359,9 @@ export function renderManager(m) {
                   : '<span class="caption">No sites granted.</span>'}
               </div>
               <p class="caption" style="margin-top:var(--s4)">
-                ${canManageRoles ? 'Site access is a separate, still-prototype-only grant — apiaries aren\'t real data yet.' : 'Only Web Admin can change roles and site access.'}
+                ${m.deactivated ? 'This member is deactivated — reactivate them to grant roles or site access again.'
+                  : canManageRoles ? 'Site access is a separate, still-prototype-only grant — apiaries aren\'t real data yet.'
+                  : 'Only Web Admin can change roles and site access.'}
               </p>
             </div>
           </div>
@@ -408,9 +418,55 @@ export function renderManager(m) {
     });
     const rolesBtn = document.getElementById('edit-roles');
     if (rolesBtn) rolesBtn.addEventListener('click', () => openRolesForm(m));
+    const deleteBtn = document.getElementById('delete-member');
+    if (deleteBtn) deleteBtn.addEventListener('click', () => openDeleteMemberModal(m));
+    const reactivateBtn = document.getElementById('reactivate-member');
+    if (reactivateBtn) reactivateBtn.addEventListener('click', () => reactivateMemberClick(m));
   }, 0);
 
   return html;
+}
+
+function openDeleteMemberModal(m) {
+  const body = `
+    <p>Delete ${esc(m.name)}? This revokes all of their roles and apiary access, and
+    deletes their contact details on file.</p>
+    <p>Anything they've already posted or written (forum posts, repository articles)
+    stays as-is and still shows their name. A Web Admin can reactivate this member
+    later, but roles, site access and contact details will need to be re-added.</p>`;
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-danger" id="confirm-delete-member">Delete member</button>`;
+  const scrim = modal({ title: 'Delete member', body, actions });
+
+  scrim.querySelector('#confirm-delete-member').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    e.target.textContent = 'Deleting…';
+    try {
+      await deactivateMember(m.id);
+    } catch (err) {
+      toast(`Couldn't delete: ${err.message}`);
+      e.target.disabled = false;
+      e.target.textContent = 'Delete member';
+      return;
+    }
+    closeModal();
+    toast(`${m.name} has been deleted.`);
+    window.__aqbba_invalidateData();
+    window.__aqbba_render();
+  });
+}
+
+async function reactivateMemberClick(m) {
+  try {
+    await reactivateMember(m.id);
+  } catch (err) {
+    toast(`Couldn't reactivate: ${err.message}`);
+    return;
+  }
+  toast(`${m.name} has been reactivated.`);
+  window.__aqbba_invalidateData();
+  window.__aqbba_render();
 }
 
 function openContactForm(m) {
