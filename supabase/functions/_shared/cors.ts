@@ -3,7 +3,7 @@
    localhost so `python3 serve.py` keeps working for local development and
    testing. Add a new origin here (e.g. a custom domain, or a Vercel preview
    URL you want to test against) rather than reopening this to '*'. */
-const ALLOWED_ORIGINS = [
+export const ALLOWED_ORIGINS = [
   'https://aqbba-collab.vercel.app',
   'http://localhost:4173',
 ];

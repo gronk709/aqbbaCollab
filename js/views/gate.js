@@ -4,8 +4,8 @@
    ========================================================================== */
 
 import { apiaries, queenLines, members } from '../data.js';
-import { signIn } from '../store.js';
-import { brandMark, icons, esc } from '../ui.js';
+import { signIn, signInWithPassword, loadSignedInMember } from '../store.js';
+import { brandMark, icons, esc, toast } from '../ui.js';
 import { isConfigured, startWildApricotLogin } from '../waAuth.js';
 
 /* A field of hexes drawn behind the headline. Pointy-top cells tile at
@@ -83,14 +83,14 @@ export function renderGate() {
             <div class="field">
               <label for="email">Email</label>
               <input type="email" id="email" name="email" autocomplete="username"
-                     placeholder="you@example.com" value="pete@augfront.com">
+                     placeholder="you@example.com">
             </div>
             <div class="field">
               <label for="pw">Password</label>
               <input type="password" id="pw" name="pw" autocomplete="current-password"
-                     placeholder="••••••••" value="demo-access">
+                     placeholder="••••••••">
             </div>
-            <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+            <button type="submit" class="btn btn-primary btn-block" id="creds-submit">Sign in</button>
           </form>
 
           <div class="gate-hint">
@@ -99,12 +99,14 @@ export function renderGate() {
               member provisions with the plain Member role — roles are deliberately not
               derived from Wild Apricot Membership Level or Groups, since neither maps
               cleanly onto this site's roles. An admin assigns real roles afterward via
-              the roles editor. The form below still signs you in as
-              <code>${esc(members[0].name)}</code> for quick testing without a real login.
+              the roles editor. The form above is for a direct (non–Wild Apricot) account
+              — a Web Admin invites those from the Members page — or, with nothing typed
+              in, falls back to a quick demo sign-in as <code>${esc(members[0].name)}</code>.
             ` : `
-              Wild Apricot is not connected yet, so any details in the form below sign you
-              in as <code>${esc(members[0].name)}</code> — Web Admin, full
-              access.
+              Wild Apricot is not connected yet. Leave the form above blank and submit it
+              to sign in as <code>${esc(members[0].name)}</code> — Web Admin, full
+              access — or fill in a direct account's real email/password if one has been
+              set up.
             `}
             Notification emails are shown on screen instead of being sent.
           </div>
@@ -136,11 +138,34 @@ document.addEventListener('click', (e) => {
   }
 });
 
-document.addEventListener('submit', (e) => {
-  if (e.target.id === 'creds') {
-    e.preventDefault();
+document.addEventListener('submit', async (e) => {
+  if (e.target.id !== 'creds') return;
+  e.preventDefault();
+
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('pw').value;
+
+  if (!email && !password) {
+    /* Nothing typed — keep the existing quick demo sign-in for testing,
+       exactly as before. */
     signIn();
     location.hash = '#/';
     window.__aqbba_render();
+    return;
   }
+
+  const btn = document.getElementById('creds-submit');
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+  try {
+    await signInWithPassword(email, password);
+    await loadSignedInMember();
+  } catch (err) {
+    toast(`Sign-in failed: ${err.message}`);
+    btn.disabled = false;
+    btn.textContent = 'Sign in';
+    return;
+  }
+  location.hash = '#/';
+  window.__aqbba_render();
 });

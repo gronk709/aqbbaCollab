@@ -7,7 +7,7 @@ import {
   apiaries, inspections, queenLines,
   members as seedMembers, currentUser as seedCurrentUser,
 } from './data.js';
-import { getSupabase } from './supabaseClient.js';
+import { getSupabase, SUPABASE_CONFIG } from './supabaseClient.js';
 
 const KEY = 'aqbba.session.v1';
 
@@ -204,6 +204,28 @@ export async function loadSignedInMember() {
   state.signedIn = true;
   commit();
   return state.remoteMember;
+}
+
+/* Called once, right after a collaborator accepts an email invite (see
+   js/inviteAuth.js / js/views/setPassword.js) — the invite link already
+   established a real Supabase session, this just gives it a password so
+   they can sign in again later without repeating the invite flow. */
+export async function completeCollaboratorPasswordSetup(password) {
+  const supabase = await getSupabase();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+  state.awaitingPasswordSetup = false;
+  await loadSignedInMember();
+}
+
+/* Real sign-in for a direct (non–Wild Apricot) account — js/views/gate.js's
+   #creds form. Throws on bad credentials; the caller still needs to call
+   loadSignedInMember() after this succeeds, same as completeWildApricotLogin's
+   callers do, since this only establishes the session. */
+export async function signInWithPassword(email, password) {
+  const supabase = await getSupabase();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
 }
 
 export function signIn() {
@@ -860,7 +882,7 @@ export async function removeRepositoryTeamMember(subTopicId, memberId) {
 
 function requireRealMember() {
   if (!state.remoteMember) {
-    throw new Error('This needs a real Wild Apricot sign-in — the demo sign-in can\'t be used here yet.');
+    throw new Error('This needs a real sign-in (Wild Apricot or a direct account) — the demo sign-in can\'t be used here yet.');
   }
   return state.remoteMember;
 }
@@ -1314,7 +1336,7 @@ export async function setMemberRoles(memberId, currentRoles, roles) {
 }
 
 /* "Delete a member" (Members directory) is a soft delete — see this
-   migration's comment (20260918000000_member_deactivation.sql) for why a
+   migration's comment (20260918072629_member_deactivation.sql) for why a
    real row delete isn't viable. Removes the roles and apiary access first,
    in that order and each as its own request, so a failure (most likely
    member_roles_protect_last_admin blocking removal of the last Web Admin)
@@ -1351,6 +1373,41 @@ export async function reactivateMember(memberId) {
   const { error } = await supabase.from('members')
     .update({ deactivated_at: null }).eq('id', memberId);
   if (error) throw error;
+}
+
+/* Web-Admin-only: invites a non-Wild-Apricot collaborator by email — see
+   supabase/functions/invite-collaborator for what actually happens
+   server-side (it independently re-checks Web-Admin-ness from the caller's
+   own verified session; this client-side check is just so the button isn't
+   shown to someone who'd only get a 403). Needs the caller's own access
+   token, not the anon key, since the Edge Function authenticates the caller
+   by it — same shape as any other authenticated fetch to an Edge Function,
+   just this project's first one that isn't public (contrast
+   completeWildApricotLogin in js/waAuth.js, which calls wildapricot-auth
+   with only the anon key because Wild Apricot itself is the identity proof
+   there). */
+export async function inviteCollaborator({ name, email, roles }) {
+  const me = requireRealMember();
+  if (!isWebAdmin(me.id)) throw new Error('Only a Web Admin can invite collaborators.');
+
+  const supabase = await getSupabase();
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error('Your session has expired — sign in again and retry.');
+
+  const res = await fetch(`${SUPABASE_CONFIG.url}/functions/v1/invite-collaborator`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+      apikey: SUPABASE_CONFIG.anonKey,
+    },
+    body: JSON.stringify({ name, email, roles }),
+  });
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'Could not send the invite.');
 }
 
 /* Reads the raw seed + member-added apiary lists directly (never
