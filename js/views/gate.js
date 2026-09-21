@@ -98,7 +98,7 @@ export function renderGate() {
           </form>
 
           <div class="gate-hint">
-            <strong>Prototype.</strong> ${isConfigured() ? `
+            <strong>Beta.</strong> ${isConfigured() ? `
               "Continue with Wild Apricot" is fully wired to real sign-in. Every real
               member provisions with the plain Member role — roles are deliberately not
               derived from Wild Apricot Membership Level or Groups, since neither maps
@@ -109,7 +109,7 @@ export function renderGate() {
               Wild Apricot is not connected yet. Fill in a direct account's real
               email/password if one has been set up.
             `}
-            Notification emails are shown on screen instead of being sent.
+            Notification emails are sent for real.
           </div>
         </div>
       </section>
