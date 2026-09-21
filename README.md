@@ -18,7 +18,7 @@ modules will not load from `file://`:
 python3 serve.py
 ```
 
-Then open <http://localhost:4173>. Any email and password signs you in.
+Then open <http://localhost:4173>. Correct Wild Apricot or direct sign-in credentials are required.
 
 `serve.py` is a plain static server that adds `Cache-Control: no-store`. Use it rather
 than `python3 -m http.server`, which sends no cache headers at all and lets the browser
