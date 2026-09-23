@@ -1312,8 +1312,11 @@ function normalizeInspectionRow(i) {
        an actual join instead. */
     by: i.inspector,
     hiveIds: i.hive_ids, status: i.resulting_status,
-    productivity: i.productivity, temperament: i.temperament, vigour: i.vigour, hygiene: i.hygiene,
+    productivity: i.productivity, temperament: i.temperament, vigour: i.vigour,
     broodPattern: i.brood_pattern,
+    miteCount: i.mite_count, ubeeoPct: i.ubeeo_pct, pkdPct: i.pkd_pct,
+    chalkbrood: i.chalkbrood, sacbrood: i.sacbrood, efb: i.efb, shb: i.shb,
+    nosemaPresent: i.nosema_present, waxMothPresent: i.wax_moth_present, viruses: i.viruses,
     note: i.note, done: i.done, date: new Date(`${i.occurred_on}T00:00:00`),
   };
 }
@@ -1504,7 +1507,10 @@ export async function updateHive(hiveId, patch) {
    multi-step write in a transaction. */
 export async function addInspection({
   apiaryId, kind, by, hiveIds, status,
-  productivity, temperament, vigour, hygiene, broodPattern, note, dateStr, done,
+  productivity, temperament, vigour, broodPattern,
+  miteCount, ubeeoPct, pkdPct, chalkbrood, sacbrood, efb, shb,
+  nosemaPresent, waxMothPresent, viruses,
+  note, dateStr, done,
 }) {
   const supabase = await getSupabase();
   const { data: inspection, error } = await supabase
@@ -1513,7 +1519,16 @@ export async function addInspection({
       apiary_id: apiaryId, kind, inspector_id: by,
       resulting_status: status || null,
       productivity: productivity || null, temperament: temperament || null,
-      vigour: vigour || null, hygiene: hygiene || null, brood_pattern: broodPattern || null,
+      vigour: vigour || null, brood_pattern: broodPattern || null,
+      /* mite_count/ubeeo_pct/pkd_pct can legitimately be 0 (e.g. a real mite
+         wash finding zero mites) and nosema/wax moth can legitimately be
+         false (assessed and not found) — `?? null` only, never `|| null`,
+         so those real results survive instead of collapsing to "not
+         recorded". */
+      mite_count: miteCount ?? null, ubeeo_pct: ubeeoPct ?? null, pkd_pct: pkdPct ?? null,
+      chalkbrood: chalkbrood ?? null, sacbrood: sacbrood ?? null, efb: efb ?? null, shb: shb ?? null,
+      nosema_present: nosemaPresent ?? null, wax_moth_present: waxMothPresent ?? null,
+      viruses: viruses || null,
       note: note || null, occurred_on: dateStr, done: !!done,
     })
     .select('*')
