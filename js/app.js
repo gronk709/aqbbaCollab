@@ -7,7 +7,7 @@ import {
   roleLabel, currentUser, loadSignedInMember, loadNotifications,
   isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
   loadProjects, loadProject, loadMembersDirectory, loadMemberDetail,
-  loadApiaries, loadApiary,
+  loadApiaries, loadApiary, loadQueenLines,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
@@ -59,11 +59,14 @@ const ROUTES = [
   /* The dashboard is a topic area of the VSH program (PRJ-00), not a page in
      its own right — hence the project-scoped route. Must precede the generic
      project route, which would otherwise swallow "p0/dashboard" as an id.
-     Loads the project list (Phase 6, for its "N research projects" stat
-     tile) and every apiary/hive/inspection (Phase 5, for the rest of the
-     page) side by side. */
+     Loads the project list (Phase 6, "N research projects" stat tile),
+     every apiary/hive/inspection (Phase 5), and every queen line (Phase 4,
+     for the "Contributing breeders" panel — a full roster, including lines
+     with no hives yet, not just whatever's embedded per-hive) side by
+     side. */
   { test: /^#\/projects\/p0\/dashboard\/?$/, view: renderDashboard,
-    load: () => Promise.all([loadProjects(), loadApiaries()]).then(([projects, ap]) => ({ ...ap, projects })) },
+    load: () => Promise.all([loadProjects(), loadApiaries(), loadQueenLines()])
+      .then(([projects, ap, queenLines]) => ({ ...ap, projects, queenLines })) },
   { test: /^#\/projects\/(.+)$/,       view: renderProject, load: (id) => loadProject(id) },
   /* Async routes (Phase 2 marketplace, Phase 3 forum/repository, Phase 6
      projects — real Supabase rows now). `load` fetches the data render()

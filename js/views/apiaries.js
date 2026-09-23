@@ -22,8 +22,7 @@ import {
 import {
   isWebAdmin, currentUser,
   addApiary, updateApiary, addHive, updateHive, addInspection,
-  setApiaryTeamMember, removeApiaryTeamMember, loadRealMembers,
-  allQueenLines, lineByCode, breederById,
+  setApiaryTeamMember, removeApiaryTeamMember, loadRealMembers, loadQueenLines,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -200,21 +199,22 @@ export function renderApiary(data, id) {
   const siteProjects = projectsForApiary(projects, ap.id);
   const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 
-  /* Which lines are here, and how each is performing on this site. Real
-     hives can (structurally) carry no queen line, unlike every mock hive —
-     filter those out before grouping. */
-  const lineCodes = [...new Set(hives.map((h) => h.line).filter(Boolean))];
+  /* Which lines are here, and how each is performing on this site. Each
+     hive already carries its queen line + breeder resolved (hive.lineInfo
+     — js/store.js's loadApiary), so this just groups by code, no separate
+     lookup needed. Real hives can (structurally) carry no queen line,
+     unlike every mock hive — filter those out before grouping. */
+  const lineCodes = [...new Set(hives.map((h) => h.lineInfo?.code).filter(Boolean))];
   const lineRows = lineCodes.map((code) => {
-    const line = lineByCode(code);
-    const set = hives.filter((h) => h.line === code);
+    const set = hives.filter((h) => h.lineInfo?.code === code);
+    const line = set[0].lineInfo;
     const scored = set.filter((h) => h.vsh != null);
     const mean = scored.length ? Math.round(scored.reduce((s, h) => s + h.vsh, 0) / scored.length) : 0;
-    const delta = mean - line.vshMean;
-    const b = breederById(line.breeder);
+    const delta = mean - (line.vshMean ?? 0);
     return `
       <tr>
         <td>${esc(line.name)}</td>
-        <td>${esc(b.name)}</td>
+        <td>${esc(line.breeder.name)}</td>
         <td class="mono">${set.length}</td>
         <td class="mono">${mean}%</td>
         <td class="mono" style="color:${delta >= 0 ? 'var(--mark-green)' : 'var(--mark-red)'}">
@@ -575,8 +575,15 @@ function openApiaryEditForm(ap) {
   });
 }
 
-function openHiveEditForm(hive) {
-  const lineOptions = allQueenLines().map((l) =>
+async function openHiveEditForm(hive) {
+  let queenLines;
+  try {
+    queenLines = await loadQueenLines();
+  } catch (err) {
+    toast(`Couldn't load queen lines: ${err.message}`);
+    return;
+  }
+  const lineOptions = `<option value="">No queen line</option>` + queenLines.map((l) =>
     `<option value="${l.code}" ${l.code === hive.line ? 'selected' : ''}>${esc(l.name)}</option>`).join('');
   const colourOptions = queenColours.map((c) =>
     `<option value="${c}" ${c === hive.queenColour ? 'selected' : ''}>${c}</option>`).join('');
@@ -681,8 +688,15 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function openHiveForm(ap) {
-  const lineOptions = allQueenLines().map((l) => `<option value="${l.code}">${esc(l.name)}</option>`).join('');
+async function openHiveForm(ap) {
+  let queenLines;
+  try {
+    queenLines = await loadQueenLines();
+  } catch (err) {
+    toast(`Couldn't load queen lines: ${err.message}`);
+    return;
+  }
+  const lineOptions = `<option value="">No queen line</option>` + queenLines.map((l) => `<option value="${l.code}">${esc(l.name)}</option>`).join('');
   const colourOptions = queenColours.map((c) => `<option value="${c}">${c}</option>`).join('');
   const statusOptions = Object.entries(statusLabels).map(([v, label]) =>
     `<option value="${v}" ${v === 'thriving' ? 'selected' : ''}>${label}</option>`).join('');
