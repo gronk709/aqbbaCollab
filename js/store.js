@@ -1313,6 +1313,7 @@ function normalizeInspectionRow(i) {
     by: i.inspector,
     hiveIds: i.hive_ids, status: i.resulting_status,
     productivity: i.productivity, temperament: i.temperament, vigour: i.vigour, hygiene: i.hygiene,
+    broodPattern: i.brood_pattern,
     note: i.note, done: i.done, date: new Date(`${i.occurred_on}T00:00:00`),
   };
 }
@@ -1503,7 +1504,7 @@ export async function updateHive(hiveId, patch) {
    multi-step write in a transaction. */
 export async function addInspection({
   apiaryId, kind, by, hiveIds, status,
-  productivity, temperament, vigour, hygiene, note, dateStr, done,
+  productivity, temperament, vigour, hygiene, broodPattern, note, dateStr, done,
 }) {
   const supabase = await getSupabase();
   const { data: inspection, error } = await supabase
@@ -1512,7 +1513,7 @@ export async function addInspection({
       apiary_id: apiaryId, kind, inspector_id: by,
       resulting_status: status || null,
       productivity: productivity || null, temperament: temperament || null,
-      vigour: vigour || null, hygiene: hygiene || null,
+      vigour: vigour || null, hygiene: hygiene || null, brood_pattern: broodPattern || null,
       note: note || null, occurred_on: dateStr, done: !!done,
     })
     .select('*')
