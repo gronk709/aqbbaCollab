@@ -850,6 +850,20 @@ async function openInspectionForm(ap, hives) {
         ${[1, 2, 3, 4, 5].map((n) => `<option value="${n}">${n}</option>`).join('')}
       </select>
     </div>`;
+  const numberField = (label, fieldId, { max, step } = {}) => `
+    <div class="field" style="flex:1">
+      <label for="${fieldId}">${label} <span class="caption">(optional)</span></label>
+      <input id="${fieldId}" type="number" min="0" ${max ? `max="${max}"` : ''} ${step ? `step="${step}"` : ''} placeholder="optional">
+    </div>`;
+  const yesNoOptions = (label, fieldId) => `
+    <div class="field" style="flex:1">
+      <label for="${fieldId}">${label}</label>
+      <select id="${fieldId}">
+        <option value="">Not assessed</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    </div>`;
 
   let realMembers;
   try {
@@ -884,10 +898,28 @@ async function openInspectionForm(ap, hives) {
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         ${scoreOptions('Vigour', 'i-vigour')}
-        ${scoreOptions('Hygiene', 'i-hygiene')}
+        ${scoreOptions('Brood Pattern', 'i-brood-pattern')}
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
-        ${scoreOptions('Brood Pattern', 'i-brood-pattern')}
+        ${numberField('Mite Count', 'i-mite-count')}
+        ${numberField('UBeeO Score', 'i-ubeeo-pct', { max: 100 })}
+        ${numberField('PKD Score', 'i-pkd-pct', { max: 100 })}
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        ${scoreOptions('Chalkbrood', 'i-chalkbrood')}
+        ${scoreOptions('Sacbrood', 'i-sacbrood')}
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        ${scoreOptions('European Foulbrood (EFB)', 'i-efb')}
+        ${scoreOptions('Small Hive Beetle (SHB)', 'i-shb')}
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        ${yesNoOptions('Nosema present', 'i-nosema')}
+        ${yesNoOptions('Wax moth present', 'i-wax-moth')}
+      </div>
+      <div class="field">
+        <label for="i-viruses">Viruses</label>
+        <input id="i-viruses" type="text" placeholder="e.g. DWV, CBPV (optional)">
       </div>
       <div class="field">
         <label>Hives</label>
@@ -931,6 +963,10 @@ async function openInspectionForm(ap, hives) {
       const raw = scrim.querySelector(fieldId).value;
       return raw ? Number(raw) : null;
     };
+    const yesNoOf = (fieldId) => {
+      const raw = scrim.querySelector(fieldId).value;
+      return raw ? raw === 'yes' : null;
+    };
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
@@ -944,8 +980,17 @@ async function openInspectionForm(ap, hives) {
         productivity: scoreOf('#i-productivity'),
         temperament: scoreOf('#i-temperament'),
         vigour: scoreOf('#i-vigour'),
-        hygiene: scoreOf('#i-hygiene'),
         broodPattern: scoreOf('#i-brood-pattern'),
+        miteCount: scoreOf('#i-mite-count'),
+        ubeeoPct: scoreOf('#i-ubeeo-pct'),
+        pkdPct: scoreOf('#i-pkd-pct'),
+        chalkbrood: scoreOf('#i-chalkbrood'),
+        sacbrood: scoreOf('#i-sacbrood'),
+        efb: scoreOf('#i-efb'),
+        shb: scoreOf('#i-shb'),
+        nosemaPresent: yesNoOf('#i-nosema'),
+        waxMothPresent: yesNoOf('#i-wax-moth'),
+        viruses: scrim.querySelector('#i-viruses').value.trim() || null,
         note: scrim.querySelector('#i-note').value.trim(),
         dateStr,
         done: scrim.querySelector('#i-done').checked,
