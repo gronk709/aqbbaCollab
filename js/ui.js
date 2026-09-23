@@ -123,8 +123,8 @@ export const avatar = (member, cls = '') =>
 export const tag = (text, variant = '') =>
   `<span class="tag ${variant}">${esc(text)}</span>`;
 
-export const subButton = (key, on, label = 'Subscribe') => `
-  <button class="sub-btn ${on ? 'is-on' : ''}" data-sub="${key}"
+export const subButton = (key, on, label = 'Subscribe', what = '') => `
+  <button class="sub-btn ${on ? 'is-on' : ''}" data-sub="${key}"${what ? ` data-sub-label="${esc(what)}"` : ''}
           aria-pressed="${on}">
     ${on ? icons.bellOn : icons.bell}
     <span>${on ? 'Subscribed' : label}</span>

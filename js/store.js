@@ -1408,7 +1408,12 @@ export async function loadApiary(id) {
 /* Auto-generates a unique 3-letter code from the name's first word — same
    base-letters convention generateQueenLineCode uses, so "Carwoola" reads
    as "CAR" the same way a queen line named "Carwoola 3" would read "CAR".
-   The Add Apiary form has no code field of its own. */
+   The Add Apiary form has no code field of its own.
+
+   Notifies the 'apiary:new' channel (see 20260925000000_apiary_subscriptions
+   .sql) — the one subscription with no existing row to attach to, since the
+   whole point is being told about a site before you'd otherwise know it
+   exists. */
 export async function addApiary({ name, region, address, stage, dateEstablished, flora, brief }) {
   if (!isWebAdmin()) throw new Error('Only a Web Admin can add an apiary.');
   const supabase = await getSupabase();
@@ -1420,6 +1425,7 @@ export async function addApiary({ name, region, address, stage, dateEstablished,
   let code = initials;
   for (let n = 2; taken.has(code); n++) code = `${initials}${n}`;
 
+  const me = currentUser();
   const { data, error } = await supabase
     .from('apiaries')
     .insert({
@@ -1430,6 +1436,10 @@ export async function addApiary({ name, region, address, stage, dateEstablished,
     .select('*')
     .single();
   if (error) throw error;
+  notifySubscribers({
+    type: 'apiary', id: 'new', contextName: 'New research apiaries', itemKind: 'apiary',
+    itemTitle: name, path: `#/apiaries/${data.id}`, excludeMemberId: me.id,
+  });
   return normalizeApiaryRow(data);
 }
 
