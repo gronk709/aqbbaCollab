@@ -20,11 +20,11 @@ import {
   projectStatusLabels, inspectionKinds, queenColours,
 } from '../data.js';
 import {
-  isWebAdmin, currentUser,
+  isWebAdmin, isSubscribed, currentUser,
   addApiary, updateApiary, addHive, updateHive, addInspection,
   setApiaryTeamMember, removeApiaryTeamMember, loadRealMembers, loadQueenLines,
 } from '../store.js';
-import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
+import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
 
 /* Projects are real Supabase rows now (Phase 6) — `sites` is a plain
@@ -62,6 +62,7 @@ export function renderApiaries(data) {
         <h1>Research apiaries</h1>
       </div>
       <div class="topbar-actions">
+        ${subButton('apiary:new', isSubscribed('apiary:new'), 'Notify me of new sites', 'new research apiaries')}
         ${isWebAdmin() ? `<button class="btn btn-primary btn-sm" id="new-apiary">${icons.plus} Add apiary</button>` : ''}
       </div>
     </div>

@@ -30,6 +30,7 @@ const kindMeta = {
   thread: { label: 'New topic',   icon: 'forum',  variant: 'tag-amber' },
   repo:   { label: 'Repository',  icon: 'book',   variant: 'tag-blue' },
   insp:   { label: 'Inspection',  icon: 'apiary', variant: 'tag-green' },
+  apiary: { label: 'New apiary',  icon: 'apiary', variant: 'tag-amber' },
   market: { label: 'Marketplace', icon: 'tag',    variant: 'tag-outline' },
 };
 
@@ -40,6 +41,7 @@ export function renderNotifications() {
   const threadSubs = state.subs.filter((s) => s.startsWith('thread:'));
   const repoSubs = state.subs.filter((s) => s.startsWith('repo:'));
   const catSubs = state.subs.filter((s) => s.startsWith('cat:'));
+  const apiarySubs = state.subs.filter((s) => s.startsWith('apiary:'));
 
   const rows = items.map((n) => {
     const meta = kindMeta[n.kind] || kindMeta.reply;
@@ -137,6 +139,7 @@ export function renderNotifications() {
                 return s ? `<a class="tag tag-amber" href="#/repository/${s.id}">${esc(s.name)}</a>` : '';
               }))}
               ${section('Categories', catSubs.map((k) => `<span class="tag tag-blue">${esc(k.slice(4))}</span>`))}
+              ${section('Research apiaries', apiarySubs.map(() => '<a class="tag tag-amber" href="#/apiaries">New research apiaries</a>'))}
               ${state.subs.length === 0 ? '<p class="caption">Nothing followed yet.</p>' : ''}
             </div>
           </div>

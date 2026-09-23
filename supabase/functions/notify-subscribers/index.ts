@@ -6,18 +6,19 @@
    sent: every add-content call site just called toast() instead. This
    function is the real send; js/store.js's notifySubscribers() calls it,
    fire-and-forget, right after a successful publish (see addRepositoryArticle,
-   addRepositoryDocument, addRepositoryLink, addThread, addPost). It also
+   addRepositoryDocument, addRepositoryLink, addThread, addPost, addApiary). It also
    writes one row per notified subscriber into the real `notifications` table
    (20260916000000...) — the in-app Notifications page reads that, and gets
    one regardless of whether that subscriber even has an email on file.
 
    Called with:
      {
-       type: 'repo' | 'thread' | 'cat',   // matches subscriptions.subscribable_type
-       id: string,                        // subscribable_id
-       contextName: string,               // sub-topic / thread / category name
-       itemKind: 'article' | 'document' | 'link' | 'thread' | 'reply',
-       itemTitle: string,                 // article title, filename, link name, or a reply preview
+       type: 'repo' | 'thread' | 'cat' | 'apiary',   // matches subscriptions.subscribable_type
+       id: string,                        // subscribable_id ('new' for type 'apiary' -- see
+                                           // 20260925000000_apiary_subscriptions.sql's header comment)
+       contextName: string,               // sub-topic / thread / category / apiary-channel name
+       itemKind: 'article' | 'document' | 'link' | 'thread' | 'reply' | 'apiary',
+       itemTitle: string,                 // article title, filename, link name, reply preview, or apiary name
        actorName: string,                 // who published it
        actorId: string,                   // members.id of whoever published it
        path: string,                      // in-app hash route, e.g. '#/repository/rs-graft'
@@ -58,14 +59,16 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeadersFor } from '../_shared/cors.ts';
 
-const SUBSCRIBABLE_TYPES = new Set(['repo', 'thread', 'cat']);
+const SUBSCRIBABLE_TYPES = new Set(['repo', 'thread', 'cat', 'apiary']);
 const ITEM_KINDS: Record<string, string> = {
   article: 'article', document: 'document', link: 'link', thread: 'topic', reply: 'reply',
+  apiary: 'research apiary',
 };
 /* notifications.kind is a narrower set than itemKind — an article, document
    or link are all just "repo" activity to the in-app feed. */
 const NOTIFICATION_KIND: Record<string, string> = {
   reply: 'reply', thread: 'thread', article: 'repo', document: 'repo', link: 'repo',
+  apiary: 'apiary',
 };
 const DEFAULT_APP_ORIGIN = 'https://aqbba-collab.vercel.app';
 const RESEND_BATCH_URL = 'https://api.resend.com/emails/batch';
