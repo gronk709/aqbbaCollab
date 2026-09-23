@@ -16,7 +16,7 @@ import { projectStatusLabels } from '../data.js';
 import {
   addProject, deleteProject, addProjectSection, updateProjectSection, deleteProjectSection,
   joinProject, leaveProject, setProjectTeamMember, removeProjectTeamMember, loadRealMembers,
-  allApiaryById, currentUser, isWebAdmin,
+  currentUser, isWebAdmin,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 
@@ -24,8 +24,11 @@ let activeStatus = 'All';
 
 const statusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 
+/* p.siteDetails is resolved server-side now (loadProjects/loadProject,
+   js/store.js) — apiaries are real rows since Phase 5, so p.sites' plain
+   id array needs an actual query to resolve, not a synchronous lookup. */
 function sitesLine(p) {
-  const named = (p.sites || []).map((id) => allApiaryById(id)).filter(Boolean);
+  const named = p.siteDetails || [];
   if (!named.length) return 'No site confirmed yet — recruiting a host apiary.';
   const names = named.map((a) => a.code).join(', ');
   return p.open_sites ? `Running at ${names}, open to other member apiaries.` : `Running at ${names}.`;
@@ -492,12 +495,9 @@ export function renderProject(data, id) {
           <div class="panel">
             <div class="panel-head"><h2>Sites</h2></div>
             <div class="panel-body">
-              ${(p.sites || []).length ? `
+              ${(p.siteDetails || []).length ? `
                 <div class="row row-wrap" style="gap:6px;margin-bottom:var(--s3)">
-                  ${p.sites.map((id2) => {
-                    const a = allApiaryById(id2);
-                    return a ? `<a class="tag tag-outline" href="#/apiaries/${a.id}">${a.code} · ${esc(a.name)}</a>` : '';
-                  }).join('')}
+                  ${p.siteDetails.map((a) => `<a class="tag tag-outline" href="#/apiaries/${a.id}">${a.code} · ${esc(a.name)}</a>`).join('')}
                 </div>` : ''}
               <p class="caption">${esc(sitesLine(p))}</p>
             </div>

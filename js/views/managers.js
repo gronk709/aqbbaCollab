@@ -1,22 +1,18 @@
 /* ==========================================================================
-   Manager details. Contact information for whoever is listed as an apiary's
-   manager — phone and email are mandatory once saved, address is optional —
-   plus their roles and which apiaries they're permitted to add hives to and
-   log inspections for.
-
-   This is keyed by member id, not by role: the "manager" of an apiary is
-   whichever member is assigned to it (see apiaries.js's manager select),
-   which in the seed data includes people whose only role is "Breeder". The
-   page works the same regardless of role.
+   Member details — contact information (phone and email are mandatory once
+   saved, address is optional), roles, and which apiaries this member has
+   real site access to (apiary_managers — granted from that apiary's own
+   page, js/views/apiaries.js's Team panel, not here; this page just shows
+   it, in "Apiary access"/"Manages" below).
 
    Holding the "Apiary Manager" role is a title, not itself a grant — actual
-   edit access to a given site comes from that apiary's own managers list,
-   set here independently. A member can hold several roles at once.
+   edit access to a given site comes from apiary_managers, set on the
+   apiary's own page. A member can hold several roles at once.
    ========================================================================== */
 
 import { roleOptions } from '../data.js';
 import {
-  allApiaries, isWebAdmin, managersFor, setManagedApiaries,
+  isWebAdmin,
   currentUser, loadRealMembers, loadMemberRoles, setMemberRoles, setMemberContact,
   deactivateMember, reactivateMember, inviteCollaborator,
 } from '../store.js';
@@ -278,7 +274,7 @@ export function renderManager(m) {
   if (!m) return '';
 
   const complete = Boolean(m.phone && m.email);
-  const manages = allApiaries().filter((a) => a.managers.includes(m.id));
+  const manages = m.manages || [];
   const roleLabelText = m.roles.join(' & ') || '—';
   const canManageRoles = isWebAdmin(currentUser().id);
   /* Own record or Web Admin — matches member_contact_details' real RLS
@@ -353,15 +349,14 @@ export function renderManager(m) {
                 ${m.roles.length ? m.roles.map((r) => `<span class="tag tag-outline">${esc(r)}</span>`).join('')
                   : '<span class="caption">No roles set.</span>'}
               </div>
-              <div class="eyebrow" style="margin-bottom:var(--s2)">Can add hives / log inspections at</div>
+              <div class="eyebrow" style="margin-bottom:var(--s2)">Apiary access</div>
               <div class="row row-wrap" style="gap:6px">
-                ${manages.length ? manages.map((a) => `<a class="tag tag-amber" href="#/apiaries/${a.id}">${a.code} · ${esc(a.name)}</a>`).join('')
+                ${manages.length ? manages.map((a) => `<a class="tag tag-amber" href="#/apiaries/${a.id}">${a.code} · ${a.accessLevel === 'manage' ? 'Manage' : 'Operate'}</a>`).join('')
                   : '<span class="caption">No sites granted.</span>'}
               </div>
               <p class="caption" style="margin-top:var(--s4)">
                 ${m.deactivated ? 'This member is deactivated — reactivate them to grant roles or site access again.'
-                  : canManageRoles ? 'Site access is a separate, still-prototype-only grant — apiaries aren\'t real data yet.'
-                  : 'Only Web Admin can change roles and site access.'}
+                  : 'Apiary access is granted per site, from that site\'s own page (Team panel) — not here.'}
               </p>
             </div>
           </div>
@@ -401,7 +396,7 @@ export function renderManager(m) {
                   <a class="sub" href="#/apiaries/${a.id}">
                     <div class="sub-title">
                       <strong>${esc(a.name)}</strong>
-                      <span>${a.code} · ${a.hives} hives</span>
+                      <span>${a.code} · ${a.accessLevel === 'manage' ? 'Manage' : 'Operate'}</span>
                     </div>
                     ${icons.chevron}
                   </a>`).join('')}
@@ -525,9 +520,13 @@ function openContactForm(m) {
   });
 }
 
+/* Apiary site access isn't set here any more — same reasoning Phase 6
+   already established for project team assignment: it's a real per-entity
+   grant now (apiary_managers), assigned from the apiary's own page (Team
+   panel, js/views/apiaries.js's openManageApiaryTeamModal), not the
+   member's roles page. */
 function openRolesForm(m) {
   const currentRoles = m.roles;
-  const apiaries = allApiaries();
 
   const roleChecks = roleOptions.map((r) => `
     <label class="row" style="align-items:flex-start;gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:8px">
@@ -538,36 +537,21 @@ function openRolesForm(m) {
       </span>
     </label>`).join('');
 
-  const siteChecks = apiaries.map((a) => `
-    <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:6px">
-      <input type="checkbox" value="${a.id}" class="r-site" ${managersFor(a.id).includes(m.id) ? 'checked' : ''}>
-      ${esc(a.name)} <span class="caption">(${a.code})</span>
-    </label>`).join('');
-
   const body = `
-    <p class="caption" style="margin-bottom:var(--s5);color:var(--amber-deep)">
-      Site access below is still prototype-only — it doesn't save to a shared record,
-      since apiaries aren't real data yet. Roles above save for real.
-    </p>
     <div class="field">
       <label>Roles</label>
       ${roleChecks}
-    </div>
-    <div class="field">
-      <label>Can add hives / log inspections at</label>
-      ${siteChecks || '<p class="caption">No apiaries exist yet.</p>'}
     </div>`;
 
   const actions = `
     <button class="btn btn-ghost" data-close>Cancel</button>
     <button class="btn btn-primary" id="save-roles">Save</button>`;
 
-  const scrim = modal({ title: `Roles & access — ${m.name}`, body, actions });
+  const scrim = modal({ title: `Roles — ${m.name}`, body, actions });
   const saveBtn = scrim.querySelector('#save-roles');
 
   saveBtn.addEventListener('click', async () => {
     const roles = [...scrim.querySelectorAll('.r-role:checked')].map((c) => c.value);
-    const sites = [...scrim.querySelectorAll('.r-site:checked')].map((c) => c.value);
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
@@ -579,9 +563,8 @@ function openRolesForm(m) {
       saveBtn.textContent = 'Save';
       return;
     }
-    setManagedApiaries(m.id, sites);
     closeModal();
-    toast(`Roles and site access updated for ${m.name}.`);
+    toast(`Roles updated for ${m.name}.`);
     window.__aqbba_invalidateData();
     window.__aqbba_render();
   });

@@ -2,23 +2,24 @@
    VSH research dashboard. Answers, in order: where are the apiaries and who
    runs them, what state are the hives in, what has been inspected and what is
    next, and whose lines are in the program.
+
+   Phase 5 of the backend migration: apiaries/hives/inspections are real
+   Supabase rows now, loaded by the router (js/store.js's loadApiaries) and
+   passed in as `data`, same as every other migrated view. Queen lines/
+   breeders (Phase 4) stay mock for now.
    ========================================================================== */
 
 import {
   stageLabels, statusLabels,
-  tally, vshAverage, relDays, fmtDate, fmtDateLong,
+  tally, vshAverage, relDays, fmtDate,
 } from '../data.js';
 import {
-  allApiaries, allApiaryById, allRecentInspections, allUpcomingInspections, isWebAdmin,
+  isWebAdmin,
   allQueenLines, lineByCode, addQueenLine, updateQueenLine,
-  allBreeders, breederById, addBreeder, updateBreeder, memberById, allMembers,
+  allBreeders, breederById, addBreeder, updateBreeder, allMembers,
 } from '../store.js';
-import { esc, icons, avatar, tag, modal, closeModal, toast } from '../ui.js';
+import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
-
-/* Recomputed on every call rather than cached at module load, since member-
-   added apiaries and hives can change between renders. */
-const getAllHives = () => allApiaries().flatMap((a) => a.hiveRecords);
 
 function stageTag(stage) {
   const v = { establishing: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green', requeening: 'tag-red' }[stage];
@@ -27,7 +28,6 @@ function stageTag(stage) {
 
 function apiaryCard(ap) {
   const t = tally(ap.hiveRecords);
-  const mgr = memberById(ap.manager);
   const vsh = vshAverage(ap.hiveRecords);
   const inTreatment = t.treating || 0;
   const tf = ap.hiveRecords.filter((h) => h.treatmentFree >= 3).length;
@@ -44,17 +44,9 @@ function apiaryCard(ap) {
       </div>
       <div class="panel-body">
         <p class="caption">${esc(ap.region)}</p>
-        <p class="mono caption" style="font-size:11px;margin-top:2px">${ap.coords}</p>
+        ${ap.address ? `<p class="mono caption" style="font-size:11px;margin-top:2px">${esc(ap.address)}</p>` : ''}
 
-        <div class="row" style="margin-top:var(--s4);gap:var(--s2)">
-          ${avatar(mgr)}
-          <div>
-            <div style="font-size:13px;font-weight:600">${esc(mgr.name)}</div>
-            <div class="caption">Manager · member since ${mgr.since}</div>
-          </div>
-        </div>
-
-        <dl class="tiles tiles-quad" style="margin-top:var(--s5);border-radius:3px">
+        <dl class="tiles tiles-quad" style="margin-top:var(--s4);border-radius:3px">
           <div class="tile" style="padding:var(--s3) var(--s4)">
             <dt>Hives</dt><dd style="font-size:1.375rem">${ap.hives}</dd>
           </div>
@@ -72,31 +64,29 @@ function apiaryCard(ap) {
     </a>`;
 }
 
-function inspectionLine(insp, { showDate = 'day' } = {}) {
-  const ap = allApiaryById(insp.apiary);
-  const by = memberById(insp.by);
+function inspectionLine(insp, apiaries) {
+  const ap = apiaries.find((a) => a.id === insp.apiary);
   const d = insp.date;
   return `
     <li>
-      <a class="line" href="#/apiaries/${ap.id}">
+      <a class="line" href="#/apiaries/${ap ? ap.id : ''}">
         <div class="line-date">
           <b>${d.getDate()}</b>
           ${d.toLocaleDateString('en-AU', { month: 'short' })}
         </div>
         <div class="line-body">
           <strong>${esc(insp.kind)}</strong>
-          <span>${esc(ap.name)} · ${insp.hiveIds.length} hive${insp.hiveIds.length > 1 ? 's' : ''} · ${esc(by.name)}</span>
+          <span>${ap ? esc(ap.name) : 'Unknown site'} · ${insp.hiveIds.length} hive${insp.hiveIds.length > 1 ? 's' : ''} · ${insp.by ? esc(insp.by.name) : 'Unknown'}</span>
         </div>
         <div class="line-meta">
-          <div class="caption mono">${relDays(insp.offset)}</div>
+          <div class="caption mono">${relDays(Math.round((insp.date - new Date()) / 86400000))}</div>
           ${insp.done ? `<span class="tag tag-green" style="margin-top:3px">Complete</span>` : ''}
         </div>
       </a>
     </li>`;
 }
 
-function colonyStatusPanel() {
-  const allHives = getAllHives();
+function colonyStatusPanel(allHives) {
   const t = tally(allHives);
   const total = allHives.length;
   const treatmentFree = allHives.filter((h) => h.treatmentFree > 0).length;
@@ -129,7 +119,7 @@ function colonyStatusPanel() {
         <span class="caption mono">${total} hives</span>
       </div>
       <div class="panel-body">
-        ${bars}
+        ${total ? bars : '<p class="caption">No hives registered yet.</p>'}
         <div style="margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
           <div class="row" style="justify-content:space-between">
             <span style="font-size:13px">Treatment free, any duration</span>
@@ -147,8 +137,7 @@ function colonyStatusPanel() {
     </div>`;
 }
 
-function breedersPanel() {
-  const allHives = getAllHives();
+function breedersPanel(allHives) {
   const lines = allQueenLines();
   const canManage = isWebAdmin();
   const rows = lines.map((line) => {
@@ -312,15 +301,16 @@ function openQueenLineForm(line) {
   });
 }
 
-export function renderDashboard(projects) {
-  const apiaries = allApiaries();
-  const allHives = getAllHives();
-  const upcomingInspections = allUpcomingInspections();
-  const recentInspections = allRecentInspections();
+export function renderDashboard(data) {
+  const { apiaries, inspections, projects } = data;
+  const allHives = apiaries.flatMap((a) => a.hiveRecords);
+  const recentInspections = inspections.filter((i) => i.done).sort((a, b) => b.date - a.date);
+  const upcomingInspections = inspections.filter((i) => !i.done).sort((a, b) => a.date - b.date);
   const t = tally(allHives);
   const focus = apiaries.find((a) => a.stage === 'assessment') || apiaries[0];
   const attention = allHives.filter((h) => h.status === 'poor').length;
   const next = upcomingInspections[0];
+  const nextApiary = next ? apiaries.find((a) => a.id === next.apiary) : null;
 
   const html = `
     <div class="topbar">
@@ -330,7 +320,7 @@ export function renderDashboard(projects) {
           <a href="#/projects/p0">Varroa Sensitive Hygiene Breeding Program</a> ${icons.chevron}
           <span>Dashboard</span>
         </div>
-        <div class="eyebrow">PRJ-00 · 2026 season</div>
+        <div class="eyebrow">PRJ-00</div>
         <h1>Research dashboard</h1>
       </div>
       <div class="topbar-actions">
@@ -348,7 +338,6 @@ export function renderDashboard(projects) {
         <div class="tile">
           <dt>Program mean VSH</dt>
           <dd>${vshAverage(allHives)}<small>%</small></dd>
-          <div class="tile-trend"><b>+4</b> on last season</div>
         </div>
         <div class="tile">
           <dt>Treating</dt>
@@ -362,8 +351,8 @@ export function renderDashboard(projects) {
         </div>
         <div class="tile">
           <dt>Next inspection</dt>
-          <dd style="font-size:1.125rem;letter-spacing:0">${fmtDate(next.date)}</dd>
-          <div class="tile-trend">${esc(allApiaryById(next.apiary).name)} · ${esc(next.kind)}</div>
+          <dd style="font-size:1.125rem;letter-spacing:0">${next ? fmtDate(next.date) : '—'}</dd>
+          <div class="tile-trend">${next ? `${esc(nextApiary ? nextApiary.name : 'Unknown site')} · ${esc(next.kind)}` : 'None scheduled'}</div>
         </div>
         <div class="tile">
           <dt>Research projects</dt>
@@ -376,6 +365,7 @@ export function renderDashboard(projects) {
         ${apiaries.map(apiaryCard).join('')}
       </div>
 
+      ${focus ? `
       <div class="grid grid-dash" style="margin-top:var(--s6)">
         <div class="stack">
           <div class="panel">
@@ -391,9 +381,9 @@ export function renderDashboard(projects) {
               <p class="caption" style="margin-bottom:var(--s4)">
                 ${focus.hiveRecords.length} hives. One cell per hive, coloured by colony status.
               </p>
-              ${renderComb(focus.hiveRecords, { id: 'dash-comb' })}
+              ${focus.hiveRecords.length ? renderComb(focus.hiveRecords, { id: 'dash-comb' }) : '<p class="caption">No hives registered yet.</p>'}
             </div>
-            ${renderReadout(null)}
+            ${focus.hiveRecords.length ? renderReadout(null) : ''}
           </div>
 
           <div class="panel">
@@ -402,12 +392,14 @@ export function renderDashboard(projects) {
               <span class="spacer"></span>
               <span class="caption mono">${recentInspections.length}</span>
             </div>
-            <ul class="list">${recentInspections.map((i) => inspectionLine(i)).join('')}</ul>
+            ${recentInspections.length
+              ? `<ul class="list">${recentInspections.map((i) => inspectionLine(i, apiaries)).join('')}</ul>`
+              : '<div class="empty" style="padding:var(--s5)"><p class="caption">Nothing logged yet.</p></div>'}
           </div>
         </div>
 
         <div class="stack">
-          ${colonyStatusPanel()}
+          ${colonyStatusPanel(allHives)}
 
           <div class="panel">
             <div class="panel-head">
@@ -415,20 +407,23 @@ export function renderDashboard(projects) {
               <span class="spacer"></span>
               <span class="caption mono">${upcomingInspections.length}</span>
             </div>
-            <ul class="list">${upcomingInspections.map((i) => inspectionLine(i)).join('')}</ul>
+            ${upcomingInspections.length
+              ? `<ul class="list">${upcomingInspections.map((i) => inspectionLine(i, apiaries)).join('')}</ul>`
+              : '<div class="empty" style="padding:var(--s5)"><p class="caption">Nothing scheduled.</p></div>'}
           </div>
         </div>
-      </div>
+      </div>` : `
+      <div class="empty" style="margin-top:var(--s6)"><p class="caption">No research apiaries yet.</p></div>`}
 
       <div style="margin-top:var(--s6)">
-        ${breedersPanel()}
+        ${breedersPanel(allHives)}
       </div>
     </div>`;
 
   /* Bind after paint. */
   setTimeout(() => {
     const root = document.getElementById('main');
-    if (root) bindComb(root, focus.hiveRecords);
+    if (root && focus && focus.hiveRecords.length) bindComb(root, focus.hiveRecords);
 
     const newBreederBtn = document.getElementById('new-breeder');
     if (newBreederBtn) newBreederBtn.addEventListener('click', () => openBreederForm());

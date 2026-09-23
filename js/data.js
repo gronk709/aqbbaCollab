@@ -17,22 +17,6 @@
        changes: seed content keeps working exactly as it does today.
    ========================================================================== */
 
-/* [SEED — Phase 5] RNG helpers, used only to fabricate hive records below.
-   Dead code the moment hives are real rows — real hives don't need a seed. */
-/* Mulberry32 — small, fast, seeded. */
-function seeded(seed) {
-  return function () {
-    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-
-const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
-const between = (rng, lo, hi) => lo + rng() * (hi - lo);
-const intBetween = (rng, lo, hi) => Math.floor(between(rng, lo, hi + 1));
-
 /* --------------------------------------------------------------------------
    [SEED — Phase 1] Members. The signed-in user is Pete; the rest populate
    activity. Replaced by the real `members`/`member_roles` tables — Pete
@@ -103,37 +87,17 @@ export const queenLines = [
 export const lineByCode = (code) => queenLines.find((l) => l.code === code);
 
 /* --------------------------------------------------------------------------
-   [SEED — Phase 5] Research apiaries. Three sites at different program
-   stages.
+   Apiary/hive/inspection display vocabulary and pure helpers. The tables
+   themselves (apiaries, hives, inspections) moved to real Supabase rows in
+   Phase 5 — see js/store.js's loadApiaries/loadApiary — so nothing here is
+   seed content any more, just the labels backing real check constraints
+   and the aggregation functions views call on whatever hive array they're
+   given, real or otherwise.
    -------------------------------------------------------------------------- */
 
-const apiarySeeds = [
-  {
-    id: 'ap-tambo', name: 'Tambo Crossing', code: 'TMB',
-    region: 'East Gippsland, VIC', coords: '37.4382° S, 147.7461° E',
-    stage: 'maintenance', manager: 'm5', established: 2019, hives: 104, seed: 4471,
-    flora: 'Yellow box, red stringybark, silver wattle',
-    brief: 'The program\'s reference site. Nine generations of closed-population selection with no miticide input since the 2021/22 season.',
-  },
-  {
-    id: 'ap-barrow', name: 'Barrowfield', code: 'BRW',
-    region: 'Central Tablelands, NSW', coords: '33.6712° S, 149.5803° E',
-    stage: 'assessment', manager: 'm3', established: 2021, hives: 98, seed: 8823,
-    flora: 'Ironbark, grey box, canola (seasonal)',
-    brief: 'Mid-cycle assessment of four lines against the Tambo benchmark. Freeze-killed brood assays run fortnightly through the build-up.',
-  },
-  {
-    id: 'ap-oradale', name: 'Oradale', code: 'ORA',
-    region: 'Darling Downs, QLD', coords: '27.9012° S, 151.6144° E',
-    stage: 'establishing', manager: 'm4', established: 2026, hives: 96, seed: 1907,
-    flora: 'Spotted gum, brigalow, cultivated sunflower',
-    brief: 'Site commissioned March 2026. Nucs drawn from Tambo and Kellyanne stock; baseline mite counts still in progress.',
-  },
-];
-
-/* [PERMANENT] Apiary status — editable after creation via updateApiary
-   (js/store.js), not just set once at registration. Stays as the display
-   vocabulary for `apiaries.stage` once that column is a real Postgres enum. */
+/* Apiary status — editable after creation via updateApiary (js/store.js),
+   not just set once at registration. Backs `apiaries.stage`'s check
+   constraint. */
 export const stageLabels = {
   establishing: 'Establishing',
   assessment:   'Assessment',
@@ -141,15 +105,7 @@ export const stageLabels = {
   requeening:   'Re-queening',
 };
 
-/* [SEED — Phase 5] Only used to fabricate seed hive statuses below. */
-const statusPool = {
-  maintenance:  ['thriving', 'thriving', 'good', 'thriving', 'good', 'thriving', 'average', 'thriving', 'good', 'thriving'],
-  assessment:   ['thriving', 'good', 'average', 'poor', 'thriving', 'good', 'treating', 'average', 'good', 'thriving'],
-  establishing: ['average', 'poor', 'good', 'treating', 'average', 'thriving', 'poor', 'average', 'good', 'average'],
-  requeening:   ['poor', 'treating', 'average', 'poor', 'treating', 'average', 'good', 'poor', 'treating', 'average'],
-};
-
-/* [PERMANENT] Display vocabulary for `hives.status`. */
+/* Display vocabulary for `hives.status`. */
 export const statusLabels = {
   thriving: 'Thriving',
   good:     'Good',
@@ -158,7 +114,6 @@ export const statusLabels = {
   treating: 'Treating',
 };
 
-/* [PERMANENT] */
 export const statusNote = {
   thriving: 'Meeting all assessment thresholds.',
   good:     'Slightly below thriving benchmarks but stable.',
@@ -167,114 +122,20 @@ export const statusNote = {
   treating: 'Under active treatment. Excluded from selection data this cycle.',
 };
 
-/* [PERMANENT] */
 export const queenColours = ['white', 'yellow', 'red', 'green', 'blue'];
 
-/* [SEED — Phase 5] Each fabricated hive carries the four data points the
-   assessment protocol requires: VSH score, mite load, hive configuration,
-   and last inspection. Real hives get these from actual inspection data
-   instead of a seeded RNG. */
-function buildHives(ap) {
-  const rng = seeded(ap.seed);
-  const pool = statusPool[ap.stage];
-  const lines = ap.stage === 'establishing'
-    ? ['TMB-22', 'KLN-03', 'ORA-08']
-    : ap.stage === 'assessment'
-      ? ['BRW-14', 'TMB-22', 'KLN-03', 'MRN-05', 'ORA-08']
-      : ['TMB-22', 'CVE-17', 'BRW-14', 'WDG-11'];
-
-  return Array.from({ length: ap.hives }, (_, i) => {
-    const status = pool[Math.floor(rng() * pool.length)];
-    const line = pick(rng, lines);
-    const treatmentFree = status !== 'treating' && ap.stage !== 'establishing'
-      ? intBetween(rng, 1, 5)
-      : status === 'treating' ? 0 : intBetween(rng, 0, 1);
-
-    const baseVsh = lineByCode(line).vshMean;
-    const vsh = Math.max(28, Math.min(97, Math.round(baseVsh + between(rng, -14, 12))));
-
-    return {
-      id: `${ap.code}-${String(i + 1).padStart(3, '0')}`,
-      apiary: ap.id,
-      status,
-      line,
-      queenColour: queenColours[(ap.established + Math.floor(rng() * 2)) % 5],
-      queenYear: 2026 - intBetween(rng, 0, 2),
-      vsh,
-      miteLoad: Number(between(rng, 0.1, status === 'poor' ? 8.4 : 3.6).toFixed(1)),
-      broodFrames: intBetween(rng, 3, 11),
-      lastSeen: intBetween(rng, 1, 34),
-      treatmentFree,
-    };
-  });
-}
-
-/* [SEED — Phase 5] managers: who may add hives / log inspections at this
-   site, beyond Web Admin, who always can. Defaults to just the primary
-   manager; the roles editor can grant additional members access per site. */
-export const apiaries = apiarySeeds.map((ap) => ({ ...ap, hiveRecords: buildHives(ap), managers: [ap.manager] }));
-export const apiaryById = (id) => apiaries.find((a) => a.id === id);
-
-/* [PERMANENT] Pure aggregation over whatever hive array is passed in —
-   keeps working unchanged once that array comes from Supabase. */
+/* Pure aggregation over whatever hive array is passed in. */
 export function tally(hives) {
   return hives.reduce((acc, h) => { acc[h.status] = (acc[h.status] || 0) + 1; return acc; }, {});
 }
 
-/* [PERMANENT] */
 export function vshAverage(hives) {
   const scored = hives.filter((h) => h.vsh != null);
   if (!scored.length) return 0;
   return Math.round(scored.reduce((s, h) => s + h.vsh, 0) / scored.length);
 }
 
-/* --------------------------------------------------------------------------
-   [SEED — Phase 5, except inspectionKinds] Inspections. Hive-level: each
-   inspection names the specific hives it covers (one, a subset, or all of a
-   site) rather than just a headcount, and can update those hives' status
-   (see setHiveStatus in js/store.js). Dates are relative to today so the
-   dashboard never goes stale.
-   -------------------------------------------------------------------------- */
-
-/* [PERMANENT] */
 export const inspectionKinds = ['Assessment', 'Maintenance', 'Biosecurity'];
-
-/* [SEED — Phase 5] Only used to compute the fabricated inspection dates
-   below relative to today; real inspections just store a real date. */
-function shiftDays(days) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-/* hiveIds are a deterministic slice of each apiary's seed hives — close
-   enough to the original headcounts for demo data, no need to match them
-   exactly. The retired, more specific assay names are folded into the note
-   so that detail isn't lost now that kind is just the coarse category. */
-const hivesAt = (apiaryId, n) => apiaryById(apiaryId).hiveRecords.slice(0, n).map((h) => h.id);
-
-const inspectionPlan = [
-  { apiary: 'ap-barrow',  offset: -6, kind: 'Assessment',  by: 'm3',  hiveIds: hivesAt('ap-barrow', 24),  done: true,  note: 'Freeze-killed brood assay. Recapping above 60% in 19 of 24. BRW-14 leading.' },
-  { apiary: 'ap-tambo',   offset: -4, kind: 'Assessment',  by: 'm5',  hiveIds: hivesAt('ap-tambo', 30),   done: true,  note: 'Alcohol wash — mite count. Site mean 1.4 mites/100 bees. No intervention required.' },
-  { apiary: 'ap-oradale', offset: -3, kind: 'Assessment',  by: 'm4',  hiveIds: hivesAt('ap-oradale', 40), done: true,  note: 'Nuc build assessment. 6 nucs failed to build. Requeening scheduled.' },
-  { apiary: 'ap-barrow',  offset: -1, kind: 'Assessment',  by: 'm9',  hiveIds: hivesAt('ap-barrow', 18),  done: true,  note: 'Brood pattern assessment. Two hives with spotty pattern flagged for follow-up.' },
-  { apiary: 'ap-tambo',   offset: 2,  kind: 'Assessment',  by: 'm5',  hiveIds: hivesAt('ap-tambo', 32),   done: false, note: 'Recapping count. Ninth-generation cohort. Full cohort measure.' },
-  { apiary: 'ap-oradale', offset: 3,  kind: 'Assessment',  by: 'm4',  hiveIds: hivesAt('ap-oradale', 48), done: false, note: 'Alcohol wash — mite count. Baseline established for the new site.' },
-  { apiary: 'ap-barrow',  offset: 6,  kind: 'Maintenance', by: 'm3',  hiveIds: hivesAt('ap-barrow', 12),  done: false, note: 'Queen mating check. Second round of II queens from Coalvale semen.' },
-  { apiary: 'ap-tambo',   offset: 9,  kind: 'Maintenance', by: 'm5',  hiveIds: hivesAt('ap-tambo', 104),  done: false, note: 'Full frame audit. Pre-season audit across the whole site.' },
-  { apiary: 'ap-oradale', offset: 13, kind: 'Assessment',  by: 'm10', hiveIds: hivesAt('ap-oradale', 26), done: false, note: 'Brood pattern assessment. First assessment on Oradale-mated queens.' },
-];
-
-export const inspections = inspectionPlan.map((p, i) => ({
-  id: `insp-${i}`,
-  status: null,
-  ...p,
-  date: shiftDays(p.offset),
-}));
-
-export const recentInspections   = inspections.filter((i) => i.done).sort((a, b) => b.date - a.date);
-export const upcomingInspections = inspections.filter((i) => !i.done).sort((a, b) => a.date - b.date);
 
 /* --------------------------------------------------------------------------
    [PERMANENT, Phase 6 complete]

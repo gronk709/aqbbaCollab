@@ -74,7 +74,9 @@ export function renderReadout(hive, { editable = false } = {}) {
           <dd>${hive.miteLoad == null ? '—' : hive.miteLoad}<small style="font-size:10px;color:var(--propolis-40)"> /100</small></dd>
         </div>
         <div><dt>Hive Configuration</dt><dd>${hive.broodFrames || '—'}</dd></div>
-        <div><dt>Last inspected</dt><dd style="font-size:13px">${relDays(-hive.lastSeen)}</dd></div>
+        <div><dt>Last inspected</dt><dd style="font-size:13px">${hive.lastInspectedAt
+          ? relDays(Math.round((new Date(hive.lastInspectedAt) - new Date()) / 86400000))
+          : 'Never'}</dd></div>
         <div><dt>Treatment free</dt><dd style="font-size:13px">${tf}</dd></div>
       </dl>
 
