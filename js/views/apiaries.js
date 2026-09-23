@@ -225,9 +225,6 @@ export function renderApiary(data, id) {
   }).join('');
 
   const inspRows = insp.map((i) => {
-    const hiveList = hives.length && hives.every((h) => i.hiveIds.includes(h.id))
-      ? 'All Hives'
-      : i.hiveIds.join(', ');
     const byName = i.by ? esc(i.by.name) : 'Unknown';
     return `
       <li>
@@ -238,7 +235,7 @@ export function renderApiary(data, id) {
           </div>
           <div class="line-body">
             <strong>${esc(i.kind)}</strong>
-            <span>${esc(hiveList)} · ${byName}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
+            <span><span class="mono">${esc(i.hiveId)}</span> · ${byName}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
             ${i.note ? `<p class="caption" style="margin-top:3px">${esc(i.note)}</p>` : ''}
           </div>
           <div class="line-meta">
@@ -806,38 +803,6 @@ async function openHiveForm(ap) {
   });
 }
 
-/* Checkbox list of the current apiary's hives, plus an "All hives" toggle
-   that checks/unchecks every hive below it. Unlike the old form, this no
-   longer lets an inspection be redirected at a different apiary than the
-   one it was opened from — that would mean loading every apiary's access
-   and hive list just to power one dropdown, when every other per-entity
-   page in this app only ever loads its own entity's data. */
-function renderHiveChecklist(hives) {
-  if (!hives.length) return `<p class="caption">This apiary has no hives registered yet.</p>`;
-
-  const rows = hives.map((h) => `
-    <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:4px">
-      <input type="checkbox" value="${h.id}" class="i-hive-check">
-      <span class="mono">${h.id}</span>
-    </label>`).join('');
-
-  return `
-    <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--comb-shade)">
-      <input type="checkbox" id="i-hive-all"> All hives (${hives.length})
-    </label>
-    <div style="max-height:180px;overflow-y:auto">${rows}</div>`;
-}
-
-function bindHiveChecklist(scrim) {
-  const all = scrim.querySelector('#i-hive-all');
-  if (!all) return;
-  const checks = () => [...scrim.querySelectorAll('.i-hive-check')];
-  all.addEventListener('change', () => checks().forEach((c) => { c.checked = all.checked; }));
-  checks().forEach((c) => c.addEventListener('change', () => {
-    all.checked = checks().every((x) => x.checked);
-  }));
-}
-
 async function openInspectionForm(ap, hives) {
   const kindOptions = inspectionKinds.map((k) => `<option>${esc(k)}</option>`).join('');
   const statusOptions = `<option value="">No change</option>` +
@@ -865,6 +830,11 @@ async function openInspectionForm(ap, hives) {
       </select>
     </div>`;
 
+  if (!hives.length) {
+    toast('This apiary has no hives registered yet — add one before logging an inspection.');
+    return;
+  }
+
   let realMembers;
   try {
     realMembers = await loadRealMembers();
@@ -875,10 +845,15 @@ async function openInspectionForm(ap, hives) {
   const me = currentUser();
   const memberOptions = realMembers.map((m) =>
     `<option value="${m.id}" ${m.id === me.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+  const hiveOptions = hives.map((h) => `<option value="${h.id}">${h.id}</option>`).join('');
 
   const body = `
     <form id="insp-form">
       <div class="row" style="gap:var(--s3);align-items:flex-start">
+        <div class="field" style="flex:1">
+          <label for="i-hive">Hive</label>
+          <select id="i-hive">${hiveOptions}</select>
+        </div>
         <div class="field" style="flex:1">
           <label for="i-kind">Inspection type</label>
           <select id="i-kind">${kindOptions}</select>
@@ -889,7 +864,7 @@ async function openInspectionForm(ap, hives) {
         </div>
       </div>
       <div class="field">
-        <label for="i-status">Resulting status (optional bulk change)</label>
+        <label for="i-status">Resulting status (optional)</label>
         <select id="i-status">${statusOptions}</select>
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
@@ -921,10 +896,6 @@ async function openInspectionForm(ap, hives) {
         <label for="i-viruses">Viruses</label>
         <input id="i-viruses" type="text" placeholder="e.g. DWV, CBPV (optional)">
       </div>
-      <div class="field">
-        <label>Hives</label>
-        <div id="i-hives-wrap">${renderHiveChecklist(hives)}</div>
-      </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         <div class="field" style="flex:1">
           <label for="i-by">Conducted by</label>
@@ -948,14 +919,13 @@ async function openInspectionForm(ap, hives) {
     <button class="btn btn-primary" id="pub-inspection">Log inspection</button>`;
 
   const scrim = modal({ title: `Log an inspection — ${ap.name}`, body, actions });
-  bindHiveChecklist(scrim);
   const saveBtn = scrim.querySelector('#pub-inspection');
 
   saveBtn.addEventListener('click', async () => {
     const dateStr = scrim.querySelector('#i-date').value;
-    const hiveIds = [...scrim.querySelectorAll('.i-hive-check:checked')].map((c) => c.value);
-    if (!dateStr || !hiveIds.length) {
-      toast('Add a date and select at least one hive.');
+    const hiveId = scrim.querySelector('#i-hive').value;
+    if (!dateStr || !hiveId) {
+      toast('Add a date and choose a hive.');
       return;
     }
 
@@ -972,10 +942,9 @@ async function openInspectionForm(ap, hives) {
     saveBtn.textContent = 'Saving…';
     try {
       await addInspection({
-        apiaryId: ap.id,
+        hiveId,
         kind: scrim.querySelector('#i-kind').value,
         by: scrim.querySelector('#i-by').value,
-        hiveIds,
         status: scrim.querySelector('#i-status').value || null,
         productivity: scoreOf('#i-productivity'),
         temperament: scoreOf('#i-temperament'),
@@ -1002,7 +971,7 @@ async function openInspectionForm(ap, hives) {
       return;
     }
     closeModal();
-    toast(`Inspection logged for ${hiveIds.length} hive${hiveIds.length > 1 ? 's' : ''}.`);
+    toast(`Inspection logged for ${hiveId}.`);
     window.__aqbba_invalidateData();
     window.__aqbba_render();
   });
