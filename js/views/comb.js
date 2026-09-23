@@ -4,7 +4,6 @@
    ========================================================================== */
 
 import { statusLabels, statusNote, relDays } from '../data.js';
-import { lineByCode, breederById } from '../store.js';
 import { esc, icons } from '../ui.js';
 
 const PER_ROW = 14;
@@ -43,8 +42,10 @@ export function renderReadout(hive, { editable = false } = {}) {
     </div>`;
   }
 
-  const line = lineByCode(hive.line);
-  const breeder = breederById(line.breeder);
+  /* hive.lineInfo is already resolved (queen line + breeder), embedded by
+     js/store.js's loadApiaries/loadApiary — real hives can structurally
+     carry no queen line at all, unlike every mock hive. */
+  const line = hive.lineInfo;
   const tf = hive.status === 'treating'
     ? 'Under treatment'
     : hive.treatmentFree === 0 ? 'Not yet established' : `${hive.treatmentFree} season${hive.treatmentFree > 1 ? 's' : ''}`;
@@ -83,7 +84,7 @@ export function renderReadout(hive, { editable = false } = {}) {
       <div class="row row-wrap" style="margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade);gap:var(--s5)">
         <div>
           <div class="eyebrow">Queen Line</div>
-          <div class="mono" style="font-size:13px;margin-top:3px">${esc(line.name)} · gen ${line.gen}</div>
+          <div class="mono" style="font-size:13px;margin-top:3px">${line ? `${esc(line.name)} · gen ${line.gen}` : '—'}</div>
         </div>
         <div>
           <div class="eyebrow">Queen ID</div>
@@ -91,7 +92,7 @@ export function renderReadout(hive, { editable = false } = {}) {
         </div>
         <div>
           <div class="eyebrow">Contributed by</div>
-          <div style="font-size:13px;margin-top:3px">${esc(breeder.name)}</div>
+          <div style="font-size:13px;margin-top:3px">${line ? esc(line.breeder.name) : '—'}</div>
         </div>
         <div>
           <div class="eyebrow">Queen marked</div>

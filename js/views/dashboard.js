@@ -3,10 +3,10 @@
    runs them, what state are the hives in, what has been inspected and what is
    next, and whose lines are in the program.
 
-   Phase 5 of the backend migration: apiaries/hives/inspections are real
-   Supabase rows now, loaded by the router (js/store.js's loadApiaries) and
-   passed in as `data`, same as every other migrated view. Queen lines/
-   breeders (Phase 4) stay mock for now.
+   Phases 4 and 5 of the backend migration: apiaries/hives/inspections and
+   queen lines/breeders are all real Supabase rows now, loaded by the
+   router (js/store.js's loadApiaries/loadQueenLines) and passed in as
+   `data`, same as every other migrated view.
    ========================================================================== */
 
 import {
@@ -15,8 +15,8 @@ import {
 } from '../data.js';
 import {
   isWebAdmin,
-  allQueenLines, lineByCode, addQueenLine, updateQueenLine,
-  allBreeders, breederById, addBreeder, updateBreeder, allMembers,
+  addQueenLine, updateQueenLine,
+  loadBreeders, addBreeder, updateBreeder, loadRealMembers,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -137,11 +137,10 @@ function colonyStatusPanel(allHives) {
     </div>`;
 }
 
-function breedersPanel(allHives) {
-  const lines = allQueenLines();
+function breedersPanel(lines, allHives) {
   const canManage = isWebAdmin();
   const rows = lines.map((line) => {
-    const b = breederById(line.breeder);
+    const b = line.breeder;
     const inProgram = allHives.filter((h) => h.line === line.code).length;
     return `
       <div class="breeder">
@@ -179,22 +178,26 @@ function breedersPanel(allHives) {
     </div>`;
 }
 
-function breederOptions(selectedId) {
-  const memberOpts = allMembers().map((m) =>
-    `<option value="${m.id}" ${m.id === selectedId ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
-  const standalone = allBreeders();
-  const standaloneOpts = standalone.map((b) =>
-    `<option value="${b.id}" ${b.id === selectedId ? 'selected' : ''}>${esc(b.name)} (not a member)</option>`).join('');
+/* selectedValue is "member:<id>" or "standalone:<id>" — js/store.js's
+   addQueenLine/updateQueenLine split this back into the two breeder FK
+   columns. Prefixing avoids ever needing to guess which table an id
+   belongs to (the old mock did this with a /^m\d+$/ regex, which only
+   ever worked because mock member ids happened to look like 'm7' — real
+   member ids are uuids). */
+function breederOptions(members, breeders, selectedValue) {
+  const memberOpts = members.map((m) =>
+    `<option value="member:${m.id}" ${`member:${m.id}` === selectedValue ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+  const standaloneOpts = breeders.map((b) =>
+    `<option value="standalone:${b.id}" ${`standalone:${b.id}` === selectedValue ? 'selected' : ''}>${esc(b.name)} (not a member)</option>`).join('');
 
   return `
     <optgroup label="Members">${memberOpts}</optgroup>
-    ${standalone.length ? `<optgroup label="Breeders (not a platform member)">${standaloneOpts}</optgroup>` : ''}`;
+    ${breeders.length ? `<optgroup label="Breeders (not a platform member)">${standaloneOpts}</optgroup>` : ''}`;
 }
 
 /* Breeders are a lightweight record independent of Members — just enough to
    credit a queen line to someone who isn't a registered platform member.
-   No login, no roles; see breederById in js/store.js for how a queen
-   line's breeder field resolves either kind uniformly. */
+   No login, no roles. */
 function openBreederForm(breeder) {
   const body = `
     <form id="breeder-form">
@@ -217,8 +220,9 @@ function openBreederForm(breeder) {
     <button class="btn btn-primary" id="save-breeder">${breeder ? 'Save changes' : 'Add breeder'}</button>`;
 
   const scrim = modal({ title: breeder ? `Edit breeder — ${breeder.name}` : 'Add a breeder', body, actions });
+  const saveBtn = scrim.querySelector('#save-breeder');
 
-  scrim.querySelector('#save-breeder').addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     const name = scrim.querySelector('#br-name').value.trim();
     if (!name) {
       toast('Enter a name.');
@@ -231,19 +235,40 @@ function openBreederForm(breeder) {
       note: scrim.querySelector('#br-note').value.trim(),
     };
 
-    if (breeder) updateBreeder(breeder.id, patch);
-    else addBreeder(patch);
-
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      if (breeder) await updateBreeder(breeder.id, patch);
+      else await addBreeder(patch);
+    } catch (err) {
+      toast(`Couldn't save: ${err.message}`);
+      saveBtn.disabled = false;
+      saveBtn.textContent = breeder ? 'Save changes' : 'Add breeder';
+      return;
+    }
     closeModal();
     toast(breeder ? `${name} updated.` : `${name} added as a breeder.`);
+    window.__aqbba_invalidateData();
     window.__aqbba_render();
   });
 }
 
 /* Queen lines have an internal code (hives reference a line by it — see
    hive.line), but members only ever see and edit the name; the code itself
-   is generated in addQueenLine (js/store.js) and never shown here. */
-function openQueenLineForm(line) {
+   is generated in addQueenLine (js/store.js) and never shown here. Fetches
+   the member/breeder pickers on open rather than requiring the dashboard
+   route to preload them — same "fetch on modal open" pattern
+   js/views/apiaries.js's openInspectionForm already uses. */
+async function openQueenLineForm(line) {
+  let members, breeders;
+  try {
+    [members, breeders] = await Promise.all([loadRealMembers(), loadBreeders()]);
+  } catch (err) {
+    toast(`Couldn't load members/breeders: ${err.message}`);
+    return;
+  }
+  const selectedValue = line ? `${line.breeder.kind}:${line.breeder.id}` : null;
+
   const body = `
     <form id="line-form">
       <div class="field">
@@ -253,7 +278,7 @@ function openQueenLineForm(line) {
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         <div class="field" style="flex:1">
           <label for="ql-breeder">Breeder</label>
-          <select id="ql-breeder">${breederOptions(line ? line.breeder : null)}</select>
+          <select id="ql-breeder">${breederOptions(members, breeders, selectedValue)}</select>
         </div>
         <div class="field" style="flex:1">
           <label for="ql-gen">Generation</label>
@@ -262,11 +287,11 @@ function openQueenLineForm(line) {
       </div>
       <div class="field">
         <label for="ql-vsh">Mean VSH (%)</label>
-        <input id="ql-vsh" type="number" min="0" max="100" value="${line ? line.vshMean : ''}" placeholder="optional">
+        <input id="ql-vsh" type="number" min="0" max="100" value="${line ? line.vshMean ?? '' : ''}" placeholder="optional">
       </div>
       <div class="field">
         <label for="ql-note">Note</label>
-        <textarea id="ql-note" placeholder="What's notable about this line?">${esc(line ? line.note : '')}</textarea>
+        <textarea id="ql-note" placeholder="What's notable about this line?">${esc(line ? line.note || '' : '')}</textarea>
       </div>
     </form>`;
 
@@ -275,34 +300,49 @@ function openQueenLineForm(line) {
     <button class="btn btn-primary" id="save-line">${line ? 'Save changes' : 'Add queen line'}</button>`;
 
   const scrim = modal({ title: line ? `Edit queen line — ${line.name}` : 'Add a queen line', body, actions });
+  const saveBtn = scrim.querySelector('#save-line');
 
-  scrim.querySelector('#save-line').addEventListener('click', () => {
+  saveBtn.addEventListener('click', async () => {
     const name = scrim.querySelector('#ql-name').value.trim();
     const vshRaw = scrim.querySelector('#ql-vsh').value;
+    const breederValue = scrim.querySelector('#ql-breeder').value;
     if (!name) {
       toast('Enter a line name.');
+      return;
+    }
+    if (!breederValue) {
+      toast('Choose a breeder.');
       return;
     }
 
     const patch = {
       name,
-      breeder: scrim.querySelector('#ql-breeder').value,
-      gen: Number(scrim.querySelector('#ql-gen').value) || 1,
-      vshMean: vshRaw ? Number(vshRaw) : 0,
+      breederValue,
+      generation: Number(scrim.querySelector('#ql-gen').value) || 1,
+      vshMean: vshRaw ? Number(vshRaw) : null,
       note: scrim.querySelector('#ql-note').value.trim(),
     };
 
-    if (line) updateQueenLine(line.code, patch);
-    else addQueenLine(patch);
-
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      if (line) await updateQueenLine(line.code, patch);
+      else await addQueenLine(patch);
+    } catch (err) {
+      toast(`Couldn't save: ${err.message}`);
+      saveBtn.disabled = false;
+      saveBtn.textContent = line ? 'Save changes' : 'Add queen line';
+      return;
+    }
     closeModal();
     toast(`${name} ${line ? 'updated' : 'added to the program'}.`);
+    window.__aqbba_invalidateData();
     window.__aqbba_render();
   });
 }
 
 export function renderDashboard(data) {
-  const { apiaries, inspections, projects } = data;
+  const { apiaries, inspections, projects, queenLines } = data;
   const allHives = apiaries.flatMap((a) => a.hiveRecords);
   const recentInspections = inspections.filter((i) => i.done).sort((a, b) => b.date - a.date);
   const upcomingInspections = inspections.filter((i) => !i.done).sort((a, b) => a.date - b.date);
@@ -416,7 +456,7 @@ export function renderDashboard(data) {
       <div class="empty" style="margin-top:var(--s6)"><p class="caption">No research apiaries yet.</p></div>`}
 
       <div style="margin-top:var(--s6)">
-        ${breedersPanel(allHives)}
+        ${breedersPanel(queenLines, allHives)}
       </div>
     </div>`;
 
@@ -435,7 +475,7 @@ export function renderDashboard(data) {
     if (list) list.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-edit-line]');
       if (!btn) return;
-      const line = lineByCode(btn.dataset.editLine);
+      const line = queenLines.find((l) => l.code === btn.dataset.editLine);
       if (line) openQueenLineForm(line);
     });
   }, 0);

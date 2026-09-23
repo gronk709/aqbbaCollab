@@ -40,8 +40,8 @@ there is no top-level Dashboard nav item any more.
 
 **Research dashboard** (`#/projects/p0/dashboard`) — a topic area of PRJ-00, reached from
 the program's summary page and breadcrumbed back to it. Program-wide figures, then a card
-per research apiary showing location, coordinates, apiary status (Establishing /
-Assessment / Maintenance / Re-queening), manager, hive count, mean VSH, hives being
+per research apiary showing location, address, apiary status (Establishing /
+Assessment / Maintenance / Re-queening), hive count, mean VSH, hives being
 treated and hives treatment-free for three or more seasons. Below that: the honeycomb
 hive grid, a colony status breakdown (hive status is its own separate field — Thriving /
 Good / Average / Poor / Treating, recorded per hive and updatable via Log Inspection),
@@ -49,20 +49,22 @@ upcoming and recently completed inspections, and the contributing breeders with 
 queen lines — the program's other two editable records, Web Admin only:
 
 - **Queen lines** — name, breeder, generation, mean VSH, and a note. Hives reference a
-  line by an internal code (`hive.line`), same reasoning as hive ids, but that code is
-  never shown or entered anywhere — members only see and edit the line's name, which can
-  change over time, while the code stays fixed and is generated automatically
-  (`js/store.js`'s `addQueenLine`/`lineByCode`/`allQueenLines`).
-- **Breeders** — a queen line's breeder is either an existing member, or a standalone
-  breeder record (name, state, note) for someone contributing a line who isn't a
-  registered platform member. Standalone breeders have no login and no roles; they exist
-  purely to be credited on a line (`addBreeder`/`breederById` in `js/store.js`), since this
-  app has no general "Add Member" feature — membership is meant to come from Wild Apricot,
-  not be created here.
+  line by an internal code (`hive.line`/`hives.queen_line`), same reasoning as hive ids,
+  but that code is never shown or entered anywhere — members only see and edit the line's
+  name, which can change over time, while the code stays fixed and is generated
+  automatically (`js/store.js`'s `addQueenLine`/`loadQueenLines`).
+- **Breeders** — a queen line's breeder is either an existing member (`breeder_member_id`)
+  or a standalone breeder record (`breeder_id` — name, state, note) for someone
+  contributing a line who isn't a registered platform member, mutually exclusive via a
+  real check constraint (`public.queen_lines`). Standalone breeders have no login and no
+  roles; they exist purely to be credited on a line (`addBreeder`/`loadBreeders` in
+  `js/store.js`), since this app has no general "Add Member" feature — membership is
+  meant to come from Wild Apricot, not be created here.
 
 Every apiary and hive field is editable after creation, not just status — **Edit apiary**
-(on the apiary's own page) covers name, region, coordinates, year established, status,
-manager and dominant flora; **Edit** on a selected hive's readout covers everything set
+(on the apiary's own page) covers name, region, address, year established, status,
+and dominant flora (site access/team is managed separately, in the "Team" panel);
+**Edit** on a selected hive's readout covers everything set
 at registration (status, queen line, queen ID, queen marking, hive configuration, UBEEO/
 Harbo results, treatment-free seasons, comments) except the hive ID itself, which stays
 fixed once assigned since inspections and other records refer to it. Both are stored the
@@ -361,7 +363,9 @@ real Postgres tables with Row Level Security, entity by entity — see
 then marketplace, forum/repository, queen lines/breeders, apiaries/hives/inspections,
 projects, notifications, then a final cleanup pass). Phases aren't strictly done in that
 order — Projects (Phase 6) landed before queen lines/breeders and apiaries/hives/
-inspections (Phases 4-5), simply because that's what was needed next.
+inspections (Phases 4-5), simply because that's what was needed next. All seven named
+phases are now live and verified; only the final cleanup pass (removing anything left
+over once every entity has moved) remains.
 
 Phase 1 (identity — `members`, `member_roles`, `apiary_managers`, contact details, and
 the Wild Apricot auth bridge) is **live and verified**: a real Wild Apricot sign-in
@@ -429,9 +433,24 @@ research sites, not illustrative content) but their hives and inspections don't 
 were entirely RNG-fabricated demo filler, so every site starts with zero hives/
 inspections in production, same as marketplace/forum started with zero real listings/
 threads. A hive's "last inspected" is a real timestamp now, not a number that only ever
-rots. Queen lines/breeders (Phase 4) stays mock — nothing here depends on it moving too;
-`hives.queen_line` stays an unconstrained column until it does, same precedent
-`apiary_managers.apiary_id` set for this phase.
+rots.
+
+Phase 4 (queen lines/breeders —
+`supabase/migrations/20260924000000_queen_lines_breeders.sql`) is **live and verified**:
+the last entity off mock data. Finishes the precedent Phase 5 set for itself —
+`hives.queen_line` was left unconstrained specifically because this table didn't exist
+yet, and now has a real FK. A queen line's breeder is either a real member or a
+standalone breeder record (someone contributing a line who isn't a registered platform
+member) — the first "either a real member or a different kind of record" reference
+anywhere in this schema, via two nullable FK columns (`breeder_member_id`/`breeder_id`)
+and an XOR check constraint, same shape `repository_documents` already uses for
+`storage_path`/`external_url`. None of the seven mock queen lines carried over — their
+breeder fields pointed at mock seed member ids that don't exist as real `members` rows,
+so production starts with zero queen lines and zero breeders, same as Phase 5's hives/
+inspections did. Resolved once, server-side: `loadApiaries`/`loadApiary`'s hive query
+embeds each hive's queen line and breeder directly (`hive.lineInfo`), so
+`js/views/comb.js`'s readout needs no separate lookup call at all — and finally has the
+null-guard it never had, since a real hive can carry no queen line, unlike every mock one.
 
 ## Wiring up the real integrations
 

@@ -3,7 +3,7 @@
    Authentication is delegated to Wild Apricot; this simulates the handoff.
    ========================================================================== */
 
-import { queenLines, members } from '../data.js';
+import { members } from '../data.js';
 import { signIn, signInWithPassword, loadSignedInMember, requestPasswordReset } from '../store.js';
 import { brandMark, icons, toast, modal, closeModal } from '../ui.js';
 import { isConfigured, startWildApricotLogin } from '../waAuth.js';
@@ -53,7 +53,6 @@ export function renderGate() {
 
         <dl class="gate-ticker">
           <div><dt>Research apiaries</dt><dd>3</dd></div>
-          <div><dt>Queen lines</dt><dd>${queenLines.length}</dd></div>
           <div><dt>Contributing members</dt><dd>${members.length}</dd></div>
         </dl>
       </section>

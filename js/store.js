@@ -4,7 +4,6 @@
    ========================================================================== */
 
 import {
-  queenLines,
   members as seedMembers, currentUser as seedCurrentUser,
 } from './data.js';
 import { getSupabase, SUPABASE_CONFIG } from './supabaseClient.js';
@@ -22,10 +21,6 @@ const defaults = () => ({
   notifications: [],
   contactDetails: {},
   roleOverrides: {},
-  newQueenLines: [],
-  queenLineOverrides: {},
-  breeders: [],
-  breederOverrides: {},
   digest: 'instant',
   currentUserId: null,
   provisionedMembers: [],
@@ -1167,66 +1162,112 @@ export async function removeProjectTeamMember(projectId, memberId) {
    exactly like addProject/setProjectTeamMember do. */
 
 /* --- queen lines & breeders --------------------------------------------------
-   Queen lines are a program-wide record, not scoped to one apiary — hives
-   reference a line by its code (hive.line), so the code stays fixed once a
-   line is created, same reasoning as hive ids. Unlike hive id, the code is
-   never shown in the UI — members only ever see and edit the line's name,
-   which can change; the code is an internal key only, so it's generated
-   here rather than entered. A line's breeder can be either an existing
-   member (id like 'm7') or a standalone breeder record added below, for
-   someone contributing a line who isn't a registered platform member —
-   resolved uniformly by breederById. */
+   Phase 4 of the backend migration — real Supabase tables now (see
+   supabase/migrations/20260924000000_queen_lines_breeders.sql). Queen
+   lines are a program-wide record, not scoped to one apiary — hives
+   reference a line by its code (hive.line — see hives.queen_line), so the
+   code stays fixed once a line is created, same reasoning as hive ids and
+   never shown/edited in the UI, generated server-side instead.
 
-export function allQueenLines() {
-  return [...state.newQueenLines, ...queenLines].map((l) => ({ ...l, ...(state.queenLineOverrides[l.code] || {}) }));
+   A line's breeder is either a real member or a standalone breeder record
+   (someone contributing a line who isn't a registered platform member) —
+   mutually exclusive real columns now (breeder_member_id XOR breeder_id),
+   not the old id-prefix regex trick, which only ever worked for mock ids.
+   loadQueenLines() embeds whichever one is set directly onto each line as
+   `breeder`, so nothing downstream needs a separate lookup call. */
+
+const QUEEN_LINE_FIELDS = 'code, name, generation, vsh_mean, note, breeder_member:members!breeder_member_id(id, name, state, initials), breeder_standalone:breeders!breeder_id(id, name, state, note)';
+
+/* Standalone breeders (public.breeders) have no stored initials column,
+   unlike members — avatar() (js/ui.js) needs one either way, so it's
+   computed here the same way js/store.js's member-facing code already
+   does elsewhere. */
+const initialsOf = (name) => name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 3) || '?';
+
+function normalizeQueenLineRow(row) {
+  const breeder = row.breeder_member
+    ? { ...row.breeder_member, kind: 'member' }
+    : { ...row.breeder_standalone, kind: 'standalone', initials: initialsOf(row.breeder_standalone.name) };
+  return { code: row.code, name: row.name, gen: row.generation, vshMean: row.vsh_mean, note: row.note, breeder };
 }
 
-export const lineByCode = (code) => allQueenLines().find((l) => l.code === code);
+export async function loadQueenLines() {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('queen_lines').select(QUEEN_LINE_FIELDS).order('name');
+  if (error) throw error;
+  return data.map(normalizeQueenLineRow);
+}
 
-function generateLineCode(name) {
+/* Auto-generates a unique code from name initials, same shape addApiary's
+   own code generation uses. breederValue is "member:<id>" or
+   "standalone:<id>" (see js/views/dashboard.js's breederOptions) — split
+   here to populate exactly one of the two FK columns. */
+async function generateQueenLineCode(supabase, name) {
   const base = (name.match(/[A-Za-z]+/) || ['LIN'])[0].slice(0, 3).toUpperCase() || 'LIN';
-  const taken = new Set(allQueenLines().map((l) => l.code));
+  const { data: existing, error } = await supabase.from('queen_lines').select('code');
+  if (error) throw error;
+  const taken = new Set(existing.map((l) => l.code));
   let n = 1;
   let code = `${base}-${String(n).padStart(2, '0')}`;
   while (taken.has(code)) { n++; code = `${base}-${String(n).padStart(2, '0')}`; }
   return code;
 }
 
-export function addQueenLine({ name, breeder, gen, vshMean, note }) {
-  const line = { code: generateLineCode(name), name, breeder, gen: gen || 1, vshMean: vshMean ?? 0, note: note || '' };
-  state.newQueenLines.unshift(line);
-  commit();
-  return line;
+function splitBreederValue(breederValue) {
+  const [kind, id] = breederValue.split(':');
+  return { breeder_member_id: kind === 'member' ? id : null, breeder_id: kind === 'standalone' ? id : null };
 }
 
-export function updateQueenLine(code, patch) {
-  state.queenLineOverrides[code] = { ...(state.queenLineOverrides[code] || {}), ...patch };
-  commit();
+export async function addQueenLine({ name, breederValue, generation, vshMean, note }) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can add a queen line.');
+  const supabase = await getSupabase();
+  const code = await generateQueenLineCode(supabase, name);
+  const { data, error } = await supabase
+    .from('queen_lines')
+    .insert({ code, name, ...splitBreederValue(breederValue), generation: generation || 1, vsh_mean: vshMean ?? null, note: note || null })
+    .select(QUEEN_LINE_FIELDS)
+    .single();
+  if (error) throw error;
+  return normalizeQueenLineRow(data);
 }
 
-const initialsOf = (name) => name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 3) || '?';
-
-export function allBreeders() {
-  return state.breeders.map((b) => ({ ...b, ...(state.breederOverrides[b.id] || {}) }));
+export async function updateQueenLine(code, { name, breederValue, generation, vshMean, note }) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can edit a queen line.');
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('queen_lines')
+    .update({ name, ...splitBreederValue(breederValue), generation: generation || 1, vsh_mean: vshMean ?? null, note: note || null })
+    .eq('code', code);
+  if (error) throw error;
 }
 
-export function addBreeder({ name, state: region, note }) {
-  const b = { id: `br-${Date.now()}`, name, state: region || '', note: note || '', initials: initialsOf(name) };
-  state.breeders.unshift(b);
-  commit();
-  return b;
+export async function loadBreeders() {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('breeders').select('*').order('name');
+  if (error) throw error;
+  return data;
 }
 
-export function updateBreeder(breederId, patch) {
-  state.breederOverrides[breederId] = { ...(state.breederOverrides[breederId] || {}), ...patch };
-  commit();
+export async function addBreeder({ name, state: region, note }) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can add a breeder.');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('breeders')
+    .insert({ name, state: region || null, note: note || null })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
 }
 
-/* A queen line's breeder is either a member id ('m7') or a standalone
-   breeder id ('br-...') — resolve to a display-ready shape either way. */
-export function breederById(id) {
-  if (/^m\d+$/.test(id)) return memberById(id);
-  return allBreeders().find((b) => b.id === id) || { id, name: 'Unknown breeder', state: '', initials: '?' };
+export async function updateBreeder(breederId, { name, state: region, note }) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can edit a breeder.');
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('breeders')
+    .update({ name, state: region || null, note: note || null })
+    .eq('id', breederId);
+  if (error) throw error;
 }
 
 /* Translates real Postgres rows into the exact shape js/data.js's mock
@@ -1251,6 +1292,12 @@ function normalizeHiveRow(h) {
     /* ISO timestamp or null — was a stored "days since" int (lastSeen);
        js/views/comb.js computes the relative label from this instead. */
     lastInspectedAt: h.last_inspected_at,
+    /* Resolved queen line + breeder, or null — `line` above stays the
+       plain code (still needed as-is for the hive edit form's <select>);
+       this is the ready-to-render shape js/views/comb.js's renderReadout
+       and js/views/apiaries.js's "Queen lines on this site" table read
+       directly, no separate lookup call needed. */
+    lineInfo: h.queen_line_info ? normalizeQueenLineRow(h.queen_line_info) : null,
   };
 }
 
@@ -1299,7 +1346,7 @@ export async function loadApiaries() {
 
   const apiaryIds = apiaryRows.map((a) => a.id);
   const [{ data: hiveRows, error: hiveErr }, { data: inspRows, error: inspErr }] = await Promise.all([
-    supabase.from('hives').select('*').in('apiary_id', apiaryIds),
+    supabase.from('hives').select(`*, queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`).in('apiary_id', apiaryIds),
     supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').in('apiary_id', apiaryIds).order('occurred_on', { ascending: false }),
   ]);
   if (hiveErr) throw hiveErr;
@@ -1332,7 +1379,7 @@ export async function loadApiary(id) {
     { data: team, error: teamErr },
   ] = await Promise.all([
     supabase.from('apiaries').select('*').eq('id', id).single(),
-    supabase.from('hives').select('*').eq('apiary_id', id).order('id'),
+    supabase.from('hives').select(`*, queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`).eq('apiary_id', id).order('id'),
     supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').eq('apiary_id', id).order('occurred_on', { ascending: false }),
     supabase.from('apiary_managers').select(`member_id, access_level, member:members!member_id(${MEMBER_DISPLAY_FIELDS})`).eq('apiary_id', id),
   ]);

@@ -70,23 +70,6 @@ export const currentUser = members[0];
 export const memberById = (id) => members.find((m) => m.id === id) || members[0];
 
 /* --------------------------------------------------------------------------
-   [SEED — Phase 4] Queen lines. Each traces to a contributing breeder.
-   -------------------------------------------------------------------------- */
-
-export const queenLines = [
-  { code: 'BRW-14', name: 'Barrowfield 14',  breeder: 'm2', gen: 7, vshMean: 82, note: 'Highest recapping rate in the program. Slow spring build.' },
-  { code: 'KLN-03', name: 'Kellyanne 3',     breeder: 'm7', gen: 5, vshMean: 76, note: 'Broad brood pattern, calm on the frame.' },
-  { code: 'TMB-22', name: 'Tambo 22',        breeder: 'm5', gen: 9, vshMean: 88, note: 'Program benchmark for VSH expression.' },
-  { code: 'ORA-08', name: 'Oradale 8',       breeder: 'm4', gen: 3, vshMean: 64, note: 'Recent entrant. Strong honey yield, VSH under assessment.' },
-  { code: 'WDG-11', name: 'Wandagee 11',     breeder: 'm7', gen: 6, vshMean: 71, note: 'Drought hardy. Sourced from Gascoyne stock.' },
-  { code: 'MRN-05', name: 'Merrindale 5',    breeder: 'm10', gen: 4, vshMean: 79, note: 'Low swarming tendency across three seasons.' },
-  { code: 'CVE-17', name: 'Coalvale 17',     breeder: 'm6', gen: 8, vshMean: 85, note: 'II-maintained closed population. Narrow genetic base.' },
-];
-
-/* [SEED — Phase 4] */
-export const lineByCode = (code) => queenLines.find((l) => l.code === code);
-
-/* --------------------------------------------------------------------------
    Apiary/hive/inspection display vocabulary and pure helpers. The tables
    themselves (apiaries, hives, inspections) moved to real Supabase rows in
    Phase 5 — see js/store.js's loadApiaries/loadApiary — so nothing here is
