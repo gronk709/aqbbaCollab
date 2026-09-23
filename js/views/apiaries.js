@@ -886,6 +886,9 @@ async function openInspectionForm(ap, hives) {
         ${scoreOptions('Vigour', 'i-vigour')}
         ${scoreOptions('Hygiene', 'i-hygiene')}
       </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
+        ${scoreOptions('Brood Pattern', 'i-brood-pattern')}
+      </div>
       <div class="field">
         <label>Hives</label>
         <div id="i-hives-wrap">${renderHiveChecklist(hives)}</div>
@@ -942,6 +945,7 @@ async function openInspectionForm(ap, hives) {
         temperament: scoreOf('#i-temperament'),
         vigour: scoreOf('#i-vigour'),
         hygiene: scoreOf('#i-hygiene'),
+        broodPattern: scoreOf('#i-brood-pattern'),
         note: scrim.querySelector('#i-note').value.trim(),
         dateStr,
         done: scrim.querySelector('#i-done').checked,
