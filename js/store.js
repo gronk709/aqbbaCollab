@@ -1169,26 +1169,21 @@ export async function removeProjectTeamMember(projectId, memberId) {
    code stays fixed once a line is created, same reasoning as hive ids and
    never shown/edited in the UI, generated server-side instead.
 
-   A line's breeder is either a real member or a standalone breeder record
-   (someone contributing a line who isn't a registered platform member) —
-   mutually exclusive real columns now (breeder_member_id XOR breeder_id),
-   not the old id-prefix regex trick, which only ever worked for mock ids.
-   loadQueenLines() embeds whichever one is set directly onto each line as
-   `breeder`, so nothing downstream needs a separate lookup call. */
+   A line's breeder must be a real member who holds the "Breeder" role
+   (member_roles) — enforced server-side by a trigger
+   (queen_lines_breeder_role_check, see 20260923223117_queen_line_breeder_
+   role_restriction.sql), not just by which members this form offers. The
+   standalone (non-member) breeder path this used to also support is gone
+   — a free-text name was the one place in this schema nothing checked
+   against the real member directory, so it's removed rather than
+   tightened. loadQueenLines() embeds the credited member directly onto
+   each line as `breeder`, so nothing downstream needs a separate lookup
+   call. */
 
-const QUEEN_LINE_FIELDS = 'code, name, generation, vsh_mean, note, breeder_member:members!breeder_member_id(id, name, state, initials), breeder_standalone:breeders!breeder_id(id, name, state, note)';
-
-/* Standalone breeders (public.breeders) have no stored initials column,
-   unlike members — avatar() (js/ui.js) needs one either way, so it's
-   computed here the same way js/store.js's member-facing code already
-   does elsewhere. */
-const initialsOf = (name) => name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 3) || '?';
+const QUEEN_LINE_FIELDS = 'code, name, generation, vsh_mean, note, breeder:members!breeder_member_id(id, name, state, initials)';
 
 function normalizeQueenLineRow(row) {
-  const breeder = row.breeder_member
-    ? { ...row.breeder_member, kind: 'member' }
-    : { ...row.breeder_standalone, kind: 'standalone', initials: initialsOf(row.breeder_standalone.name) };
-  return { code: row.code, name: row.name, gen: row.generation, vshMean: row.vsh_mean, note: row.note, breeder };
+  return { code: row.code, name: row.name, gen: row.generation, vshMean: row.vsh_mean, note: row.note, breeder: row.breeder };
 }
 
 export async function loadQueenLines() {
@@ -1198,10 +1193,24 @@ export async function loadQueenLines() {
   return data.map(normalizeQueenLineRow);
 }
 
+/* Every real member holding the "Breeder" role (member_roles) — the only
+   members selectable as a queen line's breeder. Assigning that role
+   happens on a member's own page (js/views/managers.js's role editor),
+   not here; this dashboard only picks among members who already have it. */
+export async function loadBreederMembers() {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('members')
+    .select('id, name, initials, member_roles!inner(role_name)')
+    .eq('member_roles.role_name', 'Breeder')
+    .is('deactivated_at', null)
+    .order('name');
+  if (error) throw error;
+  return data;
+}
+
 /* Auto-generates a unique code from name initials, same shape addApiary's
-   own code generation uses. breederValue is "member:<id>" or
-   "standalone:<id>" (see js/views/dashboard.js's breederOptions) — split
-   here to populate exactly one of the two FK columns. */
+   own code generation uses. */
 async function generateQueenLineCode(supabase, name) {
   const base = (name.match(/[A-Za-z]+/) || ['LIN'])[0].slice(0, 3).toUpperCase() || 'LIN';
   const { data: existing, error } = await supabase.from('queen_lines').select('code');
@@ -1213,60 +1222,26 @@ async function generateQueenLineCode(supabase, name) {
   return code;
 }
 
-function splitBreederValue(breederValue) {
-  const [kind, id] = breederValue.split(':');
-  return { breeder_member_id: kind === 'member' ? id : null, breeder_id: kind === 'standalone' ? id : null };
-}
-
-export async function addQueenLine({ name, breederValue, generation, vshMean, note }) {
+export async function addQueenLine({ name, breederMemberId, generation, vshMean, note }) {
   if (!isWebAdmin()) throw new Error('Only a Web Admin can add a queen line.');
   const supabase = await getSupabase();
   const code = await generateQueenLineCode(supabase, name);
   const { data, error } = await supabase
     .from('queen_lines')
-    .insert({ code, name, ...splitBreederValue(breederValue), generation: generation || 1, vsh_mean: vshMean ?? null, note: note || null })
+    .insert({ code, name, breeder_member_id: breederMemberId, generation: generation || 1, vsh_mean: vshMean ?? null, note: note || null })
     .select(QUEEN_LINE_FIELDS)
     .single();
   if (error) throw error;
   return normalizeQueenLineRow(data);
 }
 
-export async function updateQueenLine(code, { name, breederValue, generation, vshMean, note }) {
+export async function updateQueenLine(code, { name, breederMemberId, generation, vshMean, note }) {
   if (!isWebAdmin()) throw new Error('Only a Web Admin can edit a queen line.');
   const supabase = await getSupabase();
   const { error } = await supabase
     .from('queen_lines')
-    .update({ name, ...splitBreederValue(breederValue), generation: generation || 1, vsh_mean: vshMean ?? null, note: note || null })
+    .update({ name, breeder_member_id: breederMemberId, generation: generation || 1, vsh_mean: vshMean ?? null, note: note || null })
     .eq('code', code);
-  if (error) throw error;
-}
-
-export async function loadBreeders() {
-  const supabase = await getSupabase();
-  const { data, error } = await supabase.from('breeders').select('*').order('name');
-  if (error) throw error;
-  return data;
-}
-
-export async function addBreeder({ name, state: region, note }) {
-  if (!isWebAdmin()) throw new Error('Only a Web Admin can add a breeder.');
-  const supabase = await getSupabase();
-  const { data, error } = await supabase
-    .from('breeders')
-    .insert({ name, state: region || null, note: note || null })
-    .select('*')
-    .single();
-  if (error) throw error;
-  return data;
-}
-
-export async function updateBreeder(breederId, { name, state: region, note }) {
-  if (!isWebAdmin()) throw new Error('Only a Web Admin can edit a breeder.');
-  const supabase = await getSupabase();
-  const { error } = await supabase
-    .from('breeders')
-    .update({ name, state: region || null, note: note || null })
-    .eq('id', breederId);
   if (error) throw error;
 }
 
