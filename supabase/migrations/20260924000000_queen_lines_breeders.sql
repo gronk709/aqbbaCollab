@@ -26,8 +26,14 @@
 -- rows — carrying them over would mean fabricating a placeholder breeder
 -- or misattributing a real member. Production starts with zero queen
 -- lines and zero breeders, same as hives/inspections started empty in
--- Phase 5 (confirmed zero hives reference anything here yet, so there's
--- no orphaning risk either way).
+-- Phase 5.
+--
+-- Between Phase 5 shipping and this migration, a real hive got created
+-- through the still-mock queen-line dropdown and picked up 'BRW-14' — one
+-- of the purged mock codes — as plain text (hives.queen_line had no FK
+-- yet). The hive itself is real and stays; the dangling reference to a
+-- line that was never real is cleared below so the new FK can be added.
+-- The owning apiary manager can reassign a real queen line afterward.
 --
 -- RLS stays flat Web-Admin-only for writes on both tables — matching
 -- exactly what the mock UI already gated (isWebAdmin() around "Add
@@ -58,6 +64,9 @@ create table public.queen_lines (
   updated_at        timestamptz not null default now(),
   constraint queen_lines_breeder_xor check ((breeder_member_id is not null) <> (breeder_id is not null))
 );
+
+update public.hives set queen_line = null
+  where queen_line is not null and queen_line not in (select code from public.queen_lines);
 
 -- Finishes the precedent Phase 5 set for itself: hives.queen_line was left
 -- unconstrained specifically because this table didn't exist yet.
