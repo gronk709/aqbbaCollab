@@ -416,8 +416,22 @@ can't resolve a real thread's title (an unrelated, smaller gap — see that file
 comment), and the "Email frequency" digest selector remains UI-only; every notification
 is still sent the instant it happens, not batched.
 
-Still mock (`js/data.js` + `js/store.js`'s localStorage patches), until their own phase
-comes up: queen lines/breeders (Phase 4), apiaries/hives/inspections (Phase 5).
+Phase 5 (apiaries/hives/inspections —
+`supabase/migrations/20260923000000_apiaries_hives_inspections.sql`) is **live and
+verified**: finishes what Phase 1 started — `apiary_managers` was created back then with
+an unconstrained `apiary_id` and a `manage`/`operate` `access_level` nothing enforced yet;
+this migration adds `apiaries`/`hives`/`inspections`, wires up the FK, and actually
+enforces the split (`manage` = create/edit/delete hives, edit the apiary; `operate` =
+update hives, log inspections). Only Web Admin creates/edits/removes an apiary; site
+access is a real per-apiary grant now, assigned from the apiary's own page ("Team" panel),
+same shape as `project_team`. Of the three seed apiaries, all three carry over (real
+research sites, not illustrative content) but their hives and inspections don't — those
+were entirely RNG-fabricated demo filler, so every site starts with zero hives/
+inspections in production, same as marketplace/forum started with zero real listings/
+threads. A hive's "last inspected" is a real timestamp now, not a number that only ever
+rots. Queen lines/breeders (Phase 4) stays mock — nothing here depends on it moving too;
+`hives.queen_line` stays an unconstrained column until it does, same precedent
+`apiary_managers.apiary_id` set for this phase.
 
 ## Wiring up the real integrations
 

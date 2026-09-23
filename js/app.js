@@ -7,6 +7,7 @@ import {
   roleLabel, currentUser, loadSignedInMember, loadNotifications,
   isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
   loadProjects, loadProject, loadMembersDirectory, loadMemberDetail,
+  loadApiaries, loadApiary,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
@@ -47,19 +48,22 @@ const NAV = [
 
 const ROUTES = [
   { test: /^#\/?$/,                    view: renderProjects, load: loadProjects },
-  { test: /^#\/apiaries\/?$/,          view: renderApiaries },
-  /* Loads the project list too (Phase 6), just for the "Running here"
+  { test: /^#\/apiaries\/?$/,          view: renderApiaries, load: loadApiaries },
+  /* Also loads the project list (Phase 6), just for the "Running here"
      panel — which projects are running at this site. */
-  { test: /^#\/apiaries\/(.+)$/,       view: renderApiary, load: loadProjects },
+  { test: /^#\/apiaries\/(.+)$/,       view: renderApiary,
+    load: (id) => Promise.all([loadApiary(id), loadProjects()]).then(([a, projects]) => ({ ...a, projects })) },
   { test: /^#\/members\/?$/,           view: renderMembers, load: loadMembersDirectory },
   { test: /^#\/managers\/(.+)$/,       view: renderManager, load: (id) => loadMemberDetail(id) },
   { test: /^#\/projects\/?$/,          view: renderProjects, load: loadProjects },
   /* The dashboard is a topic area of the VSH program (PRJ-00), not a page in
      its own right — hence the project-scoped route. Must precede the generic
      project route, which would otherwise swallow "p0/dashboard" as an id.
-     Still loads the project list (Phase 6) just for its "N research
-     projects" stat tile. */
-  { test: /^#\/projects\/p0\/dashboard\/?$/, view: renderDashboard, load: loadProjects },
+     Loads the project list (Phase 6, for its "N research projects" stat
+     tile) and every apiary/hive/inspection (Phase 5, for the rest of the
+     page) side by side. */
+  { test: /^#\/projects\/p0\/dashboard\/?$/, view: renderDashboard,
+    load: () => Promise.all([loadProjects(), loadApiaries()]).then(([projects, ap]) => ({ ...ap, projects })) },
   { test: /^#\/projects\/(.+)$/,       view: renderProject, load: (id) => loadProject(id) },
   /* Async routes (Phase 2 marketplace, Phase 3 forum/repository, Phase 6
      projects — real Supabase rows now). `load` fetches the data render()

@@ -3,7 +3,7 @@
    Authentication is delegated to Wild Apricot; this simulates the handoff.
    ========================================================================== */
 
-import { apiaries, queenLines, members } from '../data.js';
+import { queenLines, members } from '../data.js';
 import { signIn, signInWithPassword, loadSignedInMember, requestPasswordReset } from '../store.js';
 import { brandMark, icons, toast, modal, closeModal } from '../ui.js';
 import { isConfigured, startWildApricotLogin } from '../waAuth.js';
@@ -31,8 +31,6 @@ function combBackdrop() {
 }
 
 export function renderGate() {
-  const hiveCount = apiaries.reduce((s, a) => s + a.hives, 0);
-
   return `
     <div class="gate">
       <section class="gate-stage">
@@ -54,8 +52,7 @@ export function renderGate() {
         </div>
 
         <dl class="gate-ticker">
-          <div><dt>Research apiaries</dt><dd>${apiaries.length}</dd></div>
-          <div><dt>Hives under assessment</dt><dd>${hiveCount}</dd></div>
+          <div><dt>Research apiaries</dt><dd>3</dd></div>
           <div><dt>Queen lines</dt><dd>${queenLines.length}</dd></div>
           <div><dt>Contributing members</dt><dd>${members.length}</dd></div>
         </dl>

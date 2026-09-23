@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import {
-  apiaries, inspections, queenLines,
+  queenLines,
   members as seedMembers, currentUser as seedCurrentUser,
 } from './data.js';
 import { getSupabase, SUPABASE_CONFIG } from './supabaseClient.js';
@@ -20,14 +20,8 @@ const defaults = () => ({
   /* Loaded fresh from Supabase (loadNotifications) — see the "notifications"
      section below. Empty until that first resolves, same as subs above. */
   notifications: [],
-  newApiaries: [],
-  newHives: [],
-  newInspections: [],
   contactDetails: {},
   roleOverrides: {},
-  apiaryManagerOverrides: {},
-  hiveOverrides: {},
-  apiaryOverrides: {},
   newQueenLines: [],
   queenLineOverrides: {},
   breeders: [],
@@ -113,9 +107,20 @@ export async function loadMembersDirectory() {
 
 export async function loadMemberDetail(id) {
   const supabase = await getSupabase();
-  const { data: row, error } = await supabase.from('members').select(MEMBER_ROW_FIELDS).eq('id', id).single();
+  const [{ data: row, error }, { data: grants, error: grantsErr }] = await Promise.all([
+    supabase.from('members').select(MEMBER_ROW_FIELDS).eq('id', id).single(),
+    /* Real per-site access (Phase 5, apiary_managers) — replaces the old
+       mock-only "Manages" panel, which read allApiaries().filter(a =>
+       a.managers.includes(m.id)), a function that no longer exists. */
+    supabase.from('apiary_managers').select('access_level, apiary:apiaries(id, code, name)').eq('member_id', id),
+  ]);
   if (error) throw error;
-  return normalizeMemberRow(row);
+  if (grantsErr) throw grantsErr;
+
+  return {
+    ...normalizeMemberRow(row),
+    manages: grants.map((g) => ({ ...g.apiary, accessLevel: g.access_level })),
+  };
 }
 
 /* Upserts (member_id is member_contact_details' own primary key) rather
@@ -964,6 +969,22 @@ let cachedRecruitingCount = 0;
    badge is simply 0 until Projects has been loaded once this session. */
 export const recruitingCount = () => cachedRecruitingCount;
 
+/* projects.sites is a plain jsonb array of apiary ids (apiaries didn't
+   exist when Phase 6 shipped) — resolves those ids to {id, code, name} for
+   display (js/views/projects.js's sitesLine/Sites panel), same lean-lookup
+   shape as loadRealMembers vs. the richer loadMembersDirectory. Replaces
+   the old synchronous allApiaryById, which read a mock array nothing here
+   still has by the time Phase 5 makes apiaries real. */
+async function siteDetailsFor(supabase, siteIdArrays) {
+  const ids = [...new Set(siteIdArrays.flat())];
+  if (!ids.length) return () => [];
+  const { data, error } = await supabase.from('apiaries').select('id, code, name').in('id', ids);
+  if (error) throw error;
+  const byId = {};
+  data.forEach((a) => { byId[a.id] = a; });
+  return (siteIds) => (siteIds || []).map((id) => byId[id]).filter(Boolean);
+}
+
 export async function loadProjects() {
   const supabase = await getSupabase();
   const { data: rows, error } = await supabase
@@ -973,8 +994,9 @@ export async function loadProjects() {
   if (error) throw error;
 
   const counts = await participantCounts(rows.map((p) => p.id));
+  const resolveSites = await siteDetailsFor(supabase, rows.map((p) => p.sites || []));
   cachedRecruitingCount = rows.filter((p) => p.status === 'recruiting').length;
-  return rows.map((p) => ({ ...p, participantCount: counts[p.id] ?? 0 }));
+  return rows.map((p) => ({ ...p, participantCount: counts[p.id] ?? 0, siteDetails: resolveSites(p.sites) }));
 }
 
 async function participantCounts(projectIds) {
@@ -1011,9 +1033,10 @@ export async function loadProject(id) {
   const me = currentUser();
   const admin = isWebAdmin(me.id);
   const myAccess = team.find((t) => t.member_id === me.id)?.access_level ?? null;
+  const resolveSites = await siteDetailsFor(supabase, [project.sites || []]);
 
   return {
-    project,
+    project: { ...project, siteDetails: resolveSites(project.sites) },
     sections,
     participants: participants.map((p) => ({ ...p, member: withRoles(p.member) })),
     team: team.map((t) => ({ ...t, member: withRoles(t.member) })),
@@ -1132,36 +1155,16 @@ export async function removeProjectTeamMember(projectId, memberId) {
 }
 
 /* --- apiaries, hives & inspections ----------------------------------------
-   These are the program's own research data, not member social content, so
-   they're kept separate from the forum/marketplace/project patterns above
-   even though the shape of "seeded + member-added, merged for rendering" is
-   the same idea throughout. */
-
-/* A hive's fields can be corrected or updated after the fact — either the
-   full Edit Hive form, or just a status change from a hive-level inspection
-   (see addInspection below) — stored the same way as roleOverrides etc.,
-   keyed by hive id and applied on top of whichever base record (seed or
-   member-added) the hive came from. */
-function withHiveOverrides(h) {
-  const o = state.hiveOverrides[h.id];
-  return o ? { ...h, ...o } : h;
-}
-
-function setHiveStatus(hiveId, status) {
-  state.hiveOverrides[hiveId] = { ...(state.hiveOverrides[hiveId] || {}), status, lastSeen: 0 };
-}
-
-export function updateHive(hiveId, patch) {
-  state.hiveOverrides[hiveId] = { ...(state.hiveOverrides[hiveId] || {}), ...patch };
-  commit();
-}
-
-/* An apiary's fields — including status — are editable after creation from
-   its own page, same override pattern as hives above. */
-export function updateApiary(apiaryId, patch) {
-  state.apiaryOverrides[apiaryId] = { ...(state.apiaryOverrides[apiaryId] || {}), ...patch };
-  commit();
-}
+   Phase 5 of the backend migration — real Supabase tables now (see
+   supabase/migrations/20260923000000_apiaries_hives_inspections.sql), same
+   shape every prior phase's real entities settled into: a lean loadX() for
+   list/dashboard use, a richer loadOne(id) for the detail page (including
+   the per-entity team grant), and plain insert/update writers with RLS as
+   the real backstop — content-level writes (hives, inspections) don't
+   duplicate that check client-side, exactly like addProjectSection/
+   updateProjectSection don't; only identity-level writes (the apiary row
+   itself, and the team grant) get a client-side isWebAdmin() pre-check,
+   exactly like addProject/setProjectTeamMember do. */
 
 /* --- queen lines & breeders --------------------------------------------------
    Queen lines are a program-wide record, not scoped to one apiary — hives
@@ -1226,71 +1229,270 @@ export function breederById(id) {
   return allBreeders().find((b) => b.id === id) || { id, name: 'Unknown breeder', state: '', initials: '?' };
 }
 
-function withMemberHives(ap) {
-  const extra = state.newHives.filter((h) => h.apiary === ap.id);
-  const hiveRecords = [...(ap.hiveRecords || []), ...extra].map(withHiveOverrides);
-  const override = state.apiaryOverrides[ap.id] || {};
-  return { ...ap, ...override, hiveRecords, hives: hiveRecords.length, managers: managersFor(ap.id) };
+/* Translates real Postgres rows into the exact shape js/data.js's mock
+   apiaries/hives/inspections arrays already had — same reasoning as
+   normalizeMemberRow above: nothing downstream (js/views/apiaries.js,
+   js/views/comb.js, js/views/dashboard.js) needs to change field names,
+   just where the data came from. */
+function normalizeApiaryRow(ap) {
+  return {
+    id: ap.id, code: ap.code, name: ap.name, region: ap.region, address: ap.address,
+    stage: ap.stage, dateEstablished: ap.date_established, dateRemoved: ap.date_removed,
+    flora: ap.flora, brief: ap.brief,
+  };
 }
 
-export function allApiaries() {
-  return [...state.newApiaries, ...apiaries].map(withMemberHives);
+function normalizeHiveRow(h) {
+  return {
+    id: h.id, apiary: h.apiary_id, status: h.status, line: h.queen_line,
+    queenId: h.queen_id, queenColour: h.queen_colour, queenYear: h.queen_year,
+    vsh: h.vsh, miteLoad: h.mite_load, broodFrames: h.hive_configuration,
+    treatmentFree: h.treatment_free_seasons, comment: h.comment,
+    /* ISO timestamp or null — was a stored "days since" int (lastSeen);
+       js/views/comb.js computes the relative label from this instead. */
+    lastInspectedAt: h.last_inspected_at,
+  };
 }
 
-export const allApiaryById = (id) => allApiaries().find((a) => a.id === id);
+function normalizeInspectionRow(i) {
+  return {
+    id: i.id, apiary: i.apiary_id, kind: i.kind,
+    /* The real inspector row (id, name, initials), embedded via the
+       inspector_id FK — inspections.by used to be a mock member id string,
+       resolved with memberById() in the view; that only ever knew about
+       the seed roster plus whichever real member is currently signed in,
+       never an arbitrary other real member, so a real inspector now needs
+       an actual join instead. */
+    by: i.inspector,
+    hiveIds: i.hive_ids, status: i.resulting_status,
+    productivity: i.productivity, temperament: i.temperament, vigour: i.vigour, hygiene: i.hygiene,
+    note: i.note, done: i.done, date: new Date(`${i.occurred_on}T00:00:00`),
+  };
+}
 
-export function addApiary({ name, region, coords, flora, brief, manager, established, stage }) {
+/* Attaches each inspection's hive_ids (normalized into inspection_hives,
+   not a stored array) — shared by loadApiaries/loadApiary so both build
+   the same shape. */
+async function withHiveIds(supabase, inspectionRows) {
+  const inspectionIds = inspectionRows.map((i) => i.id);
+  const { data, error } = await supabase
+    .from('inspection_hives')
+    .select('inspection_id, hive_id')
+    .in('inspection_id', inspectionIds);
+  if (error) throw error;
+  const byInspection = {};
+  data.forEach((r) => { (byInspection[r.inspection_id] ||= []).push(r.hive_id); });
+  return inspectionRows.map((i) => ({ ...i, hive_ids: byInspection[i.id] || [] }));
+}
+
+/* Every real apiary (excluding decommissioned ones — see updateApiary's
+   dateRemoved) with its hives embedded as hiveRecords, and every
+   inspection with its hiveIds — same shape js/data.js's mock apiaries/
+   inspections arrays already had, so renderApiaries and renderDashboard
+   (both need "every apiary + every hive + every inspection") barely
+   change. Used by both the #/apiaries list route and the dashboard route. */
+export async function loadApiaries() {
+  const supabase = await getSupabase();
+  const { data: apiaryRows, error: apErr } = await supabase
+    .from('apiaries').select('*').is('date_removed', null).order('name');
+  if (apErr) throw apErr;
+
+  const apiaryIds = apiaryRows.map((a) => a.id);
+  const [{ data: hiveRows, error: hiveErr }, { data: inspRows, error: inspErr }] = await Promise.all([
+    supabase.from('hives').select('*').in('apiary_id', apiaryIds),
+    supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').in('apiary_id', apiaryIds).order('occurred_on', { ascending: false }),
+  ]);
+  if (hiveErr) throw hiveErr;
+  if (inspErr) throw inspErr;
+
+  const hivesByApiary = {};
+  hiveRows.forEach((h) => { (hivesByApiary[h.apiary_id] ||= []).push(normalizeHiveRow(h)); });
+
+  const apiariesOut = apiaryRows.map((ap) => {
+    const hiveRecords = hivesByApiary[ap.id] || [];
+    return { ...normalizeApiaryRow(ap), hiveRecords, hives: hiveRecords.length };
+  });
+
+  const inspections = await withHiveIds(supabase, inspRows);
+  return { apiaries: apiariesOut, inspections: inspections.map(normalizeInspectionRow) };
+}
+
+/* One apiary in full: its hives, its inspections (with hiveIds), and its
+   team (apiary_managers joined to members — apiary_managers has two FKs to
+   members, member_id/granted_by, same ambiguity member_roles/project_team
+   hit; !member_id picks the right one) plus this member's own
+   isAdmin/canManage/canOperate, same shape loadProject's canManage/
+   canContribute already use. */
+export async function loadApiary(id) {
+  const supabase = await getSupabase();
+  const [
+    { data: apiary, error: apErr },
+    { data: hives, error: hiveErr },
+    { data: inspections, error: inspErr },
+    { data: team, error: teamErr },
+  ] = await Promise.all([
+    supabase.from('apiaries').select('*').eq('id', id).single(),
+    supabase.from('hives').select('*').eq('apiary_id', id).order('id'),
+    supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').eq('apiary_id', id).order('occurred_on', { ascending: false }),
+    supabase.from('apiary_managers').select(`member_id, access_level, member:members!member_id(${MEMBER_DISPLAY_FIELDS})`).eq('apiary_id', id),
+  ]);
+  if (apErr) throw apErr;
+  if (hiveErr) throw hiveErr;
+  if (inspErr) throw inspErr;
+  if (teamErr) throw teamErr;
+
+  const me = currentUser();
+  const admin = isWebAdmin(me.id);
+  const myAccess = team.find((t) => t.member_id === me.id)?.access_level ?? null;
+
+  const inspectionsWithHiveIds = await withHiveIds(supabase, inspections);
+
+  return {
+    apiary: normalizeApiaryRow(apiary),
+    hives: hives.map(normalizeHiveRow),
+    inspections: inspectionsWithHiveIds.map(normalizeInspectionRow),
+    team: team.map((t) => ({ ...t, member: withRoles(t.member) })),
+    isAdmin: admin,
+    canManage: admin || myAccess === 'manage',
+    canOperate: admin || myAccess === 'manage' || myAccess === 'operate',
+  };
+}
+
+/* Auto-generates a unique code from name initials, same as the mock
+   version did — the Add Apiary form has no code field of its own. */
+export async function addApiary({ name, region, address, stage, dateEstablished, flora, brief }) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can add an apiary.');
+  const supabase = await getSupabase();
+
   const initials = name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 4) || 'NEW';
-  const taken = new Set(allApiaries().map((a) => a.code));
+  const { data: existing, error: existingErr } = await supabase.from('apiaries').select('code');
+  if (existingErr) throw existingErr;
+  const taken = new Set(existing.map((a) => a.code));
   let code = initials;
   for (let n = 2; taken.has(code); n++) code = `${initials}${n}`;
 
-  const ap = {
-    id: `ap-${Date.now()}`, name, code,
-    region, coords: coords || '—',
-    stage: stage || 'establishing', manager,
-    established: established || new Date().getFullYear(),
-    hives: 0, flora: flora || '—', brief, hiveRecords: [], managers: [manager],
-  };
-  state.newApiaries.unshift(ap);
-  commit();
-  return ap;
+  const { data, error } = await supabase
+    .from('apiaries')
+    .insert({
+      id: `ap-${Date.now()}`, code, name, region,
+      address: address || null, stage: stage || 'establishing',
+      date_established: dateEstablished || null, flora: flora || null, brief: brief || null,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return normalizeApiaryRow(data);
 }
 
-/* Hive ID is entered by whoever registers the hive (validated for
-   uniqueness in the Add Hive form) rather than assigned automatically. */
-export function addHive(apiaryId, hive) {
-  const record = { apiary: apiaryId, lastSeen: 0, ...hive };
-  state.newHives.push(record);
-  commit();
-  return record;
+/* Same field names addApiary takes, plus dateRemoved (only ever set to
+   decommission a site — no UI writes it yet, so it's simply omitted from
+   every ordinary edit-apiary save). */
+export async function updateApiary(apiaryId, { name, region, address, flora, brief, stage, dateEstablished, dateRemoved }) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can edit an apiary.');
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('apiaries').update({
+    name, region, address: address || null, flora: flora || null, brief, stage,
+    date_established: dateEstablished || null, date_removed: dateRemoved,
+  }).eq('id', apiaryId);
+  if (error) throw error;
 }
 
-function daysFromToday(dateStr) {
-  const d = new Date(`${dateStr}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((d - today) / 86400000);
+/* Hive ID is entered by whoever registers the hive — the table's own
+   primary key now enforces uniqueness instead of only a client-side check.
+   No client-side permission check, same as addProjectSection — the "Add
+   hive" button only shows when loadApiary's canManage said so, and RLS
+   (can_manage_apiary) is the real backstop either way. */
+export async function addHive(apiaryId, hive) {
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('hives')
+    .insert({
+      id: hive.id, apiary_id: apiaryId, status: hive.status,
+      queen_line: hive.line || null, queen_id: hive.queenId || null,
+      queen_colour: hive.queenColour || null, queen_year: hive.queenYear || null,
+      vsh: hive.vsh, mite_load: hive.miteLoad,
+      hive_configuration: hive.broodFrames || null,
+      treatment_free_seasons: hive.treatmentFree || 0,
+      comment: hive.comment || null,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return normalizeHiveRow(data);
 }
 
-function hydrateInspection(i) {
-  return { ...i, date: new Date(`${i.dateStr}T00:00:00`), offset: daysFromToday(i.dateStr) };
+export async function updateHive(hiveId, patch) {
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('hives').update({
+    status: patch.status, queen_line: patch.line || null, queen_id: patch.queenId || null,
+    queen_colour: patch.queenColour || null, queen_year: patch.queenYear || null,
+    vsh: patch.vsh, mite_load: patch.miteLoad,
+    hive_configuration: patch.broodFrames || null,
+    treatment_free_seasons: patch.treatmentFree || 0,
+    comment: patch.comment || null,
+  }).eq('id', hiveId);
+  if (error) throw error;
 }
 
-export function addInspection({ apiary, kind, by, hiveIds, status, note, dateStr, done }) {
-  const insp = {
-    id: `ui-${Date.now()}`, apiary, kind, by: by || currentUser().id,
-    hiveIds: hiveIds || [], status: status || null, done: !!done, note: note || '', dateStr,
-  };
-  state.newInspections.push(insp);
-  if (status) insp.hiveIds.forEach((hiveId) => setHiveStatus(hiveId, status));
-  commit();
-  return insp;
+/* Logs an inspection, records which hives it covered, and — since logging
+   *any* inspection is itself "seeing" a hive — stamps last_inspected_at on
+   every one of them, not only when a resulting status also changes it (the
+   mock's setHiveStatus only touched lastSeen on a status change, which
+   reads more like a shortcut than an intentional choice for a field that's
+   meant to mean "last seen/inspected" at all). Sequential writes, same as
+   setMemberRoles's remove-then-add — nothing in this schema wraps a
+   multi-step write in a transaction. */
+export async function addInspection({
+  apiaryId, kind, by, hiveIds, status,
+  productivity, temperament, vigour, hygiene, note, dateStr, done,
+}) {
+  const supabase = await getSupabase();
+  const { data: inspection, error } = await supabase
+    .from('inspections')
+    .insert({
+      apiary_id: apiaryId, kind, inspector_id: by,
+      resulting_status: status || null,
+      productivity: productivity || null, temperament: temperament || null,
+      vigour: vigour || null, hygiene: hygiene || null,
+      note: note || null, occurred_on: dateStr, done: !!done,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+
+  if (hiveIds.length) {
+    const { error: ihErr } = await supabase
+      .from('inspection_hives')
+      .insert(hiveIds.map((hive_id) => ({ inspection_id: inspection.id, hive_id })));
+    if (ihErr) throw ihErr;
+
+    const hivePatch = { last_inspected_at: new Date().toISOString() };
+    if (status) hivePatch.status = status;
+    const { error: hiveErr } = await supabase.from('hives').update(hivePatch).in('id', hiveIds);
+    if (hiveErr) throw hiveErr;
+  }
+
+  return normalizeInspectionRow({ ...inspection, hive_ids: hiveIds });
 }
 
-export const allInspections = () => [...state.newInspections.map(hydrateInspection), ...inspections];
-export const allRecentInspections = () => allInspections().filter((i) => i.done).sort((a, b) => b.date - a.date);
-export const allUpcomingInspections = () => allInspections().filter((i) => !i.done).sort((a, b) => a.date - b.date);
+/* The actual permission grant behind Apiary Manager's manage/operate
+   tiers — Web-Admin-only to change, exactly like setProjectTeamMember. */
+export async function setApiaryTeamMember(apiaryId, memberId, accessLevel) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can assign apiary team access.');
+  const me = requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('apiary_managers')
+    .upsert({ apiary_id: apiaryId, member_id: memberId, access_level: accessLevel, granted_by: me.id }, { onConflict: 'apiary_id,member_id' });
+  if (error) throw error;
+}
+
+export async function removeApiaryTeamMember(apiaryId, memberId) {
+  if (!isWebAdmin()) throw new Error('Only a Web Admin can change apiary team access.');
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('apiary_managers').delete().eq('apiary_id', apiaryId).eq('member_id', memberId);
+  if (error) throw error;
+}
 
 /* --- contact details --------------------------------------------------------
    Phone and email are mandatory once a member's contact record is saved, so
@@ -1444,26 +1646,6 @@ export async function inviteCollaborator({ name, email, roles }) {
   if (!res.ok) throw new Error(body.error || 'Could not send the invite.');
 }
 
-/* Reads the raw seed + member-added apiary lists directly (never
-   allApiaries()) so this can't recurse through withMemberHives, which calls
-   this function to build each apiary's live .managers field. */
-export function managersFor(apiaryId) {
-  if (state.apiaryManagerOverrides[apiaryId]) return state.apiaryManagerOverrides[apiaryId];
-  const ap = [...state.newApiaries, ...apiaries].find((a) => a.id === apiaryId);
-  return ap?.managers || (ap?.manager ? [ap.manager] : []);
-}
-
-export function setManagedApiaries(memberId, apiaryIds) {
-  [...state.newApiaries, ...apiaries].forEach((ap) => {
-    const current = managersFor(ap.id);
-    const has = current.includes(memberId);
-    const want = apiaryIds.includes(ap.id);
-    if (want && !has) state.apiaryManagerOverrides[ap.id] = [...current, memberId];
-    if (!want && has) state.apiaryManagerOverrides[ap.id] = current.filter((id) => id !== memberId);
-  });
-  commit();
-}
-
 /* --- permissions -------------------------------------------------------------
    Used to be checked against a "preview as" identity rather than the real
    signed-in member — a stand-in for not having real per-member sessions,
@@ -1473,12 +1655,6 @@ export function setManagedApiaries(memberId, apiaryIds) {
    member. */
 
 export const isWebAdmin = (memberId = currentUser().id) => rolesFor(memberId).includes('Web Admin');
-
-export function canEditApiary(apiaryId) {
-  const uid = currentUser().id;
-  if (isWebAdmin(uid)) return true;
-  return managersFor(apiaryId).includes(uid);
-}
 
 /* --- session ------------------------------------------------------------- */
 
