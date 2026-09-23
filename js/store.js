@@ -1199,10 +1199,17 @@ export async function loadQueenLines() {
    not here; this dashboard only picks among members who already have it. */
 export async function loadBreederMembers() {
   const supabase = await getSupabase();
+  const { data: grants, error: grantsErr } = await supabase
+    .from('member_roles')
+    .select('member_id')
+    .eq('role_name', 'Breeder');
+  if (grantsErr) throw grantsErr;
+  const ids = grants.map((g) => g.member_id);
+  if (!ids.length) return [];
   const { data, error } = await supabase
     .from('members')
-    .select('id, name, initials, member_roles!inner(role_name)')
-    .eq('member_roles.role_name', 'Breeder')
+    .select('id, name, initials')
+    .in('id', ids)
     .is('deactivated_at', null)
     .order('name');
   if (error) throw error;
