@@ -75,7 +75,7 @@ function inspectionLine(insp, apiaries) {
         </div>
         <div class="line-body">
           <strong>${esc(insp.kind)}</strong>
-          <span>${ap ? esc(ap.name) : 'Unknown site'} · ${insp.hiveIds.length} hive${insp.hiveIds.length > 1 ? 's' : ''} · ${insp.by ? esc(insp.by.name) : 'Unknown'}</span>
+          <span>${ap ? esc(ap.name) : 'Unknown site'} · <span class="mono">${esc(insp.hiveId)}</span> · ${insp.by ? esc(insp.by.name) : 'Unknown'}</span>
         </div>
         <div class="line-meta">
           <div class="caption mono">${relDays(Math.round((insp.date - new Date()) / 86400000))}</div>

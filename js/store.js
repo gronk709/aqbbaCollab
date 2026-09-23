@@ -1283,9 +1283,13 @@ function normalizeHiveRow(h) {
   };
 }
 
+/* apiary isn't part of the raw row any more (inspections.hive_id replaced
+   apiary_id — see 20260923233933_inspections_per_hive.sql) — callers that
+   need it already know each hive's apiary_id from the hive rows they just
+   fetched, so they attach it themselves after normalizing. */
 function normalizeInspectionRow(i) {
   return {
-    id: i.id, apiary: i.apiary_id, kind: i.kind,
+    id: i.id, hiveId: i.hive_id, kind: i.kind,
     /* The real inspector row (id, name, initials), embedded via the
        inspector_id FK — inspections.by used to be a mock member id string,
        resolved with memberById() in the view; that only ever knew about
@@ -1293,7 +1297,7 @@ function normalizeInspectionRow(i) {
        never an arbitrary other real member, so a real inspector now needs
        an actual join instead. */
     by: i.inspector,
-    hiveIds: i.hive_ids, status: i.resulting_status,
+    status: i.resulting_status,
     productivity: i.productivity, temperament: i.temperament, vigour: i.vigour,
     broodPattern: i.brood_pattern,
     miteCount: i.mite_count, ubeeoPct: i.ubeeo_pct, pkdPct: i.pkd_pct,
@@ -1303,27 +1307,15 @@ function normalizeInspectionRow(i) {
   };
 }
 
-/* Attaches each inspection's hive_ids (normalized into inspection_hives,
-   not a stored array) — shared by loadApiaries/loadApiary so both build
-   the same shape. */
-async function withHiveIds(supabase, inspectionRows) {
-  const inspectionIds = inspectionRows.map((i) => i.id);
-  const { data, error } = await supabase
-    .from('inspection_hives')
-    .select('inspection_id, hive_id')
-    .in('inspection_id', inspectionIds);
-  if (error) throw error;
-  const byInspection = {};
-  data.forEach((r) => { (byInspection[r.inspection_id] ||= []).push(r.hive_id); });
-  return inspectionRows.map((i) => ({ ...i, hive_ids: byInspection[i.id] || [] }));
-}
-
 /* Every real apiary (excluding decommissioned ones — see updateApiary's
    dateRemoved) with its hives embedded as hiveRecords, and every
-   inspection with its hiveIds — same shape js/data.js's mock apiaries/
-   inspections arrays already had, so renderApiaries and renderDashboard
-   (both need "every apiary + every hive + every inspection") barely
-   change. Used by both the #/apiaries list route and the dashboard route. */
+   inspection tagged with its hive's apiary (inspections.hive_id is the
+   only FK now — apiary is looked up through the hive rows already
+   fetched, not stored on the row itself) — same shape js/data.js's mock
+   apiaries/inspections arrays already had, so renderApiaries and
+   renderDashboard (both need "every apiary + every hive + every
+   inspection") barely change. Used by both the #/apiaries list route and
+   the dashboard route. */
 export async function loadApiaries() {
   const supabase = await getSupabase();
   const { data: apiaryRows, error: apErr } = await supabase
@@ -1331,27 +1323,36 @@ export async function loadApiaries() {
   if (apErr) throw apErr;
 
   const apiaryIds = apiaryRows.map((a) => a.id);
-  const [{ data: hiveRows, error: hiveErr }, { data: inspRows, error: inspErr }] = await Promise.all([
-    supabase.from('hives').select(`*, queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`).in('apiary_id', apiaryIds),
-    supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').in('apiary_id', apiaryIds).order('occurred_on', { ascending: false }),
-  ]);
+  const { data: hiveRows, error: hiveErr } = await supabase
+    .from('hives').select(`*, queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`).in('apiary_id', apiaryIds);
   if (hiveErr) throw hiveErr;
-  if (inspErr) throw inspErr;
 
   const hivesByApiary = {};
-  hiveRows.forEach((h) => { (hivesByApiary[h.apiary_id] ||= []).push(normalizeHiveRow(h)); });
+  const apiaryByHive = {};
+  hiveRows.forEach((h) => {
+    (hivesByApiary[h.apiary_id] ||= []).push(normalizeHiveRow(h));
+    apiaryByHive[h.id] = h.apiary_id;
+  });
+
+  const hiveIds = hiveRows.map((h) => h.id);
+  const { data: inspRows, error: inspErr } = hiveIds.length
+    ? await supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').in('hive_id', hiveIds).order('occurred_on', { ascending: false })
+    : { data: [], error: null };
+  if (inspErr) throw inspErr;
 
   const apiariesOut = apiaryRows.map((ap) => {
     const hiveRecords = hivesByApiary[ap.id] || [];
     return { ...normalizeApiaryRow(ap), hiveRecords, hives: hiveRecords.length };
   });
 
-  const inspections = await withHiveIds(supabase, inspRows);
-  return { apiaries: apiariesOut, inspections: inspections.map(normalizeInspectionRow) };
+  const inspections = inspRows.map((i) => ({ ...normalizeInspectionRow(i), apiary: apiaryByHive[i.hive_id] }));
+  return { apiaries: apiariesOut, inspections };
 }
 
-/* One apiary in full: its hives, its inspections (with hiveIds), and its
-   team (apiary_managers joined to members — apiary_managers has two FKs to
+/* One apiary in full: its hives, its inspections (each tagged with this
+   apiary's own id — every hive here belongs to it, so there's no lookup
+   needed the way loadApiaries' cross-apiary case has), and its team
+   (apiary_managers joined to members — apiary_managers has two FKs to
    members, member_id/granted_by, same ambiguity member_roles/project_team
    hit; !member_id picks the right one) plus this member's own
    isAdmin/canManage/canOperate, same shape loadProject's canManage/
@@ -1361,29 +1362,30 @@ export async function loadApiary(id) {
   const [
     { data: apiary, error: apErr },
     { data: hives, error: hiveErr },
-    { data: inspections, error: inspErr },
     { data: team, error: teamErr },
   ] = await Promise.all([
     supabase.from('apiaries').select('*').eq('id', id).single(),
     supabase.from('hives').select(`*, queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`).eq('apiary_id', id).order('id'),
-    supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').eq('apiary_id', id).order('occurred_on', { ascending: false }),
     supabase.from('apiary_managers').select(`member_id, access_level, member:members!member_id(${MEMBER_DISPLAY_FIELDS})`).eq('apiary_id', id),
   ]);
   if (apErr) throw apErr;
   if (hiveErr) throw hiveErr;
-  if (inspErr) throw inspErr;
   if (teamErr) throw teamErr;
+
+  const hiveIds = hives.map((h) => h.id);
+  const { data: inspections, error: inspErr } = hiveIds.length
+    ? await supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').in('hive_id', hiveIds).order('occurred_on', { ascending: false })
+    : { data: [], error: null };
+  if (inspErr) throw inspErr;
 
   const me = currentUser();
   const admin = isWebAdmin(me.id);
   const myAccess = team.find((t) => t.member_id === me.id)?.access_level ?? null;
 
-  const inspectionsWithHiveIds = await withHiveIds(supabase, inspections);
-
   return {
     apiary: normalizeApiaryRow(apiary),
     hives: hives.map(normalizeHiveRow),
-    inspections: inspectionsWithHiveIds.map(normalizeInspectionRow),
+    inspections: inspections.map((i) => ({ ...normalizeInspectionRow(i), apiary: id })),
     team: team.map((t) => ({ ...t, member: withRoles(t.member) })),
     isAdmin: admin,
     canManage: admin || myAccess === 'manage',
@@ -1479,16 +1481,22 @@ export async function updateHive(hiveId, patch) {
   if (error) throw error;
 }
 
-/* Logs an inspection, records which hives it covered, and — since logging
-   *any* inspection is itself "seeing" a hive — stamps last_inspected_at on
-   every one of them, not only when a resulting status also changes it (the
-   mock's setHiveStatus only touched lastSeen on a status change, which
-   reads more like a shortcut than an intentional choice for a field that's
+/* Logs an inspection against exactly one hive, and — since logging *any*
+   inspection is itself "seeing" that hive — stamps its last_inspected_at,
+   not only when a resulting status also changes it (the mock's
+   setHiveStatus only touched lastSeen on a status change, which reads
+   more like a shortcut than an intentional choice for a field that's
    meant to mean "last seen/inspected" at all). Sequential writes, same as
    setMemberRoles's remove-then-add — nothing in this schema wraps a
-   multi-step write in a transaction. */
+   multi-step write in a transaction.
+
+   Inspections used to cover a batch of hives at once (inspection_hives,
+   many-to-many) with one shared set of scores — replaced with hive_id, a
+   plain FK, since a colony's Productivity/Mite Count/etc. was never
+   something a group of hives could share a single value for. Inspecting
+   several hives on the same visit now means calling this once per hive. */
 export async function addInspection({
-  apiaryId, kind, by, hiveIds, status,
+  hiveId, kind, by, status,
   productivity, temperament, vigour, broodPattern,
   miteCount, ubeeoPct, pkdPct, chalkbrood, sacbrood, efb, shb,
   nosemaPresent, waxMothPresent, viruses,
@@ -1498,7 +1506,7 @@ export async function addInspection({
   const { data: inspection, error } = await supabase
     .from('inspections')
     .insert({
-      apiary_id: apiaryId, kind, inspector_id: by,
+      hive_id: hiveId, kind, inspector_id: by,
       resulting_status: status || null,
       productivity: productivity || null, temperament: temperament || null,
       vigour: vigour || null, brood_pattern: broodPattern || null,
@@ -1517,19 +1525,12 @@ export async function addInspection({
     .single();
   if (error) throw error;
 
-  if (hiveIds.length) {
-    const { error: ihErr } = await supabase
-      .from('inspection_hives')
-      .insert(hiveIds.map((hive_id) => ({ inspection_id: inspection.id, hive_id })));
-    if (ihErr) throw ihErr;
+  const hivePatch = { last_inspected_at: new Date().toISOString() };
+  if (status) hivePatch.status = status;
+  const { error: hiveErr } = await supabase.from('hives').update(hivePatch).eq('id', hiveId);
+  if (hiveErr) throw hiveErr;
 
-    const hivePatch = { last_inspected_at: new Date().toISOString() };
-    if (status) hivePatch.status = status;
-    const { error: hiveErr } = await supabase.from('hives').update(hivePatch).in('id', hiveIds);
-    if (hiveErr) throw hiveErr;
-  }
-
-  return normalizeInspectionRow({ ...inspection, hive_ids: hiveIds });
+  return normalizeInspectionRow(inspection);
 }
 
 /* The actual permission grant behind Apiary Manager's manage/operate
