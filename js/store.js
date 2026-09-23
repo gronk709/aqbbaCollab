@@ -1405,13 +1405,15 @@ export async function loadApiary(id) {
   };
 }
 
-/* Auto-generates a unique code from name initials, same as the mock
-   version did — the Add Apiary form has no code field of its own. */
+/* Auto-generates a unique 3-letter code from the name's first word — same
+   base-letters convention generateQueenLineCode uses, so "Carwoola" reads
+   as "CAR" the same way a queen line named "Carwoola 3" would read "CAR".
+   The Add Apiary form has no code field of its own. */
 export async function addApiary({ name, region, address, stage, dateEstablished, flora, brief }) {
   if (!isWebAdmin()) throw new Error('Only a Web Admin can add an apiary.');
   const supabase = await getSupabase();
 
-  const initials = name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 4) || 'NEW';
+  const initials = (name.match(/[A-Za-z]+/) || ['NEW'])[0].slice(0, 3).toUpperCase() || 'NEW';
   const { data: existing, error: existingErr } = await supabase.from('apiaries').select('code');
   if (existingErr) throw existingErr;
   const taken = new Set(existing.map((a) => a.code));
