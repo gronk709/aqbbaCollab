@@ -66,11 +66,6 @@ export function renderReadout(hive, { editable = false } = {}) {
 
       <dl class="readout-metrics">
         <div>
-          <dt>VSH score</dt>
-          <dd>${hive.vsh == null ? '—' : `${hive.vsh}%`}</dd>
-          ${hive.vsh == null ? '' : `<div class="meter"><i style="width:${hive.vsh}%"></i></div>`}
-        </div>
-        <div>
           <dt>Mite load</dt>
           <dd>${hive.miteLoad == null ? '—' : hive.miteLoad}<small style="font-size:10px;color:var(--propolis-40)"> /100</small></dd>
         </div>
