@@ -1152,11 +1152,12 @@ async function openInspectionForm(ap, hives) {
   });
 }
 
-/* Parses an optional integer field within [min, max]; blank is valid (and
-   distinct from a parse failure) — every score/count column on this form
-   is optional. */
+/* Parses an optional integer field within [min, max]; blank, or the literal
+   text "null" (any case — some spreadsheet exports write that instead of
+   leaving the cell empty), is valid and distinct from a parse failure —
+   every score/count column on this form is optional. */
 function parseOptionalInt(raw, min, max, label) {
-  if (!raw) return { ok: true, value: null };
+  if (!raw || raw.toLowerCase() === 'null') return { ok: true, value: null };
   const n = Number(raw);
   if (!Number.isInteger(n) || n < min || n > max) {
     return { ok: false, error: `${label} "${raw}" must be a whole number from ${min} to ${max}.` };
