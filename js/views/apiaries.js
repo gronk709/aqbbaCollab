@@ -729,15 +729,15 @@ async function openBulkUploadForm({ title, templateFilename, templateHeaders, te
       preview.innerHTML = `<p class="caption" style="color:var(--mark-red)">Couldn't read that file: ${esc(err.message)}</p>`;
       return;
     }
-    /* A cell containing the literal text "null" (any case — some
-       spreadsheet exports write that instead of leaving a cell empty)
-       is treated exactly like a blank cell, for every column on every
-       bulk-upload form — not just the numeric ones. Normalized once here
-       rather than in each field's own parser, so a column nobody thought
-       to special-case still gets this for free. */
+    /* A cell containing the literal text "not assessed" (any case — same
+       wording the single-entry form's own Y/N dropdowns already use for
+       "no value given") is treated exactly like a blank cell, for every
+       column on every bulk-upload form, not just the numeric ones.
+       Normalized once here rather than in each field's own parser, so a
+       column nobody thought to special-case still gets this for free. */
     const rows = parseCsv(text).map((row) => {
       const out = {};
-      for (const key in row) out[key] = row[key].toLowerCase() === 'null' ? '' : row[key];
+      for (const key in row) out[key] = row[key].toLowerCase() === 'not assessed' ? '' : row[key];
       return out;
     });
     if (!rows.length) {
@@ -1165,7 +1165,7 @@ async function openInspectionForm(ap, hives) {
 /* Parses an optional integer field within [min, max]; blank is valid (and
    distinct from a parse failure) — every score/count column on this form
    is optional. openBulkUploadForm's row normalization already turns a
-   literal "null" cell into blank before this ever sees it. */
+   literal "not assessed" cell into blank before this ever sees it. */
 function parseOptionalInt(raw, min, max, label) {
   if (!raw) return { ok: true, value: null };
   const n = Number(raw);
@@ -1194,6 +1194,14 @@ async function openInspectionBulkUploadForm(ap, hives) {
   const me = currentUser();
   const defaultKind = inspectionKinds[0];
 
+  let realMembers;
+  try {
+    realMembers = await loadRealMembers();
+  } catch (err) {
+    toast(`Couldn't load members: ${err.message}`);
+    return;
+  }
+
   await openBulkUploadForm({
     title: `Bulk upload inspections — ${ap.name}`,
     templateFilename: 'aqbba-inspections-template.csv',
@@ -1202,16 +1210,16 @@ async function openInspectionBulkUploadForm(ap, hives) {
       'Productivity', 'Temperament', 'Vigour', 'Brood Pattern',
       'Mite Count', 'UBeeO Score', 'PKD Score',
       'Chalkbrood', 'Sacbrood', 'EFB', 'SHB', 'Harbo Assay',
-      'Nosema Present', 'Wax Moth Present', 'Viruses', 'Notes', 'Completed',
+      'Nosema Present', 'Wax Moth Present', 'Viruses', 'Conducted By', 'Completed', 'Notes',
     ],
     templateSample: [[
       hives[0].id, todayStr(), defaultKind, 'good',
       '4', '5', '4', '3',
       '2', '85', '90',
       '1', '1', '1', '1', '3',
-      'N', 'N', '', 'Strong hygienic response', 'Y',
+      'N', 'N', '', me.name, 'Y', 'Strong hygienic response',
     ]],
-    requiredNote: `Only Hive ID and Date are required (Date as YYYY-MM-DD). Hive ID must already exist at ${ap.name} — every inspection is logged under your own account as "Conducted by". Inspection Type defaults to "${defaultKind}" (valid values: ${inspectionKinds.join(', ')}); Resulting Status, if given, must be one of: ${Object.keys(statusLabels).join(', ')}. The 1-5 score columns (Productivity, Temperament, Vigour, Brood Pattern, Chalkbrood, Sacbrood, EFB, SHB) and Harbo Assay (1-4) are all optional.`,
+    requiredNote: `Only Hive ID and Date are required (Date as YYYY-MM-DD). Hive ID must already exist at ${ap.name}. Conducted By defaults to your own account if left blank, or must exactly match an existing member's name. Completed defaults to Y (already completed) if left blank. Inspection Type defaults to "${defaultKind}" (valid values: ${inspectionKinds.join(', ')}); Resulting Status, if given, must be one of: ${Object.keys(statusLabels).join(', ')}. The 1-5 score columns (Productivity, Temperament, Vigour, Brood Pattern, Chalkbrood, Sacbrood, EFB, SHB) and Harbo Assay (1-4) are all optional.`,
 
     validateRow: (row, line) => {
       const hiveId = row['hive id'];
@@ -1258,6 +1266,13 @@ async function openInspectionBulkUploadForm(ap, hives) {
       const waxMoth = parseOptionalYesNo(row['wax moth present'], 'Wax Moth Present');
       if (!waxMoth.ok) return waxMoth;
 
+      let by = me.id;
+      if (row['conducted by']) {
+        const match = realMembers.find((m) => m.name.toLowerCase() === row['conducted by'].toLowerCase());
+        if (!match) return { ok: false, error: `Conducted By "${row['conducted by']}" doesn't match a member's name.` };
+        by = match.id;
+      }
+
       let done = true;
       if (row['completed']) {
         const v = row['completed'].toLowerCase();
@@ -1269,7 +1284,7 @@ async function openInspectionBulkUploadForm(ap, hives) {
       return {
         ok: true,
         data: {
-          hiveId, dateStr, kind, by: me.id, status,
+          hiveId, dateStr, kind, by, status,
           productivity: scores['productivity'], temperament: scores['temperament'],
           vigour: scores['vigour'], broodPattern: scores['brood pattern'],
           miteCount: scores['mite count'], ubeeoPct: scores['ubeeo score'], pkdPct: scores['pkd score'],
