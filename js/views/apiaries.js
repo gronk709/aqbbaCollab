@@ -793,12 +793,12 @@ async function openInspectionForm(ap, hives) {
   const kindOptions = inspectionKinds.map((k) => `<option>${esc(k)}</option>`).join('');
   const statusOptions = `<option value="">No change</option>` +
     Object.entries(statusLabels).map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
-  const scoreOptions = (label, fieldId) => `
+  const scoreOptions = (label, fieldId, max = 5) => `
     <div class="field" style="flex:1">
-      <label for="${fieldId}">${label} <span class="caption">(1-5, optional)</span></label>
+      <label for="${fieldId}">${label} <span class="caption">(1-${max}, optional)</span></label>
       <select id="${fieldId}">
         <option value="">—</option>
-        ${[1, 2, 3, 4, 5].map((n) => `<option value="${n}">${n}</option>`).join('')}
+        ${Array.from({ length: max }, (_, i) => i + 1).map((n) => `<option value="${n}">${n}</option>`).join('')}
       </select>
     </div>`;
   const numberField = (label, fieldId, { max, step } = {}) => `
@@ -875,6 +875,9 @@ async function openInspectionForm(ap, hives) {
         ${scoreOptions('Small Hive Beetle (SHB)', 'i-shb')}
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
+        ${scoreOptions('Harbo Assay', 'i-harbo-assay', 4)}
+      </div>
+      <div class="row" style="gap:var(--s3);align-items:flex-start">
         ${yesNoOptions('Nosema present', 'i-nosema')}
         ${yesNoOptions('Wax moth present', 'i-wax-moth')}
       </div>
@@ -943,6 +946,7 @@ async function openInspectionForm(ap, hives) {
         sacbrood: scoreOf('#i-sacbrood'),
         efb: scoreOf('#i-efb'),
         shb: scoreOf('#i-shb'),
+        harboAssay: scoreOf('#i-harbo-assay'),
         nosemaPresent: yesNoOf('#i-nosema'),
         waxMothPresent: yesNoOf('#i-wax-moth'),
         viruses: scrim.querySelector('#i-viruses').value.trim() || null,
