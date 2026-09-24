@@ -22,10 +22,12 @@ import {
 import {
   isWebAdmin, isSubscribed, currentUser,
   addApiary, updateApiary, addHive, updateHive, addInspection,
+  checkExistingHiveIds, addHivesBulk, addInspectionsBulk,
   setApiaryTeamMember, removeApiaryTeamMember, loadRealMembers, loadQueenLines,
 } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
+import { parseCsv, buildCsvText, downloadCsvFile } from '../csv.js';
 
 /* Projects are real Supabase rows now (Phase 6) — `sites` is a plain
    jsonb array of apiary ids, no different from the old mock shape here. */
@@ -279,7 +281,10 @@ export function renderApiary(data, id) {
             <div class="panel-head">
               <h2>Hive status — all ${hives.length}</h2>
               <span class="spacer"></span>
-              ${canManage ? `<button class="btn btn-ghost btn-sm" id="new-hive">${icons.plus} Add hive</button>` : ''}
+              ${canManage ? `
+                <button class="btn btn-ghost btn-sm" id="bulk-hives">Bulk upload (.csv)</button>
+                <button class="btn btn-ghost btn-sm" id="new-hive">${icons.plus} Add hive</button>
+              ` : ''}
             </div>
             <div class="panel-body">
               ${hives.length ? renderComb(hives, { id: 'ap-comb' }) : `
@@ -313,7 +318,10 @@ export function renderApiary(data, id) {
             <div class="panel-head">
               <h2>Inspection schedule</h2>
               <span class="spacer"></span>
-              ${canOperate ? `<button class="btn btn-ghost btn-sm" id="new-inspection">${icons.plus} Log inspection</button>` : ''}
+              ${canOperate ? `
+                <button class="btn btn-ghost btn-sm" id="bulk-inspections">Bulk upload (.csv)</button>
+                <button class="btn btn-ghost btn-sm" id="new-inspection">${icons.plus} Log inspection</button>
+              ` : ''}
             </div>
             ${insp.length ? `<ul class="list">${inspRows}</ul>` : `
               <div class="empty">
@@ -404,8 +412,14 @@ export function renderApiary(data, id) {
       if (btn) btn.addEventListener('click', () => openHiveForm(ap));
     });
 
+    const bulkHivesBtn = document.getElementById('bulk-hives');
+    if (bulkHivesBtn) bulkHivesBtn.addEventListener('click', () => openHiveBulkUploadForm(ap));
+
     const instBtn = document.getElementById('new-inspection');
     if (instBtn) instBtn.addEventListener('click', () => openInspectionForm(ap, hives));
+
+    const bulkInspBtn = document.getElementById('bulk-inspections');
+    if (bulkInspBtn) bulkInspBtn.addEventListener('click', () => openInspectionBulkUploadForm(ap, hives));
 
     const apEditBtn = document.getElementById('edit-apiary');
     if (apEditBtn) apEditBtn.addEventListener('click', () => openApiaryEditForm(ap));
@@ -686,6 +700,119 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/* Shared shell for both CSV bulk-upload flows (hives, inspections) —
+   template download, file pick, per-row validation with a visible
+   pass/fail preview before anything is written, then one bulk insert of
+   just the rows that passed. "Insert the valid rows, report the rest":
+   a typo in row 9 never blocks rows 1-8 from going in.
+
+   templateHeaders/templateSample build the downloadable .csv (buildCsvText,
+   js/csv.js). validateRow(row, line) gets one parsed CSV row (a plain
+   object keyed by lowercased header — see parseCsv) plus its 1-based
+   source line number (counting the header as line 1, so the first data
+   row is line 2 — matches what a spreadsheet app would show), and must
+   return either {ok:true, data} with `data` shaped for submitRows, or
+   {ok:false, error} with a short human-readable reason. submitRows takes
+   the array of every valid row's `data` and performs the one bulk insert. */
+async function openBulkUploadForm({ title, templateFilename, templateHeaders, templateSample, requiredNote, prepareContext, validateRow, submitRows, successLabel }) {
+  const body = `
+    <form id="bulk-form">
+      <div class="field">
+        <p class="caption">${requiredNote}</p>
+        <button type="button" class="btn btn-ghost btn-sm" id="bulk-template">Download CSV template</button>
+      </div>
+      <div class="field">
+        <label for="bulk-file">CSV file</label>
+        <input type="file" id="bulk-file" accept=".csv,text/csv">
+      </div>
+      <div id="bulk-preview"></div>
+    </form>`;
+
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="bulk-submit" disabled>Choose a file</button>`;
+
+  const scrim = modal({ title, body, actions });
+  const submitBtn = scrim.querySelector('#bulk-submit');
+  const preview = scrim.querySelector('#bulk-preview');
+  let validRows = [];
+
+  scrim.querySelector('#bulk-template').addEventListener('click', () => {
+    downloadCsvFile(templateFilename, buildCsvText(templateHeaders, templateSample));
+  });
+
+  scrim.querySelector('#bulk-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    validRows = [];
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Choose a file';
+    if (!file) { preview.innerHTML = ''; return; }
+
+    let text;
+    try {
+      text = await file.text();
+    } catch (err) {
+      preview.innerHTML = `<p class="caption" style="color:var(--mark-red)">Couldn't read that file: ${esc(err.message)}</p>`;
+      return;
+    }
+    const rows = parseCsv(text);
+    if (!rows.length) {
+      preview.innerHTML = `<p class="caption">No data rows found in that file.</p>`;
+      return;
+    }
+
+    preview.innerHTML = `<p class="caption">Checking ${rows.length} row${rows.length > 1 ? 's' : ''}…</p>`;
+    let context;
+    try {
+      context = prepareContext ? await prepareContext(rows) : undefined;
+    } catch (err) {
+      preview.innerHTML = `<p class="caption" style="color:var(--mark-red)">Couldn't validate that file: ${esc(err.message)}</p>`;
+      return;
+    }
+
+    const errors = [];
+    rows.forEach((row, i) => {
+      const line = i + 2; // header is line 1, so the first data row is line 2
+      const result = validateRow(row, line, context);
+      if (result.ok) validRows.push(result.data);
+      else errors.push({ line, message: result.error });
+    });
+
+    const errorList = errors.length
+      ? `<ul class="list" style="max-height:180px;overflow-y:auto;margin-top:var(--s3)">
+          ${errors.map((e2) => `<li><span class="caption" style="color:var(--mark-red)">Row ${e2.line}: ${esc(e2.message)}</span></li>`).join('')}
+        </ul>`
+      : '';
+    preview.innerHTML = `
+      <p class="caption" style="margin-top:var(--s3)">
+        ${rows.length} row${rows.length > 1 ? 's' : ''} found — <strong>${validRows.length} ready to upload</strong>${errors.length ? `, ${errors.length} with problems` : ''}.
+      </p>
+      ${errorList}`;
+
+    submitBtn.disabled = !validRows.length;
+    submitBtn.textContent = validRows.length ? `Upload ${validRows.length} row${validRows.length > 1 ? 's' : ''}` : 'No valid rows';
+  });
+
+  submitBtn.addEventListener('click', async () => {
+    if (!validRows.length) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Uploading…';
+    let inserted;
+    try {
+      inserted = await submitRows(validRows);
+    } catch (err) {
+      toast(`Couldn't upload: ${err.message}`);
+      submitBtn.disabled = false;
+      submitBtn.textContent = `Upload ${validRows.length} row${validRows.length > 1 ? 's' : ''}`;
+      return;
+    }
+    closeModal();
+    toast(successLabel(inserted.length));
+    window.__aqbba_invalidateData();
+    window.__aqbba_render();
+  });
+}
+
 async function openHiveForm(ap) {
   let queenLines;
   try {
@@ -786,6 +913,90 @@ async function openHiveForm(ap) {
     toast(`${record.id} added to ${ap.name}.`);
     window.__aqbba_invalidateData();
     window.__aqbba_render();
+  });
+}
+
+async function openHiveBulkUploadForm(ap) {
+  let queenLines;
+  try {
+    queenLines = await loadQueenLines();
+  } catch (err) {
+    toast(`Couldn't load queen lines: ${err.message}`);
+    return;
+  }
+
+  const year = new Date().getFullYear();
+  await openBulkUploadForm({
+    title: `Bulk upload hives — ${ap.name}`,
+    templateFilename: 'aqbba-hives-template.csv',
+    templateHeaders: ['Hive ID', 'Status', 'Queen Line', 'Queen ID', 'Queen Colour', 'Queen Year', 'Hive Configuration', 'Treatment-Free Seasons', 'Comment'],
+    templateSample: [[`${ap.code}-105`, 'thriving', '', '', 'yellow', String(year), '8 frame', '0', 'Strong buildup this spring']],
+    requiredNote: `Only Hive ID is required. Status defaults to Thriving if left blank (valid values: ${Object.keys(statusLabels).join(', ')}). Queen Colour, if given, must be one of: ${queenColours.join(', ')}. Queen Line, if given, must match an existing line's name exactly.`,
+
+    /* Hive ids are a global PK (not scoped per apiary), so "does this hive
+       already exist" has to be checked across every hive, not just this
+       site's — one query up front for every id the file mentions, rather
+       than one query per row. */
+    prepareContext: async (rows) => {
+      const ids = [...new Set(rows.map((r) => r['hive id']?.trim()).filter(Boolean))];
+      const existingIds = await checkExistingHiveIds(ids);
+      return { existingIds, seenInFile: new Set() };
+    },
+
+    validateRow: (row, line, context) => {
+      const id = row['hive id'];
+      if (!id) return { ok: false, error: 'Hive ID is required.' };
+      if (context.seenInFile.has(id)) return { ok: false, error: `Duplicate Hive ID "${id}" earlier in this file.` };
+      context.seenInFile.add(id);
+      if (context.existingIds.has(id)) return { ok: false, error: `Hive ID "${id}" already exists.` };
+
+      let status = 'thriving';
+      if (row['status']) {
+        const key = Object.keys(statusLabels).find((k) => k.toLowerCase() === row['status'].toLowerCase());
+        if (!key) return { ok: false, error: `Status "${row['status']}" must be one of: ${Object.keys(statusLabels).join(', ')}.` };
+        status = key;
+      }
+
+      let line_ = '';
+      if (row['queen line']) {
+        const match = queenLines.find((l) => l.name.toLowerCase() === row['queen line'].toLowerCase());
+        if (!match) return { ok: false, error: `Queen line "${row['queen line']}" not found.` };
+        line_ = match.code;
+      }
+
+      let queenColour = '';
+      if (row['queen colour']) {
+        const match = queenColours.find((c) => c.toLowerCase() === row['queen colour'].toLowerCase());
+        if (!match) return { ok: false, error: `Queen colour "${row['queen colour']}" must be one of: ${queenColours.join(', ')}.` };
+        queenColour = match;
+      }
+
+      let queenYear = year;
+      if (row['queen year']) {
+        const n = Number(row['queen year']);
+        if (!Number.isInteger(n)) return { ok: false, error: `Queen year "${row['queen year']}" must be a whole number.` };
+        queenYear = n;
+      }
+
+      let treatmentFree = 0;
+      if (row['treatment-free seasons']) {
+        const n = Number(row['treatment-free seasons']);
+        if (!Number.isInteger(n) || n < 0) return { ok: false, error: `Treatment-Free Seasons "${row['treatment-free seasons']}" must be a non-negative whole number.` };
+        treatmentFree = n;
+      }
+
+      return {
+        ok: true,
+        data: {
+          id, status, line: line_, queenId: row['queen id'] || '',
+          queenColour, queenYear, broodFrames: row['hive configuration'] || '',
+          treatmentFree, comment: (row['comment'] || '').slice(0, 200),
+        },
+      };
+    },
+
+    submitRows: (rows) => addHivesBulk(ap.id, rows),
+    successLabel: (n) => `${n} hive${n > 1 ? 's' : ''} added to ${ap.name}.`,
   });
 }
 
@@ -964,5 +1175,128 @@ async function openInspectionForm(ap, hives) {
     toast(`Inspection logged for ${hiveId}.`);
     window.__aqbba_invalidateData();
     window.__aqbba_render();
+  });
+}
+
+/* Parses an optional integer field within [min, max]; blank is valid (and
+   distinct from a parse failure) — every score/count column on this form
+   is optional. */
+function parseOptionalInt(raw, min, max, label) {
+  if (!raw) return { ok: true, value: null };
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    return { ok: false, error: `${label} "${raw}" must be a whole number from ${min} to ${max}.` };
+  }
+  return { ok: true, value: n };
+}
+
+/* Blank -> null (not assessed); Y/Yes/N/No (any case) -> true/false;
+   anything else is a row error. Shared by Nosema/Wax moth present. */
+function parseOptionalYesNo(raw, label) {
+  if (!raw) return { ok: true, value: null };
+  const v = raw.toLowerCase();
+  if (v === 'y' || v === 'yes') return { ok: true, value: true };
+  if (v === 'n' || v === 'no') return { ok: true, value: false };
+  return { ok: false, error: `${label} "${raw}" must be Y, N, Yes, or No.` };
+}
+
+async function openInspectionBulkUploadForm(ap, hives) {
+  if (!hives.length) {
+    toast('This apiary has no hives registered yet — add one before logging inspections.');
+    return;
+  }
+  const hiveIds = new Set(hives.map((h) => h.id));
+  const me = currentUser();
+  const defaultKind = inspectionKinds[0];
+
+  await openBulkUploadForm({
+    title: `Bulk upload inspections — ${ap.name}`,
+    templateFilename: 'aqbba-inspections-template.csv',
+    templateHeaders: [
+      'Hive ID', 'Date', 'Inspection Type', 'Resulting Status',
+      'Productivity', 'Temperament', 'Vigour', 'Brood Pattern',
+      'Mite Count', 'UBeeO Score', 'PKD Score',
+      'Chalkbrood', 'Sacbrood', 'EFB', 'SHB', 'Harbo Assay',
+      'Nosema Present', 'Wax Moth Present', 'Viruses', 'Notes', 'Completed',
+    ],
+    templateSample: [[
+      hives[0].id, todayStr(), defaultKind, 'good',
+      '4', '5', '4', '3',
+      '2', '85', '90',
+      '1', '1', '1', '1', '3',
+      'N', 'N', '', 'Strong hygienic response', 'Y',
+    ]],
+    requiredNote: `Only Hive ID and Date are required (Date as YYYY-MM-DD). Hive ID must already exist at ${ap.name} — every inspection is logged under your own account as "Conducted by". Inspection Type defaults to "${defaultKind}" (valid values: ${inspectionKinds.join(', ')}); Resulting Status, if given, must be one of: ${Object.keys(statusLabels).join(', ')}. The 1-5 score columns (Productivity, Temperament, Vigour, Brood Pattern, Chalkbrood, Sacbrood, EFB, SHB) and Harbo Assay (1-4) are all optional.`,
+
+    validateRow: (row, line) => {
+      const hiveId = row['hive id'];
+      if (!hiveId) return { ok: false, error: 'Hive ID is required.' };
+      if (!hiveIds.has(hiveId)) return { ok: false, error: `Hive "${hiveId}" does not exist at ${ap.name}.` };
+
+      const dateStr = row['date'];
+      if (!dateStr) return { ok: false, error: 'Date is required.' };
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr) || Number.isNaN(new Date(`${dateStr}T00:00:00`).getTime())) {
+        return { ok: false, error: `Date "${dateStr}" must be in YYYY-MM-DD format.` };
+      }
+
+      let kind = defaultKind;
+      if (row['inspection type']) {
+        const match = inspectionKinds.find((k) => k.toLowerCase() === row['inspection type'].toLowerCase());
+        if (!match) return { ok: false, error: `Inspection Type "${row['inspection type']}" must be one of: ${inspectionKinds.join(', ')}.` };
+        kind = match;
+      }
+
+      let status = null;
+      if (row['resulting status']) {
+        const key = Object.keys(statusLabels).find((k) => k.toLowerCase() === row['resulting status'].toLowerCase());
+        if (!key) return { ok: false, error: `Resulting Status "${row['resulting status']}" must be one of: ${Object.keys(statusLabels).join(', ')}.` };
+        status = key;
+      }
+
+      const scoreFields = [
+        ['productivity', 'Productivity', 1, 5], ['temperament', 'Temperament', 1, 5],
+        ['vigour', 'Vigour', 1, 5], ['brood pattern', 'Brood Pattern', 1, 5],
+        ['mite count', 'Mite Count', 0, 100000], ['ubeeo score', 'UBeeO Score', 0, 100],
+        ['pkd score', 'PKD Score', 0, 100], ['chalkbrood', 'Chalkbrood', 1, 5],
+        ['sacbrood', 'Sacbrood', 1, 5], ['efb', 'EFB', 1, 5], ['shb', 'SHB', 1, 5],
+        ['harbo assay', 'Harbo Assay', 1, 4],
+      ];
+      const scores = {};
+      for (const [key, label, min, max] of scoreFields) {
+        const result = parseOptionalInt(row[key], min, max, label);
+        if (!result.ok) return result;
+        scores[key] = result.value;
+      }
+
+      const nosema = parseOptionalYesNo(row['nosema present'], 'Nosema Present');
+      if (!nosema.ok) return nosema;
+      const waxMoth = parseOptionalYesNo(row['wax moth present'], 'Wax Moth Present');
+      if (!waxMoth.ok) return waxMoth;
+
+      let done = true;
+      if (row['completed']) {
+        const v = row['completed'].toLowerCase();
+        if (['y', 'yes', 'true'].includes(v)) done = true;
+        else if (['n', 'no', 'false'].includes(v)) done = false;
+        else return { ok: false, error: `Completed "${row['completed']}" must be Y, N, Yes, No, True, or False.` };
+      }
+
+      return {
+        ok: true,
+        data: {
+          hiveId, dateStr, kind, by: me.id, status,
+          productivity: scores['productivity'], temperament: scores['temperament'],
+          vigour: scores['vigour'], broodPattern: scores['brood pattern'],
+          miteCount: scores['mite count'], ubeeoPct: scores['ubeeo score'], pkdPct: scores['pkd score'],
+          chalkbrood: scores['chalkbrood'], sacbrood: scores['sacbrood'], efb: scores['efb'], shb: scores['shb'],
+          harboAssay: scores['harbo assay'],
+          nosemaPresent: nosema.value, waxMothPresent: waxMoth.value,
+          viruses: row['viruses'] || null, note: row['notes'] || '', done,
+        },
+      };
+    },
+
+    submitRows: (rows) => addInspectionsBulk(rows),
+    successLabel: (n) => `${n} inspection${n > 1 ? 's' : ''} logged at ${ap.name}.`,
   });
 }

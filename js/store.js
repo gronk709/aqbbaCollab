@@ -1444,6 +1444,21 @@ export async function updateApiary(apiaryId, { name, region, address, flora, bri
   if (error) throw error;
 }
 
+/* Shared by addHive and addHivesBulk — vsh/mite_load are deliberately not
+   set here (removed from both the single and bulk "Add hive" paths; still
+   editable afterward via the Edit hive form, which passes them through
+   updateHive instead). */
+function hiveInsertPayload(apiaryId, hive) {
+  return {
+    id: hive.id, apiary_id: apiaryId, status: hive.status,
+    queen_line: hive.line || null, queen_id: hive.queenId || null,
+    queen_colour: hive.queenColour || null, queen_year: hive.queenYear || null,
+    hive_configuration: hive.broodFrames || null,
+    treatment_free_seasons: hive.treatmentFree || 0,
+    comment: hive.comment || null,
+  };
+}
+
 /* Hive ID is entered by whoever registers the hive — the table's own
    primary key now enforces uniqueness instead of only a client-side check.
    No client-side permission check, same as addProjectSection — the "Add
@@ -1453,19 +1468,42 @@ export async function addHive(apiaryId, hive) {
   const supabase = await getSupabase();
   const { data, error } = await supabase
     .from('hives')
-    .insert({
-      id: hive.id, apiary_id: apiaryId, status: hive.status,
-      queen_line: hive.line || null, queen_id: hive.queenId || null,
-      queen_colour: hive.queenColour || null, queen_year: hive.queenYear || null,
-      vsh: hive.vsh, mite_load: hive.miteLoad,
-      hive_configuration: hive.broodFrames || null,
-      treatment_free_seasons: hive.treatmentFree || 0,
-      comment: hive.comment || null,
-    })
+    .insert(hiveInsertPayload(apiaryId, hive))
     .select('*')
     .single();
   if (error) throw error;
   return normalizeHiveRow(data);
+}
+
+/* Which of these ids already exist anywhere (hives.id is a global PK, not
+   scoped per apiary) — the CSV bulk-upload form (js/views/apiaries.js)
+   calls this to flag "already exists" per row before ever attempting an
+   insert, rather than letting one duplicate fail the whole batch. */
+export async function checkExistingHiveIds(ids) {
+  if (!ids.length) return new Set();
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('hives').select('id').in('id', ids);
+  if (error) throw error;
+  return new Set(data.map((h) => h.id));
+}
+
+/* Bulk counterpart to addHive — one multi-row insert for every
+   already-validated row from a CSV upload (js/views/apiaries.js's
+   openHiveBulkUploadForm has already checked each id is new and every
+   enum value is valid; this only writes). A single INSERT is atomic in
+   Postgres, so the caller pre-filtering to valid-only rows is what makes
+   "insert the good rows, report the rest" possible — a row this DB call
+   itself rejects (a race against another write, not caught by the
+   pre-check) fails the whole call, same as any other insert. */
+export async function addHivesBulk(apiaryId, hives) {
+  if (!hives.length) return [];
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('hives')
+    .insert(hives.map((hive) => hiveInsertPayload(apiaryId, hive)))
+    .select('*');
+  if (error) throw error;
+  return data.map(normalizeHiveRow);
 }
 
 export async function updateHive(hiveId, patch) {
@@ -1481,6 +1519,51 @@ export async function updateHive(hiveId, patch) {
   if (error) throw error;
 }
 
+/* Shared by addInspection and addInspectionsBulk. mite_count/ubeeo_pct/
+   pkd_pct/chalkbrood/sacbrood/efb/shb and nosema/wax moth can legitimately
+   be 0/false (a real mite wash finding zero mites; assessed and not
+   found) — `?? null` only, never `|| null`, so those real results survive
+   instead of collapsing to "not recorded". harbo_assay/scores stay on
+   `|| null` since their scales never include 0. */
+function inspectionInsertPayload({
+  hiveId, kind, by, status,
+  productivity, temperament, vigour, broodPattern,
+  miteCount, ubeeoPct, pkdPct, chalkbrood, sacbrood, efb, shb, harboAssay,
+  nosemaPresent, waxMothPresent, viruses,
+  note, dateStr, done,
+}) {
+  return {
+    hive_id: hiveId, kind, inspector_id: by,
+    resulting_status: status || null,
+    productivity: productivity || null, temperament: temperament || null,
+    vigour: vigour || null, brood_pattern: broodPattern || null,
+    mite_count: miteCount ?? null, ubeeo_pct: ubeeoPct ?? null, pkd_pct: pkdPct ?? null,
+    chalkbrood: chalkbrood ?? null, sacbrood: sacbrood ?? null, efb: efb ?? null, shb: shb ?? null,
+    harbo_assay: harboAssay || null,
+    nosema_present: nosemaPresent ?? null, wax_moth_present: waxMothPresent ?? null,
+    viruses: viruses || null,
+    note: note || null, occurred_on: dateStr, done: !!done,
+  };
+}
+
+/* Stamps last_inspected_at on every hive an inspection batch touched, and
+   — if any of that hive's rows set a resulting status — its status too.
+   Shared by addInspection (one hive) and addInspectionsBulk (however many
+   distinct hives the CSV covered); "last row for that hive wins" when a
+   bulk file logs the same hive more than once, same as running addInspection
+   that many times in file order would have. */
+async function touchInspectedHives(supabase, rows) {
+  const statusByHive = {};
+  rows.forEach((r) => { if (r.status) statusByHive[r.hiveId] = r.status; });
+  const hiveIds = [...new Set(rows.map((r) => r.hiveId))];
+  const now = new Date().toISOString();
+  await Promise.all(hiveIds.map((hiveId) => {
+    const patch = { last_inspected_at: now };
+    if (statusByHive[hiveId]) patch.status = statusByHive[hiveId];
+    return supabase.from('hives').update(patch).eq('id', hiveId);
+  }));
+}
+
 /* Logs an inspection against exactly one hive, and — since logging *any*
    inspection is itself "seeing" that hive — stamps its last_inspected_at,
    not only when a resulting status also changes it (the mock's
@@ -1494,44 +1577,40 @@ export async function updateHive(hiveId, patch) {
    many-to-many) with one shared set of scores — replaced with hive_id, a
    plain FK, since a colony's Productivity/Mite Count/etc. was never
    something a group of hives could share a single value for. Inspecting
-   several hives on the same visit now means calling this once per hive. */
-export async function addInspection({
-  hiveId, kind, by, status,
-  productivity, temperament, vigour, broodPattern,
-  miteCount, ubeeoPct, pkdPct, chalkbrood, sacbrood, efb, shb, harboAssay,
-  nosemaPresent, waxMothPresent, viruses,
-  note, dateStr, done,
-}) {
+   several hives on the same visit now means calling this once per hive
+   (or using the CSV bulk upload, addInspectionsBulk). */
+export async function addInspection(row) {
   const supabase = await getSupabase();
   const { data: inspection, error } = await supabase
     .from('inspections')
-    .insert({
-      hive_id: hiveId, kind, inspector_id: by,
-      resulting_status: status || null,
-      productivity: productivity || null, temperament: temperament || null,
-      vigour: vigour || null, brood_pattern: broodPattern || null,
-      /* mite_count/ubeeo_pct/pkd_pct can legitimately be 0 (e.g. a real mite
-         wash finding zero mites) and nosema/wax moth can legitimately be
-         false (assessed and not found) — `?? null` only, never `|| null`,
-         so those real results survive instead of collapsing to "not
-         recorded". */
-      mite_count: miteCount ?? null, ubeeo_pct: ubeeoPct ?? null, pkd_pct: pkdPct ?? null,
-      chalkbrood: chalkbrood ?? null, sacbrood: sacbrood ?? null, efb: efb ?? null, shb: shb ?? null,
-      harbo_assay: harboAssay || null,
-      nosema_present: nosemaPresent ?? null, wax_moth_present: waxMothPresent ?? null,
-      viruses: viruses || null,
-      note: note || null, occurred_on: dateStr, done: !!done,
-    })
+    .insert(inspectionInsertPayload(row))
     .select('*')
     .single();
   if (error) throw error;
 
-  const hivePatch = { last_inspected_at: new Date().toISOString() };
-  if (status) hivePatch.status = status;
-  const { error: hiveErr } = await supabase.from('hives').update(hivePatch).eq('id', hiveId);
-  if (hiveErr) throw hiveErr;
+  await touchInspectedHives(supabase, [row]);
 
   return normalizeInspectionRow(inspection);
+}
+
+/* Bulk counterpart — one multi-row insert for every already-validated row
+   from a CSV upload (js/views/apiaries.js's openInspectionBulkUploadForm
+   has already checked each hive id exists at this apiary and every value
+   is in range; this only writes). Same atomicity caveat as
+   addHivesBulk: a single INSERT is all-or-nothing, so a row this call
+   itself rejects (not caught by the pre-check) fails the whole call. */
+export async function addInspectionsBulk(rows) {
+  if (!rows.length) return [];
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('inspections')
+    .insert(rows.map(inspectionInsertPayload))
+    .select('*');
+  if (error) throw error;
+
+  await touchInspectedHives(supabase, rows);
+
+  return data.map(normalizeInspectionRow);
 }
 
 /* The actual permission grant behind Apiary Manager's manage/operate
