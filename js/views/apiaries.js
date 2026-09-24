@@ -735,16 +735,6 @@ async function openHiveForm(ap) {
         <label for="h-frames">Hive Configuration</label>
         <input id="h-frames" type="text" placeholder="optional">
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
-          <label for="h-vsh">UBEEO score, if known</label>
-          <input id="h-vsh" type="number" min="0" max="100" placeholder="optional">
-        </div>
-        <div class="field" style="flex:1">
-          <label for="h-mite">Harbo Assay Result, if known</label>
-          <input id="h-mite" type="number" min="0" step="0.1" placeholder="optional">
-        </div>
-      </div>
       <div class="field">
         <label for="h-tf">Treatment-free seasons</label>
         <input id="h-tf" type="number" min="0" value="0">
@@ -769,8 +759,6 @@ async function openHiveForm(ap) {
       return;
     }
 
-    const vshRaw = scrim.querySelector('#h-vsh').value;
-    const miteRaw = scrim.querySelector('#h-mite').value;
     const framesRaw = scrim.querySelector('#h-frames').value;
 
     saveBtn.disabled = true;
@@ -785,8 +773,6 @@ async function openHiveForm(ap) {
         queenColour: scrim.querySelector('#h-colour').value,
         queenYear: Number(scrim.querySelector('#h-year').value) || new Date().getFullYear(),
         broodFrames: framesRaw.trim(),
-        vsh: vshRaw ? Number(vshRaw) : null,
-        miteLoad: miteRaw ? Number(miteRaw) : null,
         treatmentFree: Number(scrim.querySelector('#h-tf').value) || 0,
         comment: scrim.querySelector('#h-comment').value.trim().slice(0, 200),
       });
