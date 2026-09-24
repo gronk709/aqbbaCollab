@@ -454,8 +454,6 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 
 /* Figure tiles — apiary-level counts */
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--comb-shade); border: 1px solid var(--comb-shade); border-radius: 4px; overflow: hidden; }
-/* Inside an apiary card the four counts read as a block, not a column. */
-.tiles-quad { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tile { background: #FFF; padding: var(--s4) var(--s5); }
 .tile dt { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--propolis-40); }
 .tile dd { margin: var(--s2) 0 0; font-family: var(--mono); font-size: 1.875rem; line-height: 1; letter-spacing: -0.03em; }
