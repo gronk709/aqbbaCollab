@@ -637,16 +637,6 @@ async function openHiveEditForm(hive) {
           <input id="he-frames" type="text" placeholder="optional" value="${esc(hive.broodFrames || '')}">
         </div>
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
-          <label for="he-vsh">UBEEO score, if known</label>
-          <input id="he-vsh" type="number" min="0" max="100" placeholder="optional" value="${hive.vsh ?? ''}">
-        </div>
-        <div class="field" style="flex:1">
-          <label for="he-mite">Harbo Assay Result, if known</label>
-          <input id="he-mite" type="number" min="0" step="0.1" placeholder="optional" value="${hive.miteLoad ?? ''}">
-        </div>
-      </div>
       <div class="field">
         <label for="he-tf">Treatment-free seasons</label>
         <input id="he-tf" type="number" min="0" value="${hive.treatmentFree || 0}">
@@ -665,9 +655,6 @@ async function openHiveEditForm(hive) {
   const saveBtn = scrim.querySelector('#save-hive');
 
   saveBtn.addEventListener('click', async () => {
-    const vshRaw = scrim.querySelector('#he-vsh').value;
-    const miteRaw = scrim.querySelector('#he-mite').value;
-
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
     try {
@@ -678,8 +665,6 @@ async function openHiveEditForm(hive) {
         queenColour: scrim.querySelector('#he-colour').value,
         queenYear: Number(scrim.querySelector('#he-year').value) || hive.queenYear,
         broodFrames: scrim.querySelector('#he-frames').value.trim(),
-        vsh: vshRaw ? Number(vshRaw) : null,
-        miteLoad: miteRaw ? Number(miteRaw) : null,
         treatmentFree: Number(scrim.querySelector('#he-tf').value) || 0,
         comment: scrim.querySelector('#he-comment').value.trim().slice(0, 200),
       });
