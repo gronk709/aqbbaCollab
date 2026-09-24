@@ -1259,7 +1259,7 @@ export async function updateQueenLine(code, { name, breederMemberId, generation,
    just where the data came from. */
 function normalizeApiaryRow(ap) {
   return {
-    id: ap.id, code: ap.code, name: ap.name, region: ap.region, address: ap.address,
+    id: ap.id, code: ap.code, name: ap.name, region: ap.region,
     stage: ap.stage, dateEstablished: ap.date_established, dateRemoved: ap.date_removed,
     flora: ap.flora, brief: ap.brief,
   };
@@ -1402,7 +1402,7 @@ export async function loadApiary(id) {
    .sql) — the one subscription with no existing row to attach to, since the
    whole point is being told about a site before you'd otherwise know it
    exists. */
-export async function addApiary({ name, region, address, stage, dateEstablished, flora, brief }) {
+export async function addApiary({ name, region, stage, dateEstablished, flora, brief }) {
   if (!isWebAdmin()) throw new Error('Only a Web Admin can add an apiary.');
   const supabase = await getSupabase();
 
@@ -1417,8 +1417,7 @@ export async function addApiary({ name, region, address, stage, dateEstablished,
   const { data, error } = await supabase
     .from('apiaries')
     .insert({
-      id: `ap-${Date.now()}`, code, name, region,
-      address: address || null, stage: stage || 'establishing',
+      id: `ap-${Date.now()}`, code, name, region, stage: stage || 'establishing',
       date_established: dateEstablished || null, flora: flora || null, brief: brief || null,
     })
     .select('*')
@@ -1434,11 +1433,11 @@ export async function addApiary({ name, region, address, stage, dateEstablished,
 /* Same field names addApiary takes, plus dateRemoved (only ever set to
    decommission a site — no UI writes it yet, so it's simply omitted from
    every ordinary edit-apiary save). */
-export async function updateApiary(apiaryId, { name, region, address, flora, brief, stage, dateEstablished, dateRemoved }) {
+export async function updateApiary(apiaryId, { name, region, flora, brief, stage, dateEstablished, dateRemoved }) {
   if (!isWebAdmin()) throw new Error('Only a Web Admin can edit an apiary.');
   const supabase = await getSupabase();
   const { error } = await supabase.from('apiaries').update({
-    name, region, address: address || null, flora: flora || null, brief, stage,
+    name, region, flora: flora || null, brief, stage,
     date_established: dateEstablished || null, date_removed: dateRemoved,
   }).eq('id', apiaryId);
   if (error) throw error;
