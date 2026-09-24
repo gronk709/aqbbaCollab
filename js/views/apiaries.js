@@ -135,10 +135,6 @@ function openApiaryForm() {
         </div>
       </div>
       <div class="field">
-        <label for="a-address">Address (optional)</label>
-        <input id="a-address" placeholder="e.g. 214 Ironbark Rd, Braidwood NSW">
-      </div>
-      <div class="field">
         <label for="a-stage">Program stage</label>
         <select id="a-stage">${stageOptions}</select>
       </div>
@@ -175,7 +171,6 @@ function openApiaryForm() {
     try {
       ap = await addApiary({
         name, region, brief,
-        address: scrim.querySelector('#a-address').value.trim(),
         flora: scrim.querySelector('#a-flora').value.trim(),
         stage: scrim.querySelector('#a-stage').value,
         dateEstablished: scrim.querySelector('#a-established').value || undefined,
@@ -340,7 +335,6 @@ export function renderApiary(data, id) {
               <div style="margin-top:var(--s5)">
                 <div class="eyebrow">Location</div>
                 <p style="font-size:13.5px;margin-top:3px">${esc(ap.region)}</p>
-                ${ap.address ? `<p class="caption" style="font-size:11.5px">${esc(ap.address)}</p>` : ''}
               </div>
 
               <div style="margin-top:var(--s4)">
@@ -531,10 +525,6 @@ function openApiaryEditForm(ap) {
         </div>
       </div>
       <div class="field">
-        <label for="ae-address">Address (optional)</label>
-        <input id="ae-address" value="${esc(ap.address || '')}">
-      </div>
-      <div class="field">
         <label for="ae-stage">Status</label>
         <select id="ae-stage">${stageOptions}</select>
       </div>
@@ -569,7 +559,6 @@ function openApiaryEditForm(ap) {
     try {
       await updateApiary(ap.id, {
         name, region, brief,
-        address: scrim.querySelector('#ae-address').value.trim(),
         flora: scrim.querySelector('#ae-flora').value.trim(),
         stage: scrim.querySelector('#ae-stage').value,
         dateEstablished: scrim.querySelector('#ae-established').value || undefined,
