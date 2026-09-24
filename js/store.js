@@ -1445,9 +1445,11 @@ export async function updateApiary(apiaryId, { name, region, address, flora, bri
 }
 
 /* Shared by addHive and addHivesBulk — vsh/mite_load are deliberately not
-   set here (removed from both the single and bulk "Add hive" paths; still
-   editable afterward via the Edit hive form, which passes them through
-   updateHive instead). */
+   set here. Neither is writable from any hive form any more (first
+   dropped from "Add hive", then from "Edit hive" too, once inspections
+   grew their own UBeeO Score and Harbo Assay fields) — that per-visit
+   assessment data now belongs on the inspection that measured it, not
+   duplicated as a standing property of the hive. */
 function hiveInsertPayload(apiaryId, hive) {
   return {
     id: hive.id, apiary_id: apiaryId, status: hive.status,
@@ -1506,12 +1508,17 @@ export async function addHivesBulk(apiaryId, hives) {
   return data.map(normalizeHiveRow);
 }
 
+/* vsh/mite_load are deliberately absent from this patch — see
+   hiveInsertPayload's comment. Neither hive form collects them any more,
+   so an Edit-hive save no longer touches either column at all (not even
+   to null) — whatever value a hive already has just stays frozen; that
+   per-visit data now only ever gets recorded on inspections
+   (ubeeo_pct/harbo_assay), which don't write back to the hive row. */
 export async function updateHive(hiveId, patch) {
   const supabase = await getSupabase();
   const { error } = await supabase.from('hives').update({
     status: patch.status, queen_line: patch.line || null, queen_id: patch.queenId || null,
     queen_colour: patch.queenColour || null, queen_year: patch.queenYear || null,
-    vsh: patch.vsh, mite_load: patch.miteLoad,
     hive_configuration: patch.broodFrames || null,
     treatment_free_seasons: patch.treatmentFree || 0,
     comment: patch.comment || null,
