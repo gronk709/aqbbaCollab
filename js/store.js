@@ -1301,7 +1301,7 @@ function normalizeInspectionRow(i) {
     productivity: i.productivity, temperament: i.temperament, vigour: i.vigour,
     broodPattern: i.brood_pattern,
     miteCount: i.mite_count, ubeeoPct: i.ubeeo_pct, pkdPct: i.pkd_pct,
-    chalkbrood: i.chalkbrood, sacbrood: i.sacbrood, efb: i.efb, shb: i.shb,
+    chalkbrood: i.chalkbrood, sacbrood: i.sacbrood, efb: i.efb, shb: i.shb, harboAssay: i.harbo_assay,
     nosemaPresent: i.nosema_present, waxMothPresent: i.wax_moth_present, viruses: i.viruses,
     note: i.note, done: i.done, date: new Date(`${i.occurred_on}T00:00:00`),
   };
@@ -1498,7 +1498,7 @@ export async function updateHive(hiveId, patch) {
 export async function addInspection({
   hiveId, kind, by, status,
   productivity, temperament, vigour, broodPattern,
-  miteCount, ubeeoPct, pkdPct, chalkbrood, sacbrood, efb, shb,
+  miteCount, ubeeoPct, pkdPct, chalkbrood, sacbrood, efb, shb, harboAssay,
   nosemaPresent, waxMothPresent, viruses,
   note, dateStr, done,
 }) {
@@ -1517,6 +1517,7 @@ export async function addInspection({
          recorded". */
       mite_count: miteCount ?? null, ubeeo_pct: ubeeoPct ?? null, pkd_pct: pkdPct ?? null,
       chalkbrood: chalkbrood ?? null, sacbrood: sacbrood ?? null, efb: efb ?? null, shb: shb ?? null,
+      harbo_assay: harboAssay || null,
       nosema_present: nosemaPresent ?? null, wax_moth_present: waxMothPresent ?? null,
       viruses: viruses || null,
       note: note || null, occurred_on: dateStr, done: !!done,
