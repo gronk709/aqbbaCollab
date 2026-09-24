@@ -1,7 +1,7 @@
 /* ==========================================================================
    VSH research dashboard. Answers, in order: where are the apiaries and who
-   runs them, what state are the hives in, what has been inspected and what is
-   next, and whose lines are in the program.
+   runs them, what state are the hives in, what has been inspected, and
+   whose lines are in the program.
 
    Phases 4 and 5 of the backend migration: apiaries/hives/inspections and
    queen lines/breeders are all real Supabase rows now, loaded by the
@@ -11,7 +11,7 @@
 
 import {
   stageLabels, statusLabels,
-  tally, vshAverage, relDays, fmtDate,
+  tally, relDays,
 } from '../data.js';
 import {
   isWebAdmin,
@@ -27,7 +27,6 @@ function stageTag(stage) {
 
 function apiaryCard(ap) {
   const t = tally(ap.hiveRecords);
-  const vsh = vshAverage(ap.hiveRecords);
   const inTreatment = t.treating || 0;
   const tf = ap.hiveRecords.filter((h) => h.treatmentFree >= 3).length;
 
@@ -45,12 +44,9 @@ function apiaryCard(ap) {
         <p class="caption">${esc(ap.region)}</p>
         ${ap.address ? `<p class="mono caption" style="font-size:11px;margin-top:2px">${esc(ap.address)}</p>` : ''}
 
-        <dl class="tiles tiles-quad" style="margin-top:var(--s4);border-radius:3px">
+        <dl class="tiles" style="margin-top:var(--s4);border-radius:3px">
           <div class="tile" style="padding:var(--s3) var(--s4)">
             <dt>Hives</dt><dd style="font-size:1.375rem">${ap.hives}</dd>
-          </div>
-          <div class="tile" style="padding:var(--s3) var(--s4)">
-            <dt>Mean VSH</dt><dd style="font-size:1.375rem">${vsh}<small>%</small></dd>
           </div>
           <div class="tile" style="padding:var(--s3) var(--s4)">
             <dt>Treating</dt><dd style="font-size:1.375rem">${inTreatment}</dd>
@@ -279,15 +275,12 @@ async function openQueenLineForm(line) {
 }
 
 export function renderDashboard(data) {
-  const { apiaries, inspections, projects, queenLines } = data;
+  const { apiaries, inspections, queenLines } = data;
   const allHives = apiaries.flatMap((a) => a.hiveRecords);
   const recentInspections = inspections.filter((i) => i.done).sort((a, b) => b.date - a.date);
-  const upcomingInspections = inspections.filter((i) => !i.done).sort((a, b) => a.date - b.date);
   const t = tally(allHives);
   const focus = apiaries.find((a) => a.stage === 'assessment') || apiaries[0];
   const attention = allHives.filter((h) => h.status === 'poor').length;
-  const next = upcomingInspections[0];
-  const nextApiary = next ? apiaries.find((a) => a.id === next.apiary) : null;
 
   const html = `
     <div class="topbar">
@@ -313,10 +306,6 @@ export function renderDashboard(data) {
           <div class="tile-trend">across ${apiaries.length} research apiaries</div>
         </div>
         <div class="tile">
-          <dt>Program mean VSH</dt>
-          <dd>${vshAverage(allHives)}<small>%</small></dd>
-        </div>
-        <div class="tile">
           <dt>Treating</dt>
           <dd>${t.treating || 0}</dd>
           <div class="tile-trend">excluded from selection this cycle</div>
@@ -325,16 +314,6 @@ export function renderDashboard(data) {
           <dt>Needs attention</dt>
           <dd>${attention}</dd>
           <div class="tile-trend">${attention ? 'above intervention threshold' : 'nothing above threshold'}</div>
-        </div>
-        <div class="tile">
-          <dt>Next inspection</dt>
-          <dd style="font-size:1.125rem;letter-spacing:0">${next ? fmtDate(next.date) : '—'}</dd>
-          <div class="tile-trend">${next ? `${esc(nextApiary ? nextApiary.name : 'Unknown site')} · ${esc(next.kind)}` : 'None scheduled'}</div>
-        </div>
-        <div class="tile">
-          <dt>Research projects</dt>
-          <dd>${projects.length}</dd>
-          <div class="tile-trend">${projects.filter((p) => p.status === 'recruiting').length} recruiting — <a href="#/projects" style="color:var(--amber-deep);font-weight:600">view all</a></div>
         </div>
       </dl>
 
@@ -377,17 +356,6 @@ export function renderDashboard(data) {
 
         <div class="stack">
           ${colonyStatusPanel(allHives)}
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Upcoming inspections</h2>
-              <span class="spacer"></span>
-              <span class="caption mono">${upcomingInspections.length}</span>
-            </div>
-            ${upcomingInspections.length
-              ? `<ul class="list">${upcomingInspections.map((i) => inspectionLine(i, apiaries)).join('')}</ul>`
-              : '<div class="empty" style="padding:var(--s5)"><p class="caption">Nothing scheduled.</p></div>'}
-          </div>
         </div>
       </div>` : `
       <div class="empty" style="margin-top:var(--s6)"><p class="caption">No research apiaries yet.</p></div>`}
