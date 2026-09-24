@@ -729,7 +729,17 @@ async function openBulkUploadForm({ title, templateFilename, templateHeaders, te
       preview.innerHTML = `<p class="caption" style="color:var(--mark-red)">Couldn't read that file: ${esc(err.message)}</p>`;
       return;
     }
-    const rows = parseCsv(text);
+    /* A cell containing the literal text "null" (any case — some
+       spreadsheet exports write that instead of leaving a cell empty)
+       is treated exactly like a blank cell, for every column on every
+       bulk-upload form — not just the numeric ones. Normalized once here
+       rather than in each field's own parser, so a column nobody thought
+       to special-case still gets this for free. */
+    const rows = parseCsv(text).map((row) => {
+      const out = {};
+      for (const key in row) out[key] = row[key].toLowerCase() === 'null' ? '' : row[key];
+      return out;
+    });
     if (!rows.length) {
       preview.innerHTML = `<p class="caption">No data rows found in that file.</p>`;
       return;
@@ -1152,12 +1162,12 @@ async function openInspectionForm(ap, hives) {
   });
 }
 
-/* Parses an optional integer field within [min, max]; blank, or the literal
-   text "null" (any case — some spreadsheet exports write that instead of
-   leaving the cell empty), is valid and distinct from a parse failure —
-   every score/count column on this form is optional. */
+/* Parses an optional integer field within [min, max]; blank is valid (and
+   distinct from a parse failure) — every score/count column on this form
+   is optional. openBulkUploadForm's row normalization already turns a
+   literal "null" cell into blank before this ever sees it. */
 function parseOptionalInt(raw, min, max, label) {
-  if (!raw || raw.toLowerCase() === 'null') return { ok: true, value: null };
+  if (!raw) return { ok: true, value: null };
   const n = Number(raw);
   if (!Number.isInteger(n) || n < min || n > max) {
     return { ok: false, error: `${label} "${raw}" must be a whole number from ${min} to ${max}.` };
