@@ -193,57 +193,51 @@ export function renderApiary(data, id) {
   if (!ap) return '';
 
   const t = tally(hives);
-  const insp = inspections.slice().sort((a, b) => a.date - b.date);
+  const insp = inspections.slice().sort((a, b) => b.date - a.date);
   const siteProjects = projectsForApiary(projects, ap.id);
   const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 
-  /* Which lines are here, and how each is performing on this site. Each
-     hive already carries its queen line + breeder resolved (hive.lineInfo
-     — js/store.js's loadApiary), so this just groups by code, no separate
-     lookup needed. Real hives can (structurally) carry no queen line,
-     unlike every mock hive — filter those out before grouping. */
-  const lineCodes = [...new Set(hives.map((h) => h.lineInfo?.code).filter(Boolean))];
-  const lineRows = lineCodes.map((code) => {
-    const set = hives.filter((h) => h.lineInfo?.code === code);
-    const line = set[0].lineInfo;
-    const scored = set.filter((h) => h.vsh != null);
-    const mean = scored.length ? Math.round(scored.reduce((s, h) => s + h.vsh, 0) / scored.length) : 0;
-    const delta = mean - (line.vshMean ?? 0);
-    return `
-      <tr>
-        <td>${esc(line.name)}</td>
-        <td>${esc(line.breeder.name)}</td>
-        <td class="mono">${set.length}</td>
-        <td class="mono">${mean}%</td>
-        <td class="mono" style="color:${delta >= 0 ? 'var(--mark-green)' : 'var(--mark-red)'}">
-          ${delta >= 0 ? '+' : ''}${delta}
-        </td>
-      </tr>`;
-  }).join('');
-
-  const inspRows = insp.map((i) => {
-    const byName = i.by ? esc(i.by.name) : 'Unknown';
-    return `
-      <li>
-        <div class="line" style="cursor:default">
-          <div class="line-date">
-            <b>${i.date.getDate()}</b>
-            ${i.date.toLocaleDateString('en-AU', { month: 'short' })}
+  /* The "Inspection reports" panel body — swapped in place whenever a
+     different hive is picked in the comb above (see bindComb's
+     onSelectHive, wired below), same as the readout panel already does.
+     hive is null before anything's been clicked yet. Each hive's own id
+     is implied by the panel now showing only its reports, so — unlike
+     the old site-wide schedule — a row doesn't need to repeat it. */
+  function renderHiveInspections(hive) {
+    if (!hive) {
+      return `<div class="empty" style="padding:var(--s6) 0"><p class="caption">Select a hive above to see its inspection reports.</p></div>`;
+    }
+    const rows = insp.filter((i) => i.hiveId === hive.id);
+    if (!rows.length) {
+      return `<div class="empty" style="padding:var(--s6) 0">
+        <h3>No inspections logged for ${esc(hive.id)}</h3>
+        <p>${canOperate ? 'Log one once an assessment has run on this hive.' : `Only ${esc(ap.name)}'s assigned managers/operators, or Web Admin, can log inspections here.`}</p>
+      </div>`;
+    }
+    return `<ul class="list">${rows.map((i) => {
+      const byName = i.by ? esc(i.by.name) : 'Unknown';
+      return `
+        <li>
+          <div class="line" style="cursor:default">
+            <div class="line-date">
+              <b>${i.date.getDate()}</b>
+              ${i.date.toLocaleDateString('en-AU', { month: 'short' })}
+            </div>
+            <div class="line-body">
+              <strong>${esc(i.kind)}</strong>
+              <span>${byName}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
+              ${i.note ? `<p class="caption" style="margin-top:3px">${esc(i.note)}</p>` : ''}
+            </div>
+            <div class="line-meta">
+              <div class="caption mono">${relDays(Math.round((i.date - new Date()) / 86400000))}</div>
+              <span class="tag ${i.done ? 'tag-green' : 'tag-outline'}" style="margin-top:3px">
+                ${i.done ? 'Complete' : 'Scheduled'}
+              </span>
+            </div>
           </div>
-          <div class="line-body">
-            <strong>${esc(i.kind)}</strong>
-            <span><span class="mono">${esc(i.hiveId)}</span> · ${byName}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
-            ${i.note ? `<p class="caption" style="margin-top:3px">${esc(i.note)}</p>` : ''}
-          </div>
-          <div class="line-meta">
-            <div class="caption mono">${relDays(Math.round((i.date - new Date()) / 86400000))}</div>
-            <span class="tag ${i.done ? 'tag-green' : 'tag-outline'}" style="margin-top:3px">
-              ${i.done ? 'Complete' : 'Scheduled'}
-            </span>
-          </div>
-        </div>
-      </li>`;
-  }).join('');
+        </li>`;
+    }).join('')}</ul>`;
+  }
 
   const teamRows = team.map((t2) => `
     <a class="row" style="gap:var(--s3)" href="#/managers/${t2.member.id}">
@@ -296,33 +290,16 @@ export function renderApiary(data, id) {
             ${hives.length ? renderReadout(null) : ''}
           </div>
 
-          ${hives.length ? `
-          <div class="panel">
-            <div class="panel-head"><h2>Queen lines on this site</h2></div>
-            <div class="tbl-scroll">
-              <table class="tbl">
-                <thead>
-                  <tr><th>Line</th><th>Breeder</th><th>Hives</th><th>Site VSH</th><th>vs line mean</th></tr>
-                </thead>
-                <tbody>${lineRows}</tbody>
-              </table>
-            </div>
-          </div>` : ''}
-
           <div class="panel">
             <div class="panel-head">
-              <h2>Inspection schedule</h2>
+              <h2>Inspection reports</h2>
               <span class="spacer"></span>
               ${canOperate ? `
                 <button class="btn btn-ghost btn-sm" id="bulk-inspections">Bulk upload (.csv)</button>
                 <button class="btn btn-ghost btn-sm" id="new-inspection">${icons.plus} Log inspection</button>
               ` : ''}
             </div>
-            ${insp.length ? `<ul class="list">${inspRows}</ul>` : `
-              <div class="empty">
-                <h3>No inspections logged</h3>
-                <p>${canOperate ? 'Log one once an assessment has run at this site.' : `Only ${esc(ap.name)}'s assigned managers/operators, or Web Admin, can log inspections here.`}</p>
-              </div>`}
+            <div id="hive-inspections">${renderHiveInspections(null)}</div>
           </div>
         </div>
 
@@ -399,7 +376,13 @@ export function renderApiary(data, id) {
 
   setTimeout(() => {
     const root = document.getElementById('main');
-    if (root && hives.length) bindComb(root, hives, canOperate ? { onEditHive: openHiveEditForm } : {});
+    const onSelectHive = (hive) => {
+      const el = document.getElementById('hive-inspections');
+      if (el) el.innerHTML = renderHiveInspections(hive);
+    };
+    if (root && hives.length) {
+      bindComb(root, hives, { ...(canOperate ? { onEditHive: openHiveEditForm } : {}), onSelectHive });
+    }
 
     ['new-hive', 'empty-hive'].forEach((elId) => {
       const btn = document.getElementById(elId);
