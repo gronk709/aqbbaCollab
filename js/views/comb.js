@@ -108,8 +108,11 @@ export function renderReadout(hive, { editable = false } = {}) {
 
 /* Wire cell selection. Call after the comb is in the DOM. Pass onEditHive to
    show and wire an Edit button on the readout (omit it — e.g. on the
-   read-only dashboard preview — and no Edit button renders at all). */
-export function bindComb(root, hives, { onEditHive } = {}) {
+   read-only dashboard preview — and no Edit button renders at all). Pass
+   onSelectHive to be told which hive was just picked (js/views/apiaries.js
+   uses this to keep a separate "Inspection reports" panel in sync with
+   whichever hive's readout is showing). */
+export function bindComb(root, hives, { onEditHive, onSelectHive } = {}) {
   const field = root.querySelector('.comb-field');
   if (!field) return;
 
@@ -132,5 +135,6 @@ export function bindComb(root, hives, { onEditHive } = {}) {
     const old = root.querySelector('#readout');
     if (old) old.outerHTML = renderReadout(hive, { editable: !!onEditHive });
     wireEditBtn();
+    if (onSelectHive) onSelectHive(hive);
   });
 }
