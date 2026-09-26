@@ -86,6 +86,26 @@ export async function loadRealMembers() {
   return data;
 }
 
+/* The sign-in gate's "Research apiaries"/"Contributing members" ticker —
+   the only page rendered before a session exists, so it can't use any of
+   the ordinary authenticated-only reads above. public_landing_stats() is a
+   SECURITY DEFINER function granted to anon specifically for this (see
+   20260926121627_public_landing_stats.sql) — it returns just the two
+   counts, never row-level data. Callers get null on any failure (offline,
+   the Supabase CDN unreachable) rather than a thrown error, since a
+   pre-sign-in visitor seeing "—" instead of a number is fine; failing to
+   render the sign-in form at all would not be. */
+export async function loadPublicStats() {
+  try {
+    const supabase = await getSupabase();
+    const { data, error } = await supabase.rpc('public_landing_stats').single();
+    if (error) throw error;
+    return { apiaryCount: data.apiary_count, memberCount: data.member_count };
+  } catch {
+    return null;
+  }
+}
+
 /* --- members directory -------------------------------------------------
    The #/members directory and #/managers/:id detail page (js/views/
    managers.js) — unlike the callers above, these show every real member

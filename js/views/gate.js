@@ -3,7 +3,6 @@
    Authentication is delegated to Wild Apricot; this simulates the handoff.
    ========================================================================== */
 
-import { members } from '../data.js';
 import { signIn, signInWithPassword, loadSignedInMember, requestPasswordReset } from '../store.js';
 import { brandMark, icons, toast, modal, closeModal } from '../ui.js';
 import { isConfigured, startWildApricotLogin } from '../waAuth.js';
@@ -30,15 +29,18 @@ function combBackdrop() {
   return `<svg class="gate-comb" viewBox="0 0 480 350" preserveAspectRatio="xMidYMid slice">${out}</svg>`;
 }
 
-export function renderGate() {
+/* stats is loadPublicStats()'s result — { apiaryCount, memberCount }, or
+   null if that fetch failed (offline, CDN unreachable). Renders "—" for
+   either count rather than a stale/misleading number in that case. */
+export function renderGate(stats) {
   return `
     <div class="gate">
       <section class="gate-stage">
         ${combBackdrop()}
 
         <a class="gate-mark" href="#/">
-          ${brandMark(44)}
-          <span>AQBBA</span>
+          ${brandMark(132)}
+          <span>Australian Queen Bee Breeders Association (AQBBA)</span>
         </a>
 
         <div class="gate-headline">
@@ -52,8 +54,8 @@ export function renderGate() {
         </div>
 
         <dl class="gate-ticker">
-          <div><dt>Research apiaries</dt><dd>3</dd></div>
-          <div><dt>Contributing members</dt><dd>${members.length}</dd></div>
+          <div><dt>Research apiaries</dt><dd>${stats ? stats.apiaryCount : '—'}</dd></div>
+          <div><dt>Contributing members</dt><dd>${stats ? stats.memberCount : '—'}</dd></div>
         </dl>
       </section>
 

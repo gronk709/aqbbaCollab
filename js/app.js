@@ -7,7 +7,7 @@ import {
   roleLabel, currentUser, loadSignedInMember, loadNotifications,
   isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
   loadProjects, loadProject, loadMembersDirectory, loadMemberDetail,
-  loadApiaries, loadApiary, loadQueenLines,
+  loadApiaries, loadApiary, loadQueenLines, loadPublicStats,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
@@ -180,7 +180,9 @@ async function render() {
   }
 
   if (!state.signedIn) {
-    app.innerHTML = renderGate();
+    const stats = await loadPublicStats();
+    if (myGen !== renderGen) return;
+    app.innerHTML = renderGate(stats);
     bindGlobal();
     return;
   }

@@ -145,14 +145,18 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   pointer-events: none;
 }
 
-.gate-mark { position: relative; z-index: 2; display: flex; align-items: center; gap: var(--s3); }
+.gate-mark { position: relative; z-index: 2; display: flex; align-items: center; gap: var(--s4); }
 /* The crest carries fine detail (a circular wordmark, bee anatomy) that
    needs real room to read, unlike the old geometric mark — sized well
-   above the label text next to it on purpose. */
-.gate-mark img { width: 44px; height: 50px; }
+   above the label text next to it on purpose. 132/151 is the original
+   44/50 at 3x. */
+.gate-mark img { width: 132px; height: 151px; }
 .gate-mark span {
   font-family: var(--mono); font-size: 11px; font-weight: 600;
-  letter-spacing: 0.2em; text-transform: uppercase;
+  /* 0.2em tracking read fine on a 5-letter acronym; spelled out in full
+     it turns unreadable, so this is loosened for the longer label. */
+  letter-spacing: 0.04em; text-transform: uppercase;
+  max-width: 26ch; line-height: 1.5;
 }
 
 .gate-headline { position: relative; z-index: 2; }
