@@ -46,8 +46,8 @@ export function renderGate(stats) {
         <div class="gate-headline">
           <h1 class="display">At the Heart of Every Thriving Colony Is a Great Queen Bee.</h1>
           <p>
-            This is a collaboration website for the  Australian Queen Bee Breeders Association
-            and its partners involved in queen bee breeding initaitives and projects that promote the
+            This is a collaboration website for the Australian Queen Bee Breeders Association
+            and its partners involved in queen bee breeding initiatives and projects that promote the
             skills, knowledge and quality of outcomes for our industry.
           </p>
         </div>
