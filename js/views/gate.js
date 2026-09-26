@@ -44,12 +44,11 @@ export function renderGate(stats) {
         </a>
 
         <div class="gate-headline">
-          <h1 class="display">Science-driven <em>and</em> industry-focused.</h1>
+          <h1 class="display">At the Heart of Every Thriving Colony Is a Great Queen Bee.</h1>
           <p>
-            The Australian Queen Bee Breeders Association runs a shared varroa sensitive
-            hygiene program across three research apiaries. Members contribute queen lines,
-            record assessments against a common protocol, and see every other member's
-            results alongside their own.
+            This is a collaboration website for the  Australian Queen Bee Breeders Association
+            and its partners involved in queen bee breeding initaitives and projects that promote the
+            skills, knowledge and quality of outcomes for our industry.
           </p>
         </div>
 
