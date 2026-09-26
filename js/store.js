@@ -1448,7 +1448,10 @@ export async function updateApiary(apiaryId, { name, region, flora, brief, stage
    dropped from "Add hive", then from "Edit hive" too, once inspections
    grew their own UBeeO Score and Harbo Assay fields) — that per-visit
    assessment data now belongs on the inspection that measured it, not
-   duplicated as a standing property of the hive. */
+   entered directly as a standing property of the hive. mite_load
+   specifically does still end up here, but only ever derived from an
+   inspection's own mite_count via touchInspectedHives, never typed in
+   on a hive form. */
 function hiveInsertPayload(apiaryId, hive) {
   return {
     id: hive.id, apiary_id: apiaryId, status: hive.status,
@@ -1509,10 +1512,12 @@ export async function addHivesBulk(apiaryId, hives) {
 
 /* vsh/mite_load are deliberately absent from this patch — see
    hiveInsertPayload's comment. Neither hive form collects them any more,
-   so an Edit-hive save no longer touches either column at all (not even
-   to null) — whatever value a hive already has just stays frozen; that
-   per-visit data now only ever gets recorded on inspections
-   (ubeeo_pct/harbo_assay), which don't write back to the hive row. */
+   so an Edit-hive save doesn't touch either column (not even to null).
+   vsh just stays whatever it already was — that per-visit data now only
+   ever gets recorded on inspections (ubeeo_pct/harbo_assay), which don't
+   write back to the hive row. mite_load is the one exception: it keeps
+   tracking the most recent inspection's mite_count (via
+   touchInspectedHives), just never through this particular patch. */
 export async function updateHive(hiveId, patch) {
   const supabase = await getSupabase();
   const { error } = await supabase.from('hives').update({
@@ -1553,19 +1558,33 @@ function inspectionInsertPayload({
 }
 
 /* Stamps last_inspected_at on every hive an inspection batch touched, and
-   — if any of that hive's rows set a resulting status — its status too.
-   Shared by addInspection (one hive) and addInspectionsBulk (however many
-   distinct hives the CSV covered); "last row for that hive wins" when a
-   bulk file logs the same hive more than once, same as running addInspection
-   that many times in file order would have. */
+   — if any of that hive's rows set a resulting status or a mite count —
+   its status and/or mite_load too. Shared by addInspection (one hive) and
+   addInspectionsBulk (however many distinct hives the CSV covered); "last
+   row for that hive wins" when a bulk file logs the same hive more than
+   once, same as running addInspection that many times in file order
+   would have.
+
+   mite_load is derived from mite_count, not entered directly anywhere —
+   a mite wash/roll counts mites per 300 bees, and mite_load is meant to
+   read as a percentage (per 100), so /3 converts one to the other.
+   Rounded to 1 decimal place to match the column's own numeric(5,1). This
+   is the one case where an inspection writes back a value onto the hive
+   beyond last_inspected_at/status — see hiveInsertPayload's comment for
+   why no hive form sets mite_load directly any more. */
 async function touchInspectedHives(supabase, rows) {
   const statusByHive = {};
-  rows.forEach((r) => { if (r.status) statusByHive[r.hiveId] = r.status; });
+  const miteLoadByHive = {};
+  rows.forEach((r) => {
+    if (r.status) statusByHive[r.hiveId] = r.status;
+    if (r.miteCount != null) miteLoadByHive[r.hiveId] = Math.round((r.miteCount / 3) * 10) / 10;
+  });
   const hiveIds = [...new Set(rows.map((r) => r.hiveId))];
   const now = new Date().toISOString();
   await Promise.all(hiveIds.map((hiveId) => {
     const patch = { last_inspected_at: now };
     if (statusByHive[hiveId]) patch.status = statusByHive[hiveId];
+    if (miteLoadByHive[hiveId] != null) patch.mite_load = miteLoadByHive[hiveId];
     return supabase.from('hives').update(patch).eq('id', hiveId);
   }));
 }

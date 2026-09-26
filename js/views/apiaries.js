@@ -36,6 +36,20 @@ const projectsForApiary = (projects, apiaryId) =>
 
 const stageVariant = { establishing: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green', requeening: 'tag-red' };
 
+/* A stand-in "Hygiene" reading for display — there's no single hygiene
+   field on an inspection any more (removed in favour of the four
+   specific disease scores it actually assessed: Chalkbrood/Sacbrood/
+   EFB/SHB — see 20260923221430_inspection_disease_biosecurity_fields.sql).
+   This is just the mean of whichever of those four were actually given,
+   computed at render time, not a stored value — skips any that weren't
+   assessed rather than treating a blank as 0, and is null (nothing
+   shown) if none were assessed at all. */
+function hygieneAvg(i) {
+  const vals = [i.chalkbrood, i.sacbrood, i.efb, i.shb].filter((v) => v != null);
+  if (!vals.length) return null;
+  return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10;
+}
+
 export function renderApiaries(data) {
   const { apiaries } = data;
 
@@ -216,16 +230,26 @@ export function renderApiary(data, id) {
     }
     return `<ul class="list">${rows.map((i) => {
       const byName = i.by ? esc(i.by.name) : 'Unknown';
+      const hygiene = hygieneAvg(i);
+      const chips = [
+        i.productivity != null ? `Productivity ${i.productivity}/5` : null,
+        i.temperament != null ? `Temperament ${i.temperament}/5` : null,
+        i.vigour != null ? `Vigour ${i.vigour}/5` : null,
+        i.broodPattern != null ? `Brood Pattern ${i.broodPattern}/5` : null,
+        hygiene != null ? `Hygiene ${hygiene}/5 (avg)` : null,
+        i.miteCount != null ? `Mite Count ${i.miteCount}` : null,
+      ].filter(Boolean);
       return `
         <li>
-          <div class="line" style="cursor:default">
+          <div class="line" style="cursor:default;align-items:flex-start">
             <div class="line-date">
               <b>${i.date.getDate()}</b>
               ${i.date.toLocaleDateString('en-AU', { month: 'short' })}
             </div>
             <div class="line-body">
               <strong>${esc(i.kind)}</strong>
-              <span>${byName}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
+              <span>Conducted by ${byName}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
+              ${chips.length ? `<div class="row row-wrap" style="gap:10px;margin-top:4px">${chips.map((c) => `<span class="caption mono" style="font-size:11px">${esc(c)}</span>`).join('')}</div>` : ''}
               ${i.note ? `<p class="caption" style="margin-top:3px">${esc(i.note)}</p>` : ''}
             </div>
             <div class="line-meta">
