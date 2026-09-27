@@ -210,28 +210,50 @@ export function renderApiary(data, id) {
   const siteProjects = projectsForApiary(projects, ap.id);
   const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 
-  /* The 5 colonies with the LOWEST mite count, strictly from each hive's own
-     most recent inspection report — not the most recent one that happens to
-     have a mite count on it, which would mean the ranking uses a stale
-     reading for a hive whose latest visit simply didn't include a mite
-     wash/roll. If that latest report didn't record one, the hive is left
-     out of this ranking entirely rather than falling back to an older
-     report. insp is already sorted most-recent first, so the first row seen
-     per hive here is its latest report, full stop. Raw mite count (per 300
-     bees), not the converted mite_load percentage on the hive record —
-     matches what the inspection reports panel itself shows for a single
-     inspection. Ascending (least first) rather than most-affected-first —
-     these are the strongest hygienic-behaviour candidates for the VSH
-     breeding program, which is what this ranking is actually for. */
-  const latestInspectionByHive = {};
+  /* The 5 colonies with the LOWEST mite count, taken from the most recent
+     inspection ROUND at this site — not each hive's individually-lowest
+     historical reading, and not filtered by the mite-count treatment
+     threshold: that threshold is a real-world fact about which colonies
+     get pulled from rotation once treated, not a cutoff this ranking
+     enforces itself, and the data doesn't retroactively guarantee every
+     over-threshold colony actually stopped appearing in later rounds. So
+     this always shows the lowest counts the most recent round actually
+     reported, whatever those are, and only reaches into an earlier round
+     for however many more it takes to reach 5 — e.g. because the most
+     recent round didn't cover every colony at the site (some had already
+     been pulled from rotation in a prior round), not because of a value
+     cutoff.
+
+     insp is already sorted most-recent first, so grouping consecutive
+     rows by distinct occurred_on gives every ROUND at this site, most
+     recent first. A colony already accounted for by a more recent round
+     it appeared in is never reconsidered from an older one — whether or
+     not that round's row had a mite count on it — since that would mean
+     using a stale reading for a colony that's since been re-measured.
+     Raw mite count (per 300 bees), not the converted mite_load percentage
+     on the hive record — matches what the inspection reports panel
+     itself shows for a single inspection. */
+  const rounds = [];
   insp.forEach((i) => {
-    if (!latestInspectionByHive[i.hiveId]) latestInspectionByHive[i.hiveId] = i;
+    const last = rounds[rounds.length - 1];
+    if (last && last.date.getTime() === i.date.getTime()) last.rows.push(i);
+    else rounds.push({ date: i.date, rows: [i] });
   });
-  const lowestMiteCounts = Object.values(latestInspectionByHive)
-    .filter((i) => i.miteCount != null)
-    .map((i) => ({ hiveId: i.hiveId, miteCount: i.miteCount, date: i.date }))
-    .sort((a, b) => a.miteCount - b.miteCount)
-    .slice(0, 5);
+
+  const seenHives = new Set();
+  const lowestMiteCounts = [];
+  for (const round of rounds) {
+    round.rows
+      .filter((i) => i.miteCount != null && !seenHives.has(i.hiveId))
+      .sort((a, b) => a.miteCount - b.miteCount)
+      .forEach((i) => {
+        if (lowestMiteCounts.length < 5) {
+          lowestMiteCounts.push({ hiveId: i.hiveId, miteCount: i.miteCount, date: i.date });
+        }
+      });
+    round.rows.forEach((i) => seenHives.add(i.hiveId));
+    if (lowestMiteCounts.length >= 5) break;
+  }
 
   /* The "Inspection reports" panel body — swapped in place whenever a
      different hive is picked in the comb above (see bindComb's
