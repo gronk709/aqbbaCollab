@@ -210,22 +210,25 @@ export function renderApiary(data, id) {
   const siteProjects = projectsForApiary(projects, ap.id);
   const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 
-  /* Top 5 colonies by mite count, each from its own most recent inspection
-     that actually recorded one — not every inspection does, and not every
-     hive's latest inspection is the one that did, so this can't just take
-     the site's most recent rows off the top. insp is already sorted most-
-     recent first, so the first mite-count-bearing row seen per hive here is
-     that hive's latest one. Raw mite count (per 300 bees), not the
-     converted mite_load percentage on the hive record — matches what the
-     inspection reports panel itself shows for a single inspection. */
+  /* The 5 colonies with the LOWEST mite count, each from its own most
+     recent inspection that actually recorded one — not every inspection
+     does, and not every hive's latest inspection is the one that did, so
+     this can't just take the site's most recent rows off the top. insp is
+     already sorted most-recent first, so the first mite-count-bearing row
+     seen per hive here is that hive's latest one. Raw mite count (per 300
+     bees), not the converted mite_load percentage on the hive record —
+     matches what the inspection reports panel itself shows for a single
+     inspection. Ascending (least first) rather than most-affected-first —
+     these are the strongest hygienic-behaviour candidates for the VSH
+     breeding program, which is what this ranking is actually for. */
   const latestMiteByHive = {};
   insp.forEach((i) => {
     if (i.miteCount != null && !latestMiteByHive[i.hiveId]) {
       latestMiteByHive[i.hiveId] = { hiveId: i.hiveId, miteCount: i.miteCount, date: i.date };
     }
   });
-  const topMiteCounts = Object.values(latestMiteByHive)
-    .sort((a, b) => b.miteCount - a.miteCount)
+  const lowestMiteCounts = Object.values(latestMiteByHive)
+    .sort((a, b) => a.miteCount - b.miteCount)
     .slice(0, 5);
 
   /* The "Inspection reports" panel body — swapped in place whenever a
@@ -394,9 +397,9 @@ export function renderApiary(data, id) {
             </div>` : ''}
 
           <div class="panel">
-            <div class="panel-head"><h2>Top 5 by mite count</h2></div>
+            <div class="panel-head"><h2>Lowest mite counts</h2></div>
             <div class="panel-body">
-              ${topMiteCounts.length ? topMiteCounts.map((r, idx) => `
+              ${lowestMiteCounts.length ? lowestMiteCounts.map((r, idx) => `
                 <div class="row" style="justify-content:space-between;padding:5px 0">
                   <span class="row" style="gap:var(--s3)">
                     <span class="caption mono" style="width:14px">${idx + 1}</span>
