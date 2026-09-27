@@ -1577,13 +1577,19 @@ function inspectionInsertPayload({
   };
 }
 
-/* Stamps last_inspected_at on every hive an inspection batch touched, and
-   — if any of that hive's rows set a resulting status or a mite count —
-   its status and/or mite_load too. Shared by addInspection (one hive) and
-   addInspectionsBulk (however many distinct hives the CSV covered); "last
-   row for that hive wins" when a bulk file logs the same hive more than
-   once, same as running addInspection that many times in file order
-   would have.
+/* Stamps last_inspected_at/status/mite_load on every hive an inspection
+   batch touched — from that hive's whole inspection history, not just this
+   batch. Bulk CSV uploads routinely land out of date order (a beekeeper
+   backfills an older visit after already logging a more recent one, or just
+   uploads several files at different times without regard for occurred_on
+   order) — trusting batch/insert order here, like this used to, meant
+   whichever upload happened to run *last* won, even when its inspections
+   were dated *earlier* than what was already on file. So instead, every
+   touched hive's derived fields get recomputed from the chronologically
+   latest (by occurred_on, the actual visit date — not upload time) row to
+   record each one: status and mite_load independently, since not every
+   inspection sets both, and last_inspected_at from the latest occurred_on
+   outright. Upload order stops mattering entirely, past or future.
 
    mite_load is derived from mite_count, not entered directly anywhere —
    a mite wash/roll counts mites per 300 bees, and mite_load is meant to
@@ -1593,16 +1599,28 @@ function inspectionInsertPayload({
    beyond last_inspected_at/status — see hiveInsertPayload's comment for
    why no hive form sets mite_load directly any more. */
 async function touchInspectedHives(supabase, rows) {
+  const hiveIds = [...new Set(rows.map((r) => r.hiveId))];
+
+  const { data: history, error } = await supabase
+    .from('inspections')
+    .select('hive_id, occurred_on, resulting_status, mite_count')
+    .in('hive_id', hiveIds)
+    .order('occurred_on', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+
+  const lastSeenByHive = {};
   const statusByHive = {};
   const miteLoadByHive = {};
-  rows.forEach((r) => {
-    if (r.status) statusByHive[r.hiveId] = r.status;
-    if (r.miteCount != null) miteLoadByHive[r.hiveId] = Math.round((r.miteCount / 3) * 10) / 10;
+  history.forEach((r) => {
+    lastSeenByHive[r.hive_id] = r.occurred_on;
+    if (r.resulting_status) statusByHive[r.hive_id] = r.resulting_status;
+    if (r.mite_count != null) miteLoadByHive[r.hive_id] = Math.round((r.mite_count / 3) * 10) / 10;
   });
-  const hiveIds = [...new Set(rows.map((r) => r.hiveId))];
-  const now = new Date().toISOString();
+
   await Promise.all(hiveIds.map((hiveId) => {
-    const patch = { last_inspected_at: now };
+    const patch = {};
+    if (lastSeenByHive[hiveId]) patch.last_inspected_at = new Date(`${lastSeenByHive[hiveId]}T00:00:00`).toISOString();
     if (statusByHive[hiveId]) patch.status = statusByHive[hiveId];
     if (miteLoadByHive[hiveId] != null) patch.mite_load = miteLoadByHive[hiveId];
     return supabase.from('hives').update(patch).eq('id', hiveId);
