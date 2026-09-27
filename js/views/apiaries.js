@@ -210,24 +210,26 @@ export function renderApiary(data, id) {
   const siteProjects = projectsForApiary(projects, ap.id);
   const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 
-  /* The 5 colonies with the LOWEST mite count, each from its own most
-     recent inspection that actually recorded one — not every inspection
-     does, and not every hive's latest inspection is the one that did, so
-     this can't just take the site's most recent rows off the top. insp is
-     already sorted most-recent first, so the first mite-count-bearing row
-     seen per hive here is that hive's latest one. Raw mite count (per 300
+  /* The 5 colonies with the LOWEST mite count, strictly from each hive's own
+     most recent inspection report — not the most recent one that happens to
+     have a mite count on it, which would mean the ranking uses a stale
+     reading for a hive whose latest visit simply didn't include a mite
+     wash/roll. If that latest report didn't record one, the hive is left
+     out of this ranking entirely rather than falling back to an older
+     report. insp is already sorted most-recent first, so the first row seen
+     per hive here is its latest report, full stop. Raw mite count (per 300
      bees), not the converted mite_load percentage on the hive record —
      matches what the inspection reports panel itself shows for a single
      inspection. Ascending (least first) rather than most-affected-first —
      these are the strongest hygienic-behaviour candidates for the VSH
      breeding program, which is what this ranking is actually for. */
-  const latestMiteByHive = {};
+  const latestInspectionByHive = {};
   insp.forEach((i) => {
-    if (i.miteCount != null && !latestMiteByHive[i.hiveId]) {
-      latestMiteByHive[i.hiveId] = { hiveId: i.hiveId, miteCount: i.miteCount, date: i.date };
-    }
+    if (!latestInspectionByHive[i.hiveId]) latestInspectionByHive[i.hiveId] = i;
   });
-  const lowestMiteCounts = Object.values(latestMiteByHive)
+  const lowestMiteCounts = Object.values(latestInspectionByHive)
+    .filter((i) => i.miteCount != null)
+    .map((i) => ({ hiveId: i.hiveId, miteCount: i.miteCount, date: i.date }))
     .sort((a, b) => a.miteCount - b.miteCount)
     .slice(0, 5);
 
