@@ -206,10 +206,27 @@ export function renderApiary(data, id) {
   const { apiary: ap, hives, inspections, team, isAdmin, canManage, canOperate, projects } = data;
   if (!ap) return '';
 
-  const t = tally(hives);
   const insp = inspections.slice().sort((a, b) => b.date - a.date);
   const siteProjects = projectsForApiary(projects, ap.id);
   const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
+
+  /* Top 5 colonies by mite count, each from its own most recent inspection
+     that actually recorded one — not every inspection does, and not every
+     hive's latest inspection is the one that did, so this can't just take
+     the site's most recent rows off the top. insp is already sorted most-
+     recent first, so the first mite-count-bearing row seen per hive here is
+     that hive's latest one. Raw mite count (per 300 bees), not the
+     converted mite_load percentage on the hive record — matches what the
+     inspection reports panel itself shows for a single inspection. */
+  const latestMiteByHive = {};
+  insp.forEach((i) => {
+    if (i.miteCount != null && !latestMiteByHive[i.hiveId]) {
+      latestMiteByHive[i.hiveId] = { hiveId: i.hiveId, miteCount: i.miteCount, date: i.date };
+    }
+  });
+  const topMiteCounts = Object.values(latestMiteByHive)
+    .sort((a, b) => b.miteCount - a.miteCount)
+    .slice(0, 5);
 
   /* The "Inspection reports" panel body — swapped in place whenever a
      different hive is picked in the comb above (see bindComb's
@@ -377,21 +394,19 @@ export function renderApiary(data, id) {
             </div>` : ''}
 
           <div class="panel">
-            <div class="panel-head"><h2>Counts</h2></div>
+            <div class="panel-head"><h2>Top 5 by mite count</h2></div>
             <div class="panel-body">
-              ${hives.length ? Object.keys(statusLabels).filter((k) => t[k]).map((k) => `
+              ${topMiteCounts.length ? topMiteCounts.map((r, idx) => `
                 <div class="row" style="justify-content:space-between;padding:5px 0">
-                  <span class="row" style="gap:var(--s2)">
-                    <span class="pip pip-${k}"></span>
-                    <span style="font-size:13px">${statusLabels[k]}</span>
+                  <span class="row" style="gap:var(--s3)">
+                    <span class="caption mono" style="width:14px">${idx + 1}</span>
+                    <span style="font-size:13px;font-weight:600">${esc(r.hiveId)}</span>
                   </span>
-                  <span class="mono" style="font-size:13px">${t[k]}</span>
-                </div>`).join('') : `<p class="caption">No hives yet.</p>`}
-              ${hives.length ? `
-              <div class="row" style="justify-content:space-between;padding-top:var(--s3);margin-top:var(--s2);border-top:1px solid var(--comb-shade)">
-                <span style="font-size:13px;font-weight:600">Mean VSH</span>
-                <span class="mono" style="font-size:13px;font-weight:600">${vshAverage(hives)}%</span>
-              </div>` : ''}
+                  <span class="row" style="gap:var(--s3)">
+                    <span class="caption mono" style="font-size:11px">${r.date.getDate()} ${r.date.toLocaleDateString('en-AU', { month: 'short' })}</span>
+                    <span class="mono" style="font-size:13px;font-weight:600">${r.miteCount}</span>
+                  </span>
+                </div>`).join('') : `<p class="caption">No mite counts recorded yet.</p>`}
             </div>
           </div>
         </div>
