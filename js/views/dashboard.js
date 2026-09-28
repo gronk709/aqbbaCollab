@@ -1,7 +1,7 @@
 /* ==========================================================================
    VSH research dashboard. Answers, in order: where are the apiaries and who
-   runs them, what state are the hives in, what has been inspected, and
-   whose lines are in the program.
+   runs them, what state are the hives in, and whose lines are in the
+   program.
 
    Phases 4 and 5 of the backend migration: apiaries/hives/inspections and
    queen lines/breeders are all real Supabase rows now, loaded by the
@@ -11,7 +11,7 @@
 
 import {
   stageLabels, statusLabels,
-  tally, relDays,
+  tally,
 } from '../data.js';
 import {
   isWebAdmin,
@@ -57,28 +57,6 @@ function apiaryCard(ap) {
         </dl>
       </div>
     </a>`;
-}
-
-function inspectionLine(insp, apiaries) {
-  const ap = apiaries.find((a) => a.id === insp.apiary);
-  const d = insp.date;
-  return `
-    <li>
-      <a class="line" href="#/apiaries/${ap ? ap.id : ''}">
-        <div class="line-date">
-          <b>${d.getDate()}</b>
-          ${d.toLocaleDateString('en-AU', { month: 'short' })}
-        </div>
-        <div class="line-body">
-          <strong>${esc(insp.kind)}</strong>
-          <span>${ap ? esc(ap.name) : 'Unknown site'} · <span class="mono">${esc(insp.hiveId)}</span> · ${insp.by ? esc(insp.by.name) : 'Unknown'}</span>
-        </div>
-        <div class="line-meta">
-          <div class="caption mono">${relDays(Math.round((insp.date - new Date()) / 86400000))}</div>
-          ${insp.done ? `<span class="tag tag-green" style="margin-top:3px">Complete</span>` : ''}
-        </div>
-      </a>
-    </li>`;
 }
 
 function colonyStatusPanel(allHives) {
@@ -275,9 +253,8 @@ async function openQueenLineForm(line) {
 }
 
 export function renderDashboard(data) {
-  const { apiaries, inspections, queenLines } = data;
+  const { apiaries, queenLines } = data;
   const allHives = apiaries.flatMap((a) => a.hiveRecords);
-  const recentInspections = inspections.filter((i) => i.done).sort((a, b) => b.date - a.date);
   const t = tally(allHives);
   const focus = apiaries.find((a) => a.stage === 'assessment') || apiaries[0];
   const attention = allHives.filter((h) => h.status === 'poor').length;
@@ -340,17 +317,6 @@ export function renderDashboard(data) {
               ${focus.hiveRecords.length ? renderComb(focus.hiveRecords, { id: 'dash-comb' }) : '<p class="caption">No hives registered yet.</p>'}
             </div>
             ${focus.hiveRecords.length ? renderReadout(null) : ''}
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Recently completed</h2>
-              <span class="spacer"></span>
-              <span class="caption mono">${recentInspections.length}</span>
-            </div>
-            ${recentInspections.length
-              ? `<ul class="list">${recentInspections.map((i) => inspectionLine(i, apiaries)).join('')}</ul>`
-              : '<div class="empty" style="padding:var(--s5)"><p class="caption">Nothing logged yet.</p></div>'}
           </div>
         </div>
 

@@ -288,7 +288,7 @@ export function renderApiary(data, id) {
           <div class="line" style="cursor:default;align-items:flex-start">
             <div class="line-date">
               <b>${i.date.getDate()}</b>
-              ${i.date.toLocaleDateString('en-AU', { month: 'short' })}
+              ${i.date.toLocaleDateString('en-AU', { month: 'short' })} ${i.date.getFullYear()}
             </div>
             <div class="line-body">
               <strong>${esc(i.kind)}</strong>
