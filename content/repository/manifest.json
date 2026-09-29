@@ -154,26 +154,6 @@
    }
   ]
  },
- "rs-vsh": {
-  "articles": [
-   {
-    "slug": "vsh-assessment-process",
-    "file": "content/repository/rs-vsh/vsh-assessment-process.md",
-    "title": "The VSH assessment process at small scale",
-    "author": "m1",
-    "date": "2026-08-05",
-    "summary": "The working process document for running VSH assessment without research-station infrastructure."
-   }
-  ],
-  "attachments": [
-   {
-    "file": "content/repository/rs-vsh/vsh-process-small-scale.docx",
-    "name": "VSH assessment process at small scale (working document)",
-    "kind": "Word",
-    "size": "316.9 KB"
-   }
-  ]
- },
  "rs-yard": {
   "articles": [
    {
