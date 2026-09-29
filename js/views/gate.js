@@ -93,21 +93,6 @@ export function renderGate(stats) {
             </button>
             <button type="submit" class="btn btn-primary btn-block" id="creds-submit">Sign in</button>
           </form>
-
-          <div class="gate-hint">
-            <strong>Beta.</strong> ${isConfigured() ? `
-              "Continue with Wild Apricot" is fully wired to real sign-in. Every real
-              member provisions with the plain Member role — roles are deliberately not
-              derived from Wild Apricot Membership Level or Groups, since neither maps
-              cleanly onto this site's roles. An admin assigns real roles afterward via
-              the roles editor. The form above is for a direct (non–Wild Apricot) account
-              — a Web Admin invites those from the Members page.
-            ` : `
-              Wild Apricot is not connected yet. Fill in a direct account's real
-              email/password if one has been set up.
-            `}
-            Notification emails are sent for real.
-          </div>
         </div>
       </section>
     </div>`;

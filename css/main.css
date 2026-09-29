@@ -276,13 +276,6 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 }
 .rule-or::before, .rule-or::after { content: ''; flex: 1; height: 1px; background: var(--comb-shade); }
 
-.gate-hint {
-  margin-top: var(--s5); padding: var(--s3);
-  background: var(--comb-deep); border-left: 2px solid var(--amber);
-  font-size: 12px; line-height: 1.6; color: var(--propolis-60);
-}
-.gate-hint code { font-family: var(--mono); font-size: 11.5px; color: var(--propolis); }
-
 @media (max-width: 860px) {
   .gate { grid-template-columns: 1fr; }
   .gate-stage { padding: var(--s6) var(--s5); gap: var(--s7); min-height: 62vh; }
