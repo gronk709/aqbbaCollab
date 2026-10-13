@@ -111,8 +111,9 @@ export function renderNotifications() {
                 </select>
               </div>
               <p class="caption">
-                The address comes from your Wild Apricot record. Change it there and it
-                updates here at next sign-in.
+                ${currentUser().wa
+                  ? 'The address comes from your Wild Apricot record. Change it there and it updates here at next sign-in.'
+                  : 'Update the address this goes to from <a href="#/settings" style="text-decoration:underline">Account settings</a>.'}
               </p>
             </div>
           </div>

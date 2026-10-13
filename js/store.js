@@ -253,6 +253,40 @@ export async function signInWithPassword(email, password) {
   if (error) throw error;
 }
 
+/* js/views/settings.js's own "change email" — the Supabase Auth identity
+   email, not member_contact_details' (setMemberContact writes that one; the
+   settings page calls both). Only ever called for a direct (non–Wild
+   Apricot) account: invite-collaborator sets both to the same address at
+   creation, but nothing keeps them in sync afterward, and a direct account
+   signs in with THIS one specifically (signInWithPassword) — leaving it
+   stale would mean the address shown as "your email" quietly stops being
+   the one that actually signs you in. Never called for a Wild-Apricot-
+   linked member: their auth.users row has no password and isn't used to
+   sign in at all (see forgot-password's header comment), so there's nothing
+   here for them to keep in sync — editing their contact email is already
+   enough on its own. Supabase's own double opt-in (a confirmation link to
+   the new address, and sometimes the old one too, depending on project
+   settings) means this doesn't take effect until confirmed — the caller's
+   toast says so. */
+export async function changeOwnEmail(email) {
+  requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase.auth.updateUser({ email });
+  if (error) throw error;
+}
+
+/* Change-password while already signed in (js/views/settings.js) — same
+   underlying call as completeCollaboratorPasswordSetup, just without the
+   invite/recovery bookkeeping that only applies right after one of those
+   links. Only ever shown to a direct (non–Wild Apricot) account on the
+   settings page; a Wild-Apricot-linked member has no password to change. */
+export async function changeOwnPassword(password) {
+  requireRealMember();
+  const supabase = await getSupabase();
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}
+
 /* js/views/gate.js's "Forgot password?" link — public and unauthenticated
    by design, same shape as wildapricot-auth, since nobody asking to reset a
    password is signed in yet. Nothing client-side can tell whether this
