@@ -20,6 +20,7 @@ import { renderForum, renderThread } from './views/forum.js';
 import { renderRepository, renderSubTopic, renderArticle } from './views/repository.js';
 import { renderMarketplace } from './views/marketplace.js';
 import { renderNotifications } from './views/notifications.js';
+import { renderSettings } from './views/settings.js';
 import { loadContent } from './content.js';
 import { isWildApricotCallback, consumeWildApricotCallback, completeWildApricotLogin } from './waAuth.js';
 import {
@@ -81,6 +82,9 @@ const ROUTES = [
   { test: /^#\/repository\/(.+)$/,     view: renderSubTopic, load: (id) => loadSubTopic(id) },
   { test: /^#\/marketplace\/?$/,       view: renderMarketplace, load: loadListings },
   { test: /^#\/notifications\/?$/,     view: renderNotifications, load: loadNotifications },
+  /* Reached by clicking your own name in the rail (shellHTML below), not
+     from NAV — it's account-level, not a section of the app. */
+  { test: /^#\/settings\/?$/,          view: renderSettings },
 ];
 
 function shellHTML(inner) {
@@ -113,7 +117,7 @@ function shellHTML(inner) {
           <div class="rail-who">
             ${avatar(me)}
             <div>
-              <strong>${esc(me.name)}</strong>
+              <strong><a href="#/settings">${esc(me.name)}</a></strong>
               <span>${esc(roleLabel(me.id))}</span>
             </div>
           </div>
