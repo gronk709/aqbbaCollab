@@ -5,8 +5,8 @@
    when, headline numbers, and a numbered how-it-works band.
 
    Everything shown is real data (projects, the latest inspection, live
-   counts). Where iNaturalist uses photography this uses generated honeycomb
-   artwork for now — there are no photos in the repo yet.
+   counts). Photography lives in assets/photos/, cropped to the shape it's
+   shown at; a project without a photo gets generated honeycomb artwork.
    ========================================================================== */
 
 import { statusLabels, projectStatusLabels, relDays } from '../data.js';
@@ -23,8 +23,8 @@ function hexPoints(cx, cy, w) {
   ].map((p) => p.map((v) => v.toFixed(1)).join(',')).join(' ');
 }
 
-/* Decorative interlocking comb, stroked only — the stand-in for
-   photography behind the hero and on project covers. */
+/* Decorative interlocking comb, stroked only — the cover for any project
+   without a photo of its own. */
 function honeycomb({ cols, rows, w, cls }) {
   const pitchY = (w / Math.sqrt(3)) * 1.5;
   let cells = '';
@@ -87,10 +87,13 @@ function hero(me) {
   const firstName = (me.name || '').split(/\s+/)[0];
   return `
     <section class="tw:relative tw:isolate tw:flex tw:min-h-[32rem] tw:items-center tw:overflow-hidden tw:bg-propolis tw:px-6 tw:py-24 tw:text-white tw:md:min-h-[36rem]">
-      ${honeycomb({ cols: 16, rows: 9, w: 72, cls: 'tw:absolute tw:inset-0 tw:-z-10 tw:size-full tw:text-amber-bright/15' })}
-      <div class="tw:absolute tw:inset-0 tw:-z-10 tw:bg-[radial-gradient(120%_90%_at_75%_10%,rgb(224_168_62/0.32),transparent_60%)]"></div>
-      <div class="tw:absolute tw:inset-0 tw:-z-10 tw:bg-[radial-gradient(90%_70%_at_15%_100%,rgb(140_90_10/0.35),transparent_65%)]"></div>
-      <div class="tw:mx-auto tw:max-w-4xl tw:text-center">
+      <img src="assets/photos/contact_us_banner.jpg"
+           srcset="assets/photos/contact_us_banner-1000.jpg 1000w, assets/photos/contact_us_banner.jpg 2000w"
+           sizes="100vw" alt="" fetchpriority="high"
+           class="tw:absolute tw:inset-0 tw:-z-20 tw:size-full tw:object-cover">
+      <div class="tw:absolute tw:inset-0 tw:-z-10 tw:bg-propolis/60"></div>
+      <div class="tw:absolute tw:inset-0 tw:-z-10 tw:bg-[radial-gradient(75%_65%_at_50%_45%,rgb(43_31_14/0.45),transparent_75%)]"></div>
+      <div class="tw:mx-auto tw:max-w-4xl tw:text-center tw:[text-shadow:0_1px_14px_rgb(0_0_0/0.45)]">
         ${firstName ? `<p class="tw:font-mono tw:text-xs tw:font-medium tw:uppercase tw:tracking-[0.18em] tw:text-amber-bright">Welcome back, ${esc(firstName)}</p>` : ''}
         <h1 class="tw:mt-5 tw:font-display tw:text-4xl tw:font-semibold tw:leading-[1.08] tw:tracking-tight tw:text-balance tw:sm:text-5xl tw:md:text-6xl">
           At the Heart of Every Thriving Colony Is a Great Queen Bee.
@@ -98,7 +101,7 @@ function hero(me) {
         <p class="tw:mx-auto tw:mt-6 tw:max-w-2xl tw:text-lg tw:leading-relaxed tw:text-white/90 tw:text-pretty tw:md:text-xl">
           Queen bee breeding initiatives and projects that promote the skills, knowledge and quality of outcomes for our industry.
         </p>
-        <div class="tw:mt-9">${button({ href: '#/apiaries', label: 'Explore the apiaries', variant: 'light' })}</div>
+        <div class="tw:mt-9 tw:[text-shadow:none]">${button({ href: '#/apiaries', label: 'Explore the apiaries', variant: 'light' })}</div>
         <p class="tw:mt-8 tw:font-mono tw:text-sm tw:text-white/80">Science-driven and industry-focused.</p>
       </div>
     </section>`;
@@ -126,11 +129,23 @@ const COVER_TONES = [
   'tw:bg-linear-to-br tw:from-[#3b2a12] tw:via-propolis-60 tw:to-amber',
 ];
 
+/* Cover photos by project code (codes are fixed at creation — nothing in
+   the app edits them). Files are pre-cropped to the cards' 3:2. */
+const PROJECT_PHOTOS = {
+  'PRJ-00': { src: 'assets/photos/cordovan-1.jpg', alt: 'A cordovan queen among her workers on brood comb' },
+  'PRJ-02': { src: 'assets/photos/entrance_bees_cropped.jpg', alt: 'Foragers flying in to a hive entrance' },
+  'PRJ-03': { src: 'assets/photos/ubeeo-application.jpg', alt: 'A beekeeper applying the UBeeO assay to a brood frame' },
+};
+
 function projectCover(project, i) {
+  const photo = PROJECT_PHOTOS[project.code];
+  const art = photo
+    ? `<img src="${photo.src}" alt="${esc(photo.alt)}" loading="lazy" width="1200" height="800" class="tw:absolute tw:inset-0 tw:size-full tw:object-cover">`
+    : honeycomb({ cols: 9, rows: 6, w: 52, cls: 'tw:absolute tw:inset-0 tw:size-full tw:text-white/20' });
   return `
     <div class="tw:relative tw:size-full ${COVER_TONES[i % COVER_TONES.length]}">
-      ${honeycomb({ cols: 9, rows: 6, w: 52, cls: 'tw:absolute tw:inset-0 tw:size-full tw:text-white/20' })}
-      <span class="tw:absolute tw:top-3 tw:left-3 tw:rounded-full tw:bg-black/30 tw:px-2.5 tw:py-1 tw:font-mono tw:text-[11px] tw:font-medium tw:tracking-wider tw:text-white tw:backdrop-blur-sm">${esc(project.code)}</span>
+      ${art}
+      <span class="tw:absolute tw:top-3 tw:left-3 tw:rounded-full tw:bg-black/35 tw:px-2.5 tw:py-1 tw:font-mono tw:text-[11px] tw:font-medium tw:tracking-wider tw:text-white tw:backdrop-blur-sm">${esc(project.code)}</span>
     </div>`;
 }
 
