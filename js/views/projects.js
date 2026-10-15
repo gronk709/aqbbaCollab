@@ -458,7 +458,7 @@ function article(title, body) {
 function banner(p, isAdmin) {
   return `
     <header class="tw:relative tw:isolate tw:overflow-hidden tw:bg-propolis tw:px-6 tw:pt-7 tw:pb-12 tw:text-white tw:md:pb-16">
-      <div class="tw:absolute tw:inset-0 tw:-z-20">${projectCoverArt(p, { eager: true })}</div>
+      <div class="tw:absolute tw:inset-0 tw:-z-20">${projectCoverArt(p, { banner: true })}</div>
       <div class="tw:absolute tw:inset-0 tw:-z-10 tw:bg-linear-to-t tw:from-black/85 tw:via-black/55 tw:to-black/25"></div>
       <div class="tw:mx-auto tw:flex tw:min-h-[19rem] tw:max-w-6xl tw:flex-col tw:md:min-h-[24rem]">
         <div class="tw:flex tw:items-center tw:gap-4">

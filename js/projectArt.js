@@ -1,8 +1,9 @@
 /* ==========================================================================
    Project imagery and the project story card, shared by the home page and
    the projects pages so a project looks the same wherever it appears.
-   Photos live in assets/photos/, pre-cropped to the cards' 3:2; a project
-   without one gets generated honeycomb artwork in a tone fixed by its code.
+   Photos live in assets/photos/, pre-cropped to the shapes they're shown
+   at; a project without one gets generated honeycomb artwork in a tone
+   fixed by its code.
    ========================================================================== */
 
 import { projectStatusLabels } from './data.js';
@@ -33,11 +34,14 @@ export function honeycomb({ cols, rows, w, cls }) {
 }
 
 /* Cover photos by project code (codes are fixed at creation — nothing in
-   the app edits them). */
+   the app edits them). `src` is the 3:2 card crop, also used for the
+   project page banner on phones; `wide` is a 2:1 crop of the same photo,
+   framed on its subject, for that banner on wider screens. */
 export const PROJECT_PHOTOS = {
-  'PRJ-00': { src: 'assets/photos/cordovan-1.jpg', alt: 'A cordovan queen among her workers on brood comb' },
-  'PRJ-02': { src: 'assets/photos/entrance_bees_cropped.jpg', alt: 'Foragers flying in to a hive entrance' },
-  'PRJ-03': { src: 'assets/photos/ubeeo-application.jpg', alt: 'A beekeeper applying the UBeeO assay to a brood frame' },
+  'PRJ-00': { src: 'assets/photos/cordovan-1.jpg', wide: 'assets/photos/cordovan-1-wide.jpg', alt: 'A cordovan queen among her workers on brood comb' },
+  'PRJ-02': { src: 'assets/photos/entrance_bees_cropped.jpg', wide: 'assets/photos/entrance_bees_cropped-wide.jpg', alt: 'Foragers flying in to a hive entrance' },
+  'PRJ-03': { src: 'assets/photos/ubeeo-application.jpg', wide: 'assets/photos/ubeeo-application-wide.jpg', alt: 'A beekeeper applying the UBeeO assay to a brood frame' },
+  'PRJ-04': { src: 'assets/photos/ai-assisted-beekeeping.jpg', wide: 'assets/photos/ai-assisted-beekeeping-wide.jpg', alt: 'Glowing honeycomb lines on a dark background' },
 };
 
 /* Full class strings — see js/components.js for why they can't be built. */
@@ -50,12 +54,19 @@ const COVER_TONES = [
 const toneFor = (p) => COVER_TONES[(Number(String(p.code).replace(/\D/g, '')) || 0) % COVER_TONES.length];
 
 /* The project's photo (or comb artwork) filling its positioned parent.
-   `eager` for above-the-fold use, e.g. a page banner. */
-export function projectCoverArt(p, { eager = false } = {}) {
+   `banner` for the project page's own header: loads eagerly and switches
+   to the wide crop from tablet width up. */
+export function projectCoverArt(p, { banner = false } = {}) {
   const photo = PROJECT_PHOTOS[p.code];
-  const art = photo
-    ? `<img src="${photo.src}" alt="${esc(photo.alt)}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} width="1200" height="800" class="tw:absolute tw:inset-0 tw:size-full tw:object-cover">`
-    : honeycomb({ cols: 9, rows: 6, w: 52, cls: 'tw:absolute tw:inset-0 tw:size-full tw:text-white/20' });
+  let art;
+  if (!photo) {
+    art = honeycomb({ cols: 9, rows: 6, w: 52, cls: 'tw:absolute tw:inset-0 tw:size-full tw:text-white/20' });
+  } else {
+    const img = `<img src="${photo.src}" alt="${esc(photo.alt)}" ${banner ? 'fetchpriority="high"' : 'loading="lazy"'} width="1200" height="800" class="tw:absolute tw:inset-0 tw:size-full tw:object-cover">`;
+    art = banner && photo.wide
+      ? `<picture><source media="(min-width: 768px)" srcset="${photo.wide}">${img}</picture>`
+      : img;
+  }
   return `<div class="tw:absolute tw:inset-0 ${toneFor(p)}">${art}</div>`;
 }
 
