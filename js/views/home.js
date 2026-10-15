@@ -2,7 +2,7 @@
    Signed-in landing page ('#/') — the first page on the Tailwind look,
    laid out after iNaturalist's home page: photo-style hero, a "what you can
    do here" row, story cards, one featured record told as who/what/where/
-   when, headline numbers, and a numbered how-it-works band.
+   when, and headline numbers.
 
    Everything shown is real data (projects, the latest inspection, live
    counts). Project cards and their photos come from js/projectArt.js, shared
@@ -11,8 +11,8 @@
 
 import { statusLabels, relDays } from '../data.js';
 import { currentUser } from '../store.js';
-import { esc } from '../ui.js';
-import { band, button, featureItem, statBlock, stepItem } from '../components.js';
+import { esc, formatKg } from '../ui.js';
+import { band, button, featureItem, statBlock } from '../components.js';
 import { hexPoints, projectStoryCard } from '../projectArt.js';
 
 /* ---- "With AQBBA, you can" illustrations: two-tone, honey + propolis --- */
@@ -49,13 +49,6 @@ const ICONS = {
     <path d="M68 34H40a7 7 0 00-7 7v15a7 7 0 007 7h15l11 9v-9h2a7 7 0 007-7V41a7 7 0 00-7-7z" style="fill:var(--amber);stroke:var(--amber-deep)" stroke-width="4" stroke-linejoin="round"/>
     <path d="M53 41.5l7 4v8l-7 4-7-4v-8z" fill="#fff"/>
   </svg>`,
-};
-
-/* Small inline glyphs beside the numbered steps. */
-const STEP_ICONS = {
-  assess: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>`,
-  record: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5M8.5 11l2 2 4-4.5M9 17h6"/></svg>`,
-  select: `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M4 18l1.5-10 4 4L12 6l2.5 6 4-4L20 18z"/><path d="M4 21h16"/></svg>`,
 };
 
 /* ---- Sections ----------------------------------------------------------- */
@@ -171,6 +164,7 @@ function inspectionStory(apiaries, inspections) {
     insp.productivity != null ? `Productivity ${insp.productivity}/5` : null,
     insp.vigour != null ? `Vigour ${insp.vigour}/5` : null,
     insp.broodPattern != null ? `Brood pattern ${insp.broodPattern}/5` : null,
+    insp.weightKg != null ? `Colony weight ${formatKg(insp.weightKg)}` : null,
   ].filter(Boolean);
   const dateLabel = insp.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
   const ago = relDays(Math.round((insp.date - new Date()) / 86400000));
@@ -253,33 +247,6 @@ function stats(apiaries, inspections, queenLines, publicStats) {
   });
 }
 
-function steps() {
-  const items = [
-    { n: 1, title: 'Assess', icon: STEP_ICONS.assess, body: 'Colonies at the research apiaries are assessed against a common protocol: mite counts, UBeeO and hygiene scores.' },
-    { n: 2, title: 'Record', icon: STEP_ICONS.record, body: "Every inspection is logged here, so each member's results sit alongside everyone else's, measured the same way." },
-    { n: 3, title: 'Select', icon: STEP_ICONS.select, body: 'The strongest colonies become the queen lines the program breeds from next.' },
-  ];
-  return band({
-    tone: 'tint',
-    body: `<div class="tw:mx-auto tw:grid tw:max-w-5xl tw:gap-12 tw:lg:grid-cols-3 tw:lg:gap-10">${items.map(stepItem).join('')}</div>`,
-  });
-}
-
-function closing() {
-  const statement = (title, text) => `
-    <div>
-      <h2 class="tw:font-display tw:text-3xl tw:font-medium tw:tracking-tight tw:text-propolis">${esc(title)}</h2>
-      <p class="tw:mx-auto tw:mt-3 tw:max-w-xl tw:text-lg tw:leading-relaxed tw:text-propolis-60 tw:text-pretty">${esc(text)}</p>
-    </div>`;
-  return band({
-    tone: 'white',
-    body: `<div class="tw:mx-auto tw:max-w-2xl tw:space-y-12 tw:text-center">
-      ${statement('Built by breeders, for breeders', 'A collaboration space for the Australian Queen Bee Breeders Association and its partners, working on queen bee breeding initiatives and projects across the country.')}
-      ${statement('Every inspection counts', 'Each assessment logged here joins a shared record the whole program draws on when choosing which lines to breed from.')}
-    </div>`,
-  });
-}
-
 export function renderHome(data) {
   const { apiaries, inspections, projects, queenLines, stats: publicStats } = data;
   return `
@@ -289,7 +256,5 @@ export function renderHome(data) {
       ${projectStories(projects)}
       ${inspectionStory(apiaries, inspections)}
       ${stats(apiaries, inspections, queenLines, publicStats)}
-      ${steps()}
-      ${closing()}
     </div>`;
 }

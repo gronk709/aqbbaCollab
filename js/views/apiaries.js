@@ -25,7 +25,7 @@ import {
   checkExistingHiveIds, addHivesBulk, addInspectionsBulk,
   setApiaryTeamMember, removeApiaryTeamMember, loadRealMembers, loadQueenLines,
 } from '../store.js';
-import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
+import { esc, icons, avatar, subButton, modal, closeModal, toast, formatKg } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
 import { parseCsv, buildCsvText, downloadCsvFile } from '../csv.js';
 
@@ -282,6 +282,7 @@ export function renderApiary(data, id) {
         i.broodPattern != null ? `Brood Pattern ${i.broodPattern}/5` : null,
         hygiene != null ? `Hygiene ${hygiene}/5 (avg)` : null,
         i.miteCount != null ? `Mite Count ${i.miteCount}` : null,
+        i.weightKg != null ? `Colony weight ${formatKg(i.weightKg)}` : null,
       ].filter(Boolean);
       return `
         <li>
@@ -1118,8 +1119,12 @@ async function openInspectionForm(ap, hives) {
         ${scoreOptions('European Foulbrood (EFB)', 'i-efb')}
         ${scoreOptions('Small Hive Beetle (SHB)', 'i-shb')}
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
+      <div class="row" style="gap:var(--s3);align-items:flex-end">
         ${scoreOptions('Harbo Assay', 'i-harbo-assay', 4)}
+        <div class="field" style="flex:1">
+          <label for="i-weight-kg">Colony weight (kg) <span class="caption">(optional)</span></label>
+          <input id="i-weight-kg" type="number" inputmode="decimal" min="0.1" max="500" step="0.1" placeholder="e.g. 38.5">
+        </div>
       </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         ${yesNoOptions('Nosema present', 'i-nosema')}
@@ -1171,6 +1176,12 @@ async function openInspectionForm(ap, hives) {
       return raw ? raw === 'yes' : null;
     };
 
+    const weight = parseOptionalWeight(scrim.querySelector('#i-weight-kg').value.trim(), 'Colony weight');
+    if (!weight.ok) {
+      toast(weight.error);
+      return;
+    }
+
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
     try {
@@ -1191,6 +1202,7 @@ async function openInspectionForm(ap, hives) {
         efb: scoreOf('#i-efb'),
         shb: scoreOf('#i-shb'),
         harboAssay: scoreOf('#i-harbo-assay'),
+        weightKg: weight.value,
         nosemaPresent: yesNoOf('#i-nosema'),
         waxMothPresent: yesNoOf('#i-wax-moth'),
         viruses: scrim.querySelector('#i-viruses').value.trim() || null,
@@ -1222,6 +1234,21 @@ function parseOptionalInt(raw, min, max, label) {
     return { ok: false, error: `${label} "${raw}" must be a whole number from ${min} to ${max}.` };
   }
   return { ok: true, value: n };
+}
+
+/* Optional colony weight in kg: blank is valid (not weighed). Anything
+   finer than 0.1 kg is rounded to it, as the column itself would, and the
+   result must still be within the column's own 0.1-500 kg range. Shared by
+   the Log inspection form and the CSV upload. */
+const WEIGHT_MAX_KG = 500;
+function parseOptionalWeight(raw, label) {
+  if (!raw) return { ok: true, value: null };
+  const n = Number(raw);
+  const kg = Math.round(n * 10) / 10;
+  if (!Number.isFinite(n) || kg < 0.1 || kg > WEIGHT_MAX_KG) {
+    return { ok: false, error: `${label} "${raw}" must be between 0.1 and ${WEIGHT_MAX_KG} kg.` };
+  }
+  return { ok: true, value: kg };
 }
 
 /* Blank -> null (not assessed); Y/Yes/N/No (any case) -> true/false;
@@ -1258,17 +1285,17 @@ async function openInspectionBulkUploadForm(ap, hives) {
       'Hive ID', 'Date', 'Inspection Type', 'Resulting Status',
       'Productivity', 'Temperament', 'Vigour', 'Brood Pattern',
       'Mite Count', 'UBeeO Score', 'PKD Score',
-      'Chalkbrood', 'Sacbrood', 'EFB', 'SHB', 'Harbo Assay',
+      'Chalkbrood', 'Sacbrood', 'EFB', 'SHB', 'Harbo Assay', 'Colony Weight (kg)',
       'Nosema Present', 'Wax Moth Present', 'Viruses', 'Conducted By', 'Completed', 'Notes',
     ],
     templateSample: [[
       hives[0].id, todayStr(), defaultKind, 'good',
       '4', '5', '4', '3',
       '2', '85', '90',
-      '1', '1', '1', '1', '3',
+      '1', '1', '1', '1', '3', '38.5',
       'N', 'N', '', me.name, 'Y', 'Strong hygienic response',
     ]],
-    requiredNote: `Only Hive ID and Date are required (Date as YYYY-MM-DD). Hive ID must already exist at ${ap.name}. Conducted By defaults to your own account if left blank, or must exactly match an existing member's name. Completed defaults to Y (already completed) if left blank. Inspection Type defaults to "${defaultKind}" (valid values: ${inspectionKinds.join(', ')}); Resulting Status, if given, must be one of: ${Object.keys(statusLabels).join(', ')}. The 1-5 score columns (Productivity, Temperament, Vigour, Brood Pattern, Chalkbrood, Sacbrood, EFB, SHB) and Harbo Assay (1-4) are all optional.`,
+    requiredNote: `Only Hive ID and Date are required (Date as YYYY-MM-DD). Hive ID must already exist at ${ap.name}. Conducted By defaults to your own account if left blank, or must exactly match an existing member's name. Completed defaults to Y (already completed) if left blank. Inspection Type defaults to "${defaultKind}" (valid values: ${inspectionKinds.join(', ')}); Resulting Status, if given, must be one of: ${Object.keys(statusLabels).join(', ')}. The 1-5 score columns (Productivity, Temperament, Vigour, Brood Pattern, Chalkbrood, Sacbrood, EFB, SHB) and Harbo Assay (1-4) are all optional, as is Colony Weight (kg), a weight from 0.1 to ${WEIGHT_MAX_KG} kg (anything finer than 0.1 kg is rounded).`,
 
     validateRow: (row, line) => {
       const hiveId = row['hive id'];
@@ -1310,6 +1337,9 @@ async function openInspectionBulkUploadForm(ap, hives) {
         scores[key] = result.value;
       }
 
+      const weight = parseOptionalWeight(row['colony weight (kg)'], 'Colony Weight (kg)');
+      if (!weight.ok) return weight;
+
       const nosema = parseOptionalYesNo(row['nosema present'], 'Nosema Present');
       if (!nosema.ok) return nosema;
       const waxMoth = parseOptionalYesNo(row['wax moth present'], 'Wax Moth Present');
@@ -1338,7 +1368,7 @@ async function openInspectionBulkUploadForm(ap, hives) {
           vigour: scores['vigour'], broodPattern: scores['brood pattern'],
           miteCount: scores['mite count'], ubeeoPct: scores['ubeeo score'], pkdPct: scores['pkd score'],
           chalkbrood: scores['chalkbrood'], sacbrood: scores['sacbrood'], efb: scores['efb'], shb: scores['shb'],
-          harboAssay: scores['harbo assay'],
+          harboAssay: scores['harbo assay'], weightKg: weight.value,
           nosemaPresent: nosema.value, waxMothPresent: waxMoth.value,
           viruses: row['viruses'] || null, note: row['notes'] || '', done,
         },

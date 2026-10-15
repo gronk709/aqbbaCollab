@@ -85,15 +85,3 @@ export const statBlock = ({ value, label }) => `
     <div class="tw:mx-auto tw:mt-1 tw:h-1 tw:w-10 tw:rounded-full tw:bg-amber"></div>
     <p class="tw:mt-3 tw:text-[15px] tw:text-propolis-60">${esc(label)}</p>
   </div>`;
-
-/* Big-numeral step in a short numbered sequence. `icon` is trusted markup. */
-export const stepItem = ({ n, title, icon, body }) => `
-  <div class="tw:flex tw:gap-5">
-    <span class="tw:font-display tw:text-8xl tw:leading-none tw:font-medium tw:text-amber" aria-hidden="true">${n}</span>
-    <div class="tw:pt-2">
-      <h3 class="tw:flex tw:items-center tw:gap-2 tw:font-display tw:text-3xl tw:font-medium tw:text-propolis">
-        ${esc(title)}<span class="tw:text-amber">${icon}</span>
-      </h3>
-      <p class="tw:mt-2 tw:text-[17px] tw:leading-snug tw:text-propolis-60">${esc(body)}</p>
-    </div>
-  </div>`;
