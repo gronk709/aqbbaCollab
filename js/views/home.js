@@ -101,7 +101,7 @@ function features() {
 
 function projectStories(projects) {
   if (!projects.length) return '';
-  const cards = projects.slice(0, 3).map(projectStoryCard).join('');
+  const cards = projects.slice(0, 3).map((p) => projectStoryCard(p, { landing: true })).join('');
   return band({
     tone: 'white',
     title: 'Research in progress',

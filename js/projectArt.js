@@ -36,13 +36,22 @@ export function honeycomb({ cols, rows, w, cls }) {
 /* Cover photos by project code (codes are fixed at creation — nothing in
    the app edits them). `src` is the 3:2 card crop, also used for the
    project page banner on phones; `wide` is a 2:1 crop of the same photo,
-   framed on its subject, for that banner on wider screens. */
+   framed on its subject, for that banner on wider screens. `light` marks a
+   photo on a pale ground, so its page banner uses dark text instead. */
 export const PROJECT_PHOTOS = {
   'PRJ-00': { src: 'assets/photos/cordovan-1.jpg', wide: 'assets/photos/cordovan-1-wide.jpg', alt: 'A cordovan queen among her workers on brood comb' },
-  'PRJ-02': { src: 'assets/photos/entrance_bees_cropped.jpg', wide: 'assets/photos/entrance_bees_cropped-wide.jpg', alt: 'Foragers flying in to a hive entrance' },
+  'PRJ-02': { src: 'assets/photos/tropilaelaps-mite.jpg', wide: 'assets/photos/tropilaelaps-mite-wide.jpg', alt: 'A Tropilaelaps mite seen under a microscope', light: true },
   'PRJ-03': { src: 'assets/photos/ubeeo-application.jpg', wide: 'assets/photos/ubeeo-application-wide.jpg', alt: 'A beekeeper applying the UBeeO assay to a brood frame' },
   'PRJ-04': { src: 'assets/photos/ai-assisted-beekeeping.jpg', wide: 'assets/photos/ai-assisted-beekeeping-wide.jpg', alt: 'Glowing honeycomb lines on a dark background' },
 };
+
+/* The home page's tiles are curated separately: a project listed here shows
+   this photo there, and its PROJECT_PHOTOS one everywhere else. */
+const LANDING_PHOTOS = {
+  'PRJ-02': { src: 'assets/photos/entrance_bees_cropped.jpg', alt: 'Foragers flying in to a hive entrance' },
+};
+
+export const coverIsLight = (p) => Boolean(PROJECT_PHOTOS[p.code] && PROJECT_PHOTOS[p.code].light);
 
 /* Full class strings — see js/components.js for why they can't be built. */
 const COVER_TONES = [
@@ -55,14 +64,16 @@ const toneFor = (p) => COVER_TONES[(Number(String(p.code).replace(/\D/g, '')) ||
 
 /* The project's photo (or comb artwork) filling its positioned parent.
    `banner` for the project page's own header: loads eagerly and switches
-   to the wide crop from tablet width up. */
-export function projectCoverArt(p, { banner = false } = {}) {
-  const photo = PROJECT_PHOTOS[p.code];
+   to the wide crop from tablet width up. `landing` for the home page's tiles. */
+export function projectCoverArt(p, { banner = false, landing = false } = {}) {
+  const photo = (landing && LANDING_PHOTOS[p.code]) || PROJECT_PHOTOS[p.code];
   let art;
   if (!photo) {
     art = honeycomb({ cols: 9, rows: 6, w: 52, cls: 'tw:absolute tw:inset-0 tw:size-full tw:text-white/20' });
   } else {
-    const img = `<img src="${photo.src}" alt="${esc(photo.alt)}" ${banner ? 'fetchpriority="high"' : 'loading="lazy"'} width="1200" height="800" class="tw:absolute tw:inset-0 tw:size-full tw:object-cover">`;
+    // A pale photo keeps its subject to the right, so the page banner can hold text on the left.
+    const pos = photo.light ? 'tw:object-right' : 'tw:object-center';
+    const img = `<img src="${photo.src}" alt="${esc(photo.alt)}" ${banner ? 'fetchpriority="high"' : 'loading="lazy"'} width="1200" height="800" class="tw:absolute tw:inset-0 tw:size-full tw:object-cover ${pos}">`;
     art = banner && photo.wide
       ? `<picture><source media="(min-width: 768px)" srcset="${photo.wide}">${img}</picture>`
       : img;
@@ -78,11 +89,11 @@ export function projectMeta(p) {
   return `${projectStatusLabels[p.status] || p.status} · ${reach}`;
 }
 
-export function projectStoryCard(p) {
+export function projectStoryCard(p, { landing = false } = {}) {
   return storyCard({
     href: `#/projects/${p.id}`,
     cover: `
-      ${projectCoverArt(p)}
+      ${projectCoverArt(p, { landing })}
       <span class="tw:absolute tw:top-3 tw:left-3 tw:rounded-full tw:bg-black/35 tw:px-2.5 tw:py-1 tw:font-mono tw:text-[11px] tw:font-medium tw:tracking-wider tw:text-white tw:backdrop-blur-sm">${esc(p.code)}</span>`,
     title: p.title,
     body: p.summary || '',
