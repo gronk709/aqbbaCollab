@@ -7,14 +7,14 @@ import {
   roleLabel, currentUser, loadSignedInMember, loadNotifications,
   isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
   loadProjects, loadProject, loadMembersDirectory, loadMemberDetail,
-  loadApiaries, loadApiary, loadQueenLines, loadPublicStats,
+  loadApiaries, loadApiary, loadQueenLines, loadPublicStats, loadRetiredHives,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
 import { renderHome } from './views/home.js';
 import { renderSetPassword } from './views/setPassword.js';
 import { renderDashboard } from './views/dashboard.js';
-import { renderApiaries, renderApiary } from './views/apiaries.js';
+import { renderApiaries, renderApiary, renderRetiredHives } from './views/apiaries.js';
 import { renderManager, renderMembers } from './views/managers.js';
 import { renderProjects, renderProject } from './views/projects.js';
 import { renderForum, renderThread } from './views/forum.js';
@@ -56,6 +56,7 @@ const ROUTES = [
     load: () => Promise.all([loadApiaries(), loadProjects(), loadQueenLines(), loadPublicStats()])
       .then(([ap, projects, queenLines, stats]) => ({ ...ap, projects, queenLines, stats })) },
   { test: /^#\/apiaries\/?$/,          view: renderApiaries, load: loadApiaries },
+  { test: /^#\/reports\/retired-hives\/?$/, view: renderRetiredHives, load: loadRetiredHives },
   /* Also loads the project list (Phase 6), just for the "Running here"
      panel — which projects are running at this site. */
   { test: /^#\/apiaries\/(.+)$/,       view: renderApiary,

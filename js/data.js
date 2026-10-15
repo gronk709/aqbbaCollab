@@ -95,6 +95,7 @@ export const statusLabels = {
   average:  'Average',
   poor:     'Poor',
   treating: 'Treating',
+  retired:  'Retired',
 };
 
 export const statusNote = {
@@ -103,6 +104,7 @@ export const statusNote = {
   average:  'Within normal range. No action required.',
   poor:     'Multiple metrics below threshold. Re-check at next inspection.',
   treating: 'Under active treatment. Excluded from selection data this cycle.',
+  retired:  'Withdrawn from assessment',
 };
 
 export const queenColours = ['white', 'yellow', 'red', 'green', 'blue'];
