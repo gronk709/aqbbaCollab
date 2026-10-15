@@ -86,7 +86,7 @@ function hero(me) {
 
 function features() {
   const items = [
-    { href: '#/apiaries', icon: ICONS.assess, title: 'Assess', sub: 'colonies for varroa sensitive hygiene' },
+    { href: '#/repository/rs-assess', icon: ICONS.assess, title: 'Assess', sub: 'colonies for varroa sensitive hygiene' },
     { href: '#/apiaries', icon: ICONS.record, title: 'Record', sub: 'inspections across the research apiaries' },
     { href: '#/projects/p0/dashboard', icon: ICONS.contribute, title: 'Contribute', sub: 'queen lines to the breeding program' },
     { href: '#/repository', icon: ICONS.learn, title: 'Learn', sub: "from the association's repository" },
