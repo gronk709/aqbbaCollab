@@ -40,8 +40,8 @@ Projects lives at `#/projects`; there is no top-level Dashboard nav item any mor
 **Home** (`#/`) — the signed-in landing page, laid out after iNaturalist's home page:
 a hero, a "With AQBBA, you can" row linking into each part of the site, the current
 research projects as story cards, the latest inspection told as who/what/where/when
-(with the hive lit up in its apiary's honeycomb), live counts, and a numbered
-assess → record → select band. Everything on it is live data.
+(with the hive lit up in its apiary's honeycomb), and live counts. Everything on it is
+live data.
 
 **Research dashboard** (`#/projects/p0/dashboard`) — a topic area of PRJ-00, reached from
 the program's summary page and breadcrumbed back to it. Program-wide figures, then a card
@@ -93,7 +93,12 @@ updates every selected hive's status the moment the inspection is saved — so a
 is how a hive's status changes after it's first registered, not just a log entry (see
 `setHiveStatus` / `addInspection` in `js/store.js`). Inspection type is one of three
 categories — Assessment, Maintenance, Biosecurity — rather than a specific assay name;
-older, more specific seed inspections keep that detail in their notes instead. These
+older, more specific seed inspections keep that detail in their notes instead. An
+inspection can also record the **colony weight in kg** (optional, 0.1–500 kg to the
+nearest 0.1 kg — the `weight_kg` column, `20261015040214_inspection_colony_weight.sql`;
+also a "Colony Weight (kg)" column in the bulk CSV upload). It shows on that
+inspection's report, and the hive's readout shows its most recent recorded weight with
+its date — only when one exists. These
 maintenance flows are meaningfully different from the member-facing composers elsewhere
 (forum, marketplace, repository) — they alter the program's research data rather than
 adding social content, so they're access-gated: adding a new apiary is Web Admin only,
@@ -209,8 +214,9 @@ would have emailed, with unread state, plus a summary of everything the member f
 The dashboard renders all ~100 hives in an apiary as one interlocking honeycomb field.
 Each hexagon is a real hive record; click it to read that hive's four assessment data
 points (VSH/UBEEO score, mite load/Harbo assay result, hive configuration, last
-inspection) plus its queen line, its own queen ID, contributing breeder, queen marking,
-and any comments recorded when the hive was registered.
+inspection, and its latest colony weight when it has been weighed) plus its queen line,
+its own queen ID, contributing breeder, queen marking, and any comments recorded when
+the hive was registered.
 
 Cell colours quote the **international queen-marking colour code** — the one colour
 system every queen breeder already reads fluently — rather than an arbitrary palette.

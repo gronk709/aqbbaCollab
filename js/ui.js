@@ -15,6 +15,10 @@ export const html = (strings, ...vals) =>
 export const initials = (name) =>
   name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
 
+/* A colony weight for display: up to one decimal place, trailing zero
+   dropped (38.5 kg, 40 kg), matching the column's 0.1 kg resolution. */
+export const formatKg = (kg) => `${Number(Number(kg).toFixed(1))} kg`;
+
 /* --- icons: 16px stroke set --------------------------------------------- */
 
 const svg = (paths, w = 16) =>

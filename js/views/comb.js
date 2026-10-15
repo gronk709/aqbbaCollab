@@ -4,7 +4,7 @@
    ========================================================================== */
 
 import { statusLabels, statusNote, relDays } from '../data.js';
-import { esc, icons } from '../ui.js';
+import { esc, icons, formatKg } from '../ui.js';
 
 const PER_ROW = 14;
 
@@ -74,6 +74,11 @@ export function renderReadout(hive, { editable = false } = {}) {
           ? relDays(Math.round((new Date(hive.lastInspectedAt) - new Date()) / 86400000))
           : 'Never'}</dd></div>
         <div><dt>Treatment free</dt><dd style="font-size:13px">${tf}</dd></div>
+        ${hive.latestWeight ? `
+        <div>
+          <dt>Colony weight</dt>
+          <dd style="font-size:13px">${formatKg(hive.latestWeight.kg)}<small style="font-size:10px;color:var(--propolis-40)"> · ${hive.latestWeight.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}</small></dd>
+        </div>` : ''}
       </dl>
 
       <div class="row row-wrap" style="margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade);gap:var(--s5)">

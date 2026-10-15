@@ -1356,9 +1356,33 @@ function normalizeInspectionRow(i) {
     broodPattern: i.brood_pattern,
     miteCount: i.mite_count, ubeeoPct: i.ubeeo_pct, pkdPct: i.pkd_pct,
     chalkbrood: i.chalkbrood, sacbrood: i.sacbrood, efb: i.efb, shb: i.shb, harboAssay: i.harbo_assay,
+    /* Colony weight in kg (numeric(5,1)), or null when the colony wasn't
+       weighed at this inspection. */
+    weightKg: i.weight_kg == null ? null : Number(i.weight_kg),
     nosemaPresent: i.nosema_present, waxMothPresent: i.wax_moth_present, viruses: i.viruses,
     note: i.note, done: i.done, date: new Date(`${i.occurred_on}T00:00:00`),
   };
+}
+
+/* Each hive's most recent recorded colony weight, for the hive readout
+   (js/views/comb.js). Not every inspection weighs the colony, so this is the
+   latest inspection that has a weight, which isn't always the latest
+   inspection. Same-day ties go to the row logged last, the same tie-break
+   touchInspectedHives uses. Takes raw inspection rows; sets hive.latestWeight
+   to { kg, date } or null. */
+function attachLatestWeights(hives, inspRows) {
+  const best = {};
+  inspRows.forEach((r) => {
+    if (r.weight_kg == null) return;
+    const cur = best[r.hive_id];
+    if (!cur || r.occurred_on > cur.occurred_on || (r.occurred_on === cur.occurred_on && r.created_at > cur.created_at)) {
+      best[r.hive_id] = r;
+    }
+  });
+  hives.forEach((h) => {
+    const r = best[h.id];
+    h.latestWeight = r ? { kg: Number(r.weight_kg), date: new Date(`${r.occurred_on}T00:00:00`) } : null;
+  });
 }
 
 /* Every real apiary (excluding decommissioned ones — see updateApiary's
@@ -1393,6 +1417,8 @@ export async function loadApiaries() {
     ? await supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').in('hive_id', hiveIds).order('occurred_on', { ascending: false })
     : { data: [], error: null };
   if (inspErr) throw inspErr;
+
+  Object.values(hivesByApiary).forEach((hs) => attachLatestWeights(hs, inspRows));
 
   const apiariesOut = apiaryRows.map((ap) => {
     const hiveRecords = hivesByApiary[ap.id] || [];
@@ -1432,13 +1458,16 @@ export async function loadApiary(id) {
     : { data: [], error: null };
   if (inspErr) throw inspErr;
 
+  const hivesOut = hives.map(normalizeHiveRow);
+  attachLatestWeights(hivesOut, inspections);
+
   const me = currentUser();
   const admin = isWebAdmin(me.id);
   const myAccess = team.find((t) => t.member_id === me.id)?.access_level ?? null;
 
   return {
     apiary: normalizeApiaryRow(apiary),
-    hives: hives.map(normalizeHiveRow),
+    hives: hivesOut,
     inspections: inspections.map((i) => ({ ...normalizeInspectionRow(i), apiary: id })),
     team: team.map((t) => ({ ...t, member: withRoles(t.member) })),
     isAdmin: admin,
@@ -1589,12 +1618,13 @@ export async function updateHive(hiveId, patch) {
    be 0/false (a real mite wash finding zero mites; assessed and not
    found) — `?? null` only, never `|| null`, so those real results survive
    instead of collapsing to "not recorded". harbo_assay/scores stay on
-   `|| null` since their scales never include 0. */
+   `|| null` since their scales never include 0, and so does weightKg (a
+   colony can't weigh 0 — the column's own check rejects it). */
 function inspectionInsertPayload({
   hiveId, kind, by, status,
   productivity, temperament, vigour, broodPattern,
   miteCount, ubeeoPct, pkdPct, chalkbrood, sacbrood, efb, shb, harboAssay,
-  nosemaPresent, waxMothPresent, viruses,
+  weightKg, nosemaPresent, waxMothPresent, viruses,
   note, dateStr, done,
 }) {
   return {
@@ -1604,7 +1634,7 @@ function inspectionInsertPayload({
     vigour: vigour || null, brood_pattern: broodPattern || null,
     mite_count: miteCount ?? null, ubeeo_pct: ubeeoPct ?? null, pkd_pct: pkdPct ?? null,
     chalkbrood: chalkbrood ?? null, sacbrood: sacbrood ?? null, efb: efb ?? null, shb: shb ?? null,
-    harbo_assay: harboAssay || null,
+    harbo_assay: harboAssay || null, weight_kg: weightKg || null,
     nosema_present: nosemaPresent ?? null, wax_moth_present: waxMothPresent ?? null,
     viruses: viruses || null,
     note: note || null, occurred_on: dateStr, done: !!done,
