@@ -10,6 +10,9 @@
    Contributor (add/edit only) can touch, per member they've been
    individually assigned to a given project, same shape as an apiary's own
    manager grant.
+
+   Both pages are on the Tailwind look (see js/components.js); the pop-up
+   forms still use the shared modal styles from css/main.css.
    ========================================================================== */
 
 import { projectStatusLabels } from '../data.js';
@@ -19,10 +22,19 @@ import {
   currentUser, isWebAdmin,
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
+import { button } from '../components.js';
+import { projectCoverArt, projectStoryCard } from '../projectArt.js';
 
 let activeStatus = 'All';
 
-const statusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
+const STATUS_DOT = { recruiting: 'var(--amber)', active: 'var(--mark-green)', concluding: 'var(--mark-blue)' };
+
+function statusPill(status) {
+  return `
+    <span class="tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-full tw:bg-white/95 tw:px-3 tw:py-1 tw:text-xs tw:font-semibold tw:text-propolis tw:shadow-sm">
+      <span class="tw:size-2 tw:rounded-full" style="background:${STATUS_DOT[status] || 'var(--propolis-40)'}"></span>${esc(projectStatusLabels[status] || status)}
+    </span>`;
+}
 
 /* p.siteDetails is resolved server-side now (loadProjects/loadProject,
    js/store.js) — apiaries are real rows since Phase 5, so p.sites' plain
@@ -34,69 +46,70 @@ function sitesLine(p) {
   return p.open_sites ? `Running at ${names}, open to other member apiaries.` : `Running at ${names}.`;
 }
 
-function projectCard(p) {
+const HEX_ICON = `<svg viewBox="0 0 24 24" class="tw:size-full" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5z"/><path d="M12 8.2l3.3 1.9v3.8L12 15.8l-3.3-1.9v-3.8z"/></svg>`;
+
+const FILTER_ON = 'tw:border-propolis tw:bg-propolis tw:text-white';
+const FILTER_OFF = 'tw:border-comb-shade tw:bg-white tw:text-propolis tw:hover:border-amber tw:hover:text-amber-deep';
+
+function filterPill(s, n, on) {
+  const label = s === 'All' ? 'All' : projectStatusLabels[s];
   return `
-    <a class="panel" href="#/projects/${p.id}" style="display:block">
-      <div class="panel-head">
-        <div style="min-width:0">
-          <div class="eyebrow">${p.code}</div>
-          <h3 style="margin-top:2px;font-family:var(--display);font-size:1.0625rem;line-height:1.35">${esc(p.title)}</h3>
-        </div>
-        <span class="spacer"></span>
-        <span class="tag ${statusVariant[p.status]}">${projectStatusLabels[p.status]}</span>
-      </div>
-      <div class="panel-body">
-        <p style="font-size:13px;color:var(--propolis-60);line-height:1.55">${esc(p.summary)}</p>
-        <div class="row" style="margin-top:var(--s4);gap:var(--s2)">
-          <span class="caption mono">${p.participantCount} ${p.participantCount === 1 ? 'participant' : 'participants'}</span>
-        </div>
-        <p class="caption" style="margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--comb-shade)">
-          ${esc(sitesLine(p))}
-        </p>
-      </div>
-    </a>`;
+    <button type="button" data-status="${s}" aria-pressed="${on}"
+            class="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-full tw:border tw:px-4 tw:py-2 tw:text-sm tw:font-medium tw:transition ${on ? FILTER_ON : FILTER_OFF}">
+      ${esc(label)}
+      <span class="tw:rounded-full tw:px-1.5 tw:font-mono tw:text-xs ${on ? 'tw:bg-white/15' : 'tw:bg-comb tw:text-propolis-60'}">${n}</span>
+    </button>`;
+}
+
+function emptyState(admin) {
+  const heading = activeStatus === 'All'
+    ? 'No projects yet'
+    : `Nothing ${projectStatusLabels[activeStatus].toLowerCase()} right now`;
+  return `
+    <div class="tw:mx-auto tw:max-w-xl tw:rounded-2xl tw:border-2 tw:border-dashed tw:border-comb-shade tw:px-8 tw:py-14 tw:text-center">
+      <span class="tw:mx-auto tw:block tw:size-14 tw:text-amber">${HEX_ICON}</span>
+      <h2 class="tw:mt-5 tw:font-display tw:text-2xl tw:font-medium tw:text-propolis">${esc(heading)}</h2>
+      <p class="tw:mt-2 tw:text-propolis-60">${admin ? 'Add a project to get one started.' : 'Nothing here yet — check back once a Web Admin adds one.'}</p>
+      ${admin ? `<div class="tw:mt-6">${button({ id: 'empty-project', label: 'Add project', icon: icons.plus })}</div>` : ''}
+    </div>`;
 }
 
 export function renderProjects(all) {
   const admin = isWebAdmin(currentUser().id);
   const statuses = ['All', 'recruiting', 'active', 'concluding'];
   const shown = activeStatus === 'All' ? all : all.filter((p) => p.status === activeStatus);
+  const count = (s) => (s === 'All' ? all.length : all.filter((p) => p.status === s).length);
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="eyebrow">Coordinated research initiatives</div>
-        <h1>Projects</h1>
-      </div>
-      ${admin ? `
-        <div class="topbar-actions">
-          <button class="btn btn-primary btn-sm" id="new-project">${icons.plus} Add project</button>
-        </div>` : ''}
-    </div>
+    <div class="view">
+      <section class="tw:bg-comb-deep/55 tw:px-6 tw:pt-14 tw:pb-12 tw:md:pt-20">
+        <div class="tw:mx-auto tw:max-w-6xl">
+          <div class="tw:flex tw:flex-wrap tw:items-end tw:gap-x-6 tw:gap-y-5">
+            <div class="tw:min-w-0 tw:flex-1">
+              <p class="tw:font-mono tw:text-xs tw:font-medium tw:uppercase tw:tracking-[0.18em] tw:text-amber-deep">Coordinated research initiatives</p>
+              <h1 class="tw:mt-3 tw:font-display tw:text-5xl tw:font-semibold tw:tracking-tight tw:text-propolis tw:md:text-6xl">Projects</h1>
+            </div>
+            ${admin ? button({ id: 'new-project', label: 'Add project', icon: icons.plus }) : ''}
+          </div>
+          <p class="tw:mt-6 tw:max-w-3xl tw:text-lg tw:leading-relaxed tw:text-propolis-60 tw:text-pretty">
+            A project is a question with a method attached, not a place — it can run at one research
+            apiary, span all three, or wait for a member to volunteer a site. A Web Admin creates a
+            project; the Project Managers and Contributors assigned to it build out its content from
+            there. Join one with what you can contribute.
+          </p>
+          <div class="tw:mt-8 tw:flex tw:flex-wrap tw:gap-2" role="group" aria-label="Filter projects by status">
+            ${statuses.map((s) => filterPill(s, count(s), s === activeStatus)).join('')}
+          </div>
+        </div>
+      </section>
 
-    <div class="wrap view">
-      <p class="lede" style="max-width:66ch;margin-bottom:var(--s5)">
-        A project is a question with a method attached, not a place — it can run at one research
-        apiary, span all three, or wait for a member to volunteer a site. A Web Admin creates a
-        project; the Project Managers and Contributors assigned to it build out its content from
-        there. Join one with what you can contribute.
-      </p>
-
-      <div class="filters">
-        ${statuses.map((s) => {
-          const n = s === 'All' ? all.length : all.filter((p) => p.status === s).length;
-          const label = s === 'All' ? 'All' : projectStatusLabels[s];
-          return `<button class="chip ${s === activeStatus ? 'is-on' : ''}" data-status="${s}">${label} <span class="mono" style="opacity:.6">${n}</span></button>`;
-        }).join('')}
-      </div>
-
-      ${shown.length === 0 ? `
-        <div class="panel"><div class="empty">
-          <h3>Nothing ${activeStatus === 'All' ? '' : projectStatusLabels[activeStatus].toLowerCase()} right now</h3>
-          <p>${admin ? 'Add a project to get one started.' : 'Nothing here yet — check back once a Web Admin adds one.'}</p>
-          ${admin ? '<button class="btn btn-primary" id="empty-project">Add project</button>' : ''}
-        </div></div>` : `
-        <div class="grid grid-3">${shown.map(projectCard).join('')}</div>`}
+      <section class="tw:bg-white tw:px-6 tw:py-14 tw:md:py-16">
+        <div class="tw:mx-auto tw:max-w-6xl">
+          ${shown.length === 0
+            ? emptyState(admin)
+            : `<div class="tw:grid tw:gap-8 tw:sm:grid-cols-2 tw:lg:grid-cols-3">${shown.map((p) => projectStoryCard(p)).join('')}</div>`}
+        </div>
+      </section>
     </div>`;
 
   setTimeout(bindProjects, 0);
@@ -172,36 +185,57 @@ function sectionsOf(sections, type) {
   return sections.filter((s) => s.section === type).sort((a, b) => a.sort_order - b.sort_order);
 }
 
-function sectionRow(s, canContribute, canManage) {
+/* Small amber hexagon used as the bullet in list sections. */
+const HEX_BULLET = `<svg viewBox="0 0 12 14" width="10" height="12" class="tw:mt-[0.5em] tw:shrink-0 tw:text-amber" aria-hidden="true"><path d="M6 0l6 3.5v7L6 14 0 10.5v-7z" fill="currentColor"/></svg>`;
+
+const BODY_TEXT = 'tw:min-w-0 tw:flex-1 tw:text-[17px] tw:leading-relaxed tw:text-propolis/80';
+
+const ICON_BUTTON = 'tw:grid tw:size-8 tw:shrink-0 tw:place-items-center tw:rounded-lg tw:text-propolis-40 tw:transition tw:hover:bg-comb tw:hover:text-propolis tw:disabled:opacity-50';
+const ICON_BUTTON_DANGER = 'tw:grid tw:size-8 tw:shrink-0 tw:place-items-center tw:rounded-lg tw:text-propolis-40 tw:transition tw:hover:bg-mark-red/10 tw:hover:text-mark-red tw:disabled:opacity-50';
+
+const editButton = (s) => `<button type="button" class="${ICON_BUTTON}" data-edit-section="${s.id}" aria-label="Edit" title="Edit">${icons.pen}</button>`;
+const deleteButton = (s) => `<button type="button" class="${ICON_BUTTON_DANGER}" data-delete-section="${s.id}" aria-label="Delete" title="Delete">${icons.x}</button>`;
+
+const addButton = (attr, type, label, spaced) => `
+  <button type="button" ${attr}="${type}"
+          class="${spaced ? 'tw:mt-4' : ''} tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-full tw:border tw:border-dashed tw:border-amber/60 tw:px-3.5 tw:py-1.5 tw:text-sm tw:font-medium tw:text-amber-deep tw:transition tw:hover:border-amber tw:hover:bg-amber-wash">
+    ${icons.plus} ${esc(label)}
+  </button>`;
+
+const notYet = (text) => `<p class="tw:text-propolis-40 tw:italic">${text}</p>`;
+
+/* marker: 'hex' (bulleted), 'number' (Q1, Q2, ...) or 'none' (plain paragraphs). */
+function sectionRow(s, i, canContribute, canManage, marker) {
+  const lead = marker === 'hex' ? HEX_BULLET
+    : marker === 'number' ? `<span class="tw:w-8 tw:shrink-0 tw:pt-[0.2em] tw:font-mono tw:text-sm tw:font-semibold tw:text-amber-deep">Q${i + 1}</span>`
+    : '';
   return `
-    <div class="sub" data-section-row="${s.id}">
-      <div class="sub-title"><span style="text-transform:none;letter-spacing:0;font-size:13.5px;color:var(--propolis-60);line-height:1.6">${esc(s.body)}</span></div>
-      <div class="row" style="gap:4px;flex:none">
-        ${canContribute ? `<button type="button" class="attach-remove" data-edit-section="${s.id}" aria-label="Edit">${icons.pen}</button>` : ''}
-        ${canManage ? `<button type="button" class="attach-remove" data-delete-section="${s.id}" aria-label="Delete">${icons.x}</button>` : ''}
-      </div>
-    </div>`;
+    <li class="tw:flex tw:items-start tw:gap-3 tw:py-2" data-section-row="${s.id}">
+      ${lead}
+      <p class="${BODY_TEXT}">${esc(s.body)}</p>
+      ${canContribute || canManage ? `<div class="tw:-mt-0.5 tw:flex tw:shrink-0 tw:gap-0.5">
+        ${canContribute ? editButton(s) : ''}
+        ${canManage ? deleteButton(s) : ''}
+      </div>` : ''}
+    </li>`;
 }
 
-function listSectionHTML(sections, type, canContribute, canManage, addLabel) {
+function listSectionHTML(sections, type, canContribute, canManage, addLabel, marker = 'hex') {
   const items = sectionsOf(sections, type);
+  const tag = marker === 'number' ? 'ol' : 'ul';
   return `
-    ${items.length ? `<div style="border:1px solid var(--comb-shade);border-radius:4px;margin-bottom:${canContribute ? 'var(--s3)' : '0'}">${items.map((s) => sectionRow(s, canContribute, canManage)).join('')}</div>` : ''}
-    ${canContribute ? `<button type="button" class="btn btn-ghost btn-sm" data-add-section="${type}">${icons.plus} ${addLabel}</button>` : (items.length ? '' : '<p class="caption">Nothing added yet.</p>')}`;
+    ${items.length ? `<${tag} class="tw:-my-2">${items.map((s, i) => sectionRow(s, i, canContribute, canManage, marker)).join('')}</${tag}>` : ''}
+    ${canContribute ? addButton('data-add-section', type, addLabel, items.length > 0) : (items.length ? '' : notYet('Nothing added yet.'))}`;
 }
 
-function singleSectionHTML(sections, type, canContribute, addLabel) {
+function singleSectionHTML(sections, type, canContribute, addLabel, textCls = BODY_TEXT) {
   const s = sectionsOf(sections, type)[0];
-  if (!s) {
-    return canContribute
-      ? `<button type="button" class="btn btn-ghost btn-sm" data-add-section-single="${type}">${icons.plus} ${addLabel}</button>`
-      : '<p class="caption">Not added yet.</p>';
-  }
+  if (!s) return canContribute ? addButton('data-add-section-single', type, addLabel, false) : notYet('Not added yet.');
   return `
-    <p style="font-size:13.5px;color:var(--propolis-60);line-height:1.6">
-      ${esc(s.body)}
-      ${canContribute ? `<button type="button" class="attach-remove" data-edit-section="${s.id}" aria-label="Edit" style="display:inline-grid;vertical-align:middle;margin-left:8px">${icons.pen}</button>` : ''}
-    </p>`;
+    <div class="tw:flex tw:items-start tw:gap-3">
+      <p class="${textCls}">${esc(s.body)}</p>
+      ${canContribute ? editButton(s) : ''}
+    </div>`;
 }
 
 function openSectionModal({ title, initialBody = '', onSave }) {
@@ -295,25 +329,39 @@ function bindSectionEditing(projectId, sections) {
    one project at a time, Web-Admin-only to change, same shape as an
    apiary's own manager grant. */
 
-function teamPanelHTML(data) {
+const CARD = 'tw:rounded-2xl tw:border tw:border-comb-shade tw:bg-white tw:p-6';
+
+function cardHead(title, right = '') {
   return `
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Project team</h2>
-        <span class="spacer"></span>
-        ${data.isAdmin ? `<button type="button" class="btn btn-ghost btn-sm" id="manage-team">${icons.pen} Manage</button>` : ''}
+    <div class="tw:mb-4 tw:flex tw:items-center tw:gap-3">
+      <h2 class="tw:font-display tw:text-xl tw:font-medium tw:text-propolis">${esc(title)}</h2>
+      ${right ? `<div class="tw:ml-auto">${right}</div>` : ''}
+    </div>`;
+}
+
+const countBadge = (n) => `<span class="tw:rounded-full tw:bg-comb tw:px-2 tw:py-0.5 tw:font-mono tw:text-xs tw:text-propolis-60">${n}</span>`;
+
+function personRow(member, sub) {
+  return `
+    <li class="tw:flex tw:items-center tw:gap-3">
+      ${avatar(member)}
+      <div class="tw:min-w-0">
+        <p class="tw:truncate tw:text-[15px] tw:font-semibold tw:text-propolis">${esc(member.name)}</p>
+        ${sub ? `<p class="tw:text-sm tw:leading-snug tw:text-propolis-60">${esc(sub)}</p>` : ''}
       </div>
-      <div class="panel-body panel-body-flush">
-        ${data.team.length ? data.team.map((t) => `
-          <div class="breeder">
-            ${avatar(t.member)}
-            <div style="flex:1;min-width:0">
-              <strong style="font-size:13.5px;font-weight:600;display:block">${esc(t.member.name)}</strong>
-              <span class="caption">${t.access_level === 'manage' ? 'Project Manager' : 'Contributor'}</span>
-            </div>
-          </div>`).join('') : `
-          <div class="empty" style="padding:var(--s5)"><p class="caption">No one assigned yet — a Web Admin assigns Project Managers and Contributors here.</p></div>`}
-      </div>
+    </li>`;
+}
+
+function teamPanelHTML(data) {
+  const manage = data.isAdmin
+    ? `<button type="button" id="manage-team" class="tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-lg tw:px-2.5 tw:py-1 tw:text-sm tw:font-medium tw:text-amber-deep tw:transition tw:hover:bg-amber-wash">${icons.pen} Manage</button>`
+    : '';
+  return `
+    <div class="${CARD}">
+      ${cardHead('Project team', manage)}
+      ${data.team.length
+        ? `<ul class="tw:space-y-3">${data.team.map((t) => personRow(t.member, t.access_level === 'manage' ? 'Project Manager' : 'Contributor')).join('')}</ul>`
+        : '<p class="tw:text-sm tw:text-propolis-60">No one assigned yet — a Web Admin assigns Project Managers and Contributors here.</p>'}
     </div>`;
 }
 
@@ -398,128 +446,134 @@ async function openManageTeamModal(projectId, data) {
 
 /* --- detail --------------------------------------------------------------- */
 
+function article(title, body) {
+  return `
+    <section>
+      <h2 class="tw:font-display tw:text-3xl tw:font-medium tw:tracking-tight tw:text-propolis">${esc(title)}</h2>
+      <div class="tw:mt-2 tw:mb-6 tw:h-1 tw:w-10 tw:rounded-full tw:bg-amber"></div>
+      ${body}
+    </section>`;
+}
+
+function banner(p, isAdmin) {
+  return `
+    <header class="tw:relative tw:isolate tw:overflow-hidden tw:bg-propolis tw:px-6 tw:pt-7 tw:pb-12 tw:text-white tw:md:pb-16">
+      <div class="tw:absolute tw:inset-0 tw:-z-20">${projectCoverArt(p, { eager: true })}</div>
+      <div class="tw:absolute tw:inset-0 tw:-z-10 tw:bg-linear-to-t tw:from-black/85 tw:via-black/55 tw:to-black/25"></div>
+      <div class="tw:mx-auto tw:flex tw:min-h-[19rem] tw:max-w-6xl tw:flex-col tw:md:min-h-[24rem]">
+        <div class="tw:flex tw:items-center tw:gap-4">
+          <a href="#/projects" class="tw:group tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-white/85 tw:transition tw:hover:text-white">
+            <span class="tw:rotate-180 tw:transition tw:group-hover:-translate-x-0.5">${icons.chevron}</span>
+            <span class="tw:group-hover:underline">All projects</span>
+          </a>
+          ${isAdmin ? `<div class="tw:ml-auto">${button({ id: 'delete-project', label: 'Delete project', icon: icons.x, variant: 'glass', size: 'sm' })}</div>` : ''}
+        </div>
+        <div class="tw:mt-auto tw:pt-14">
+          <div class="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+            <span class="tw:rounded-full tw:bg-black/35 tw:px-2.5 tw:py-1 tw:font-mono tw:text-[11px] tw:font-medium tw:tracking-wider tw:backdrop-blur-sm">${esc(p.code)}</span>
+            ${statusPill(p.status)}
+          </div>
+          <div class="tw:[text-shadow:0_1px_12px_rgb(0_0_0/0.45)]">
+            <h1 class="tw:mt-4 tw:max-w-4xl tw:font-display tw:text-4xl tw:font-semibold tw:leading-[1.1] tw:tracking-tight tw:text-balance tw:md:text-5xl">${esc(p.title)}</h1>
+            ${p.summary ? `<p class="tw:mt-4 tw:max-w-3xl tw:text-lg tw:leading-relaxed tw:text-white/90 tw:text-pretty">${esc(p.summary)}</p>` : ''}
+          </div>
+        </div>
+      </div>
+    </header>`;
+}
+
+function joinCard(p, isParticipant) {
+  return isParticipant ? `
+    <div class="tw:rounded-2xl tw:bg-comb-deep/55 tw:p-6">
+      <div class="tw:flex tw:items-center tw:gap-3">
+        <span class="tw:grid tw:size-9 tw:shrink-0 tw:place-items-center tw:rounded-full tw:bg-amber tw:text-white">${icons.check}</span>
+        <p class="tw:font-display tw:text-xl tw:font-medium tw:text-propolis">You're part of this project</p>
+      </div>
+      <div class="tw:mt-4">${button({ id: 'leave-project', label: 'Leave project', variant: 'outline', size: 'sm' })}</div>
+    </div>` : `
+    <div class="tw:rounded-2xl tw:bg-comb-deep/55 tw:p-6">
+      <h2 class="tw:font-display tw:text-2xl tw:font-medium tw:text-propolis">Get involved</h2>
+      <p class="tw:mt-2 tw:text-[15px] tw:leading-snug tw:text-propolis-60">
+        ${p.status === 'recruiting' ? 'Actively looking for participants.' : 'Still open to new participants.'}
+      </p>
+      <div class="tw:mt-5">${button({ id: 'join-project', label: 'Join this project', icon: icons.plus, block: true })}</div>
+    </div>`;
+}
+
+function topicCard(t) {
+  return `
+    <a href="${esc(t.href)}" class="tw:group tw:flex tw:items-start tw:gap-4 tw:rounded-xl tw:border tw:border-comb-shade tw:bg-white tw:p-5 tw:transition tw:duration-200 tw:hover:-translate-y-0.5 tw:hover:border-amber/60 tw:hover:shadow-lg tw:hover:shadow-propolis/5">
+      <span class="tw:grid tw:size-10 tw:shrink-0 tw:place-items-center tw:rounded-lg tw:bg-amber-wash tw:text-amber-deep tw:[&>svg]:size-5">${icons.comb}</span>
+      <span class="tw:min-w-0 tw:flex-1">
+        <span class="tw:block tw:font-display tw:text-xl tw:font-medium tw:leading-snug tw:text-propolis tw:transition tw:group-hover:text-amber-deep">${esc(t.name)}</span>
+        ${t.desc ? `<span class="tw:mt-1 tw:block tw:text-sm tw:leading-snug tw:text-propolis-60">${esc(t.desc)}</span>` : ''}
+      </span>
+      <span class="tw:mt-1 tw:text-propolis-40 tw:transition tw:group-hover:translate-x-0.5 tw:group-hover:text-amber-deep">${icons.chevron}</span>
+    </a>`;
+}
+
+function sitesCard(p) {
+  const sites = p.siteDetails || [];
+  return `
+    <div class="${CARD}">
+      ${cardHead('Sites')}
+      ${sites.length ? `
+        <div class="tw:mb-3 tw:flex tw:flex-wrap tw:gap-2">
+          ${sites.map((a) => `
+            <a href="#/apiaries/${esc(a.id)}" class="tw:inline-flex tw:items-center tw:gap-2 tw:rounded-full tw:border tw:border-comb-shade tw:px-3 tw:py-1.5 tw:text-sm tw:text-propolis tw:transition tw:hover:border-amber tw:hover:bg-comb">
+              <span class="tw:font-mono tw:text-xs tw:font-semibold tw:text-amber-deep">${esc(a.code)}</span>${esc(a.name)}
+            </a>`).join('')}
+        </div>` : ''}
+      <p class="tw:text-sm tw:leading-snug tw:text-propolis-60">${esc(sitesLine(p))}</p>
+    </div>`;
+}
+
+function participantsCard(participants) {
+  return `
+    <div class="${CARD}">
+      ${cardHead('Participants', countBadge(participants.length))}
+      ${participants.length
+        ? `<ul class="tw:space-y-3">${participants.map((x) => personRow(x.member, x.contribution || '')).join('')}</ul>`
+        : '<p class="tw:text-sm tw:text-propolis-60">No participants yet.</p>'}
+    </div>`;
+}
+
 export function renderProject(data, id) {
   const { project: p, sections, participants, canManage, canContribute, isAdmin, isParticipant } = data;
   if (!p) return '';
 
+  const hasAddons = sectionsOf(sections, 'participation_addons').length > 0;
+
+  const main = `
+    <div class="tw:min-w-0 tw:space-y-14 tw:lg:col-start-1 tw:lg:row-span-2 tw:lg:row-start-1">
+      ${article('About this project', listSectionHTML(sections, 'background', canContribute, canManage, 'Add background', 'none'))}
+      ${article('Aims', listSectionHTML(sections, 'aims', canContribute, canManage, 'Add an aim'))}
+      ${article('Research questions', listSectionHTML(sections, 'questions', canContribute, canManage, 'Add a question', 'number'))}
+      ${p.topics && p.topics.length
+        ? article('Topic areas', `<div class="tw:grid tw:gap-4 tw:sm:grid-cols-2">${p.topics.map(topicCard).join('')}</div>`)
+        : ''}
+      ${article('Participation', `
+        <div class="tw:mb-6">${singleSectionHTML(sections, 'participation_summary', canContribute, 'Add a participation summary', 'tw:min-w-0 tw:flex-1 tw:font-display tw:text-xl tw:leading-relaxed tw:text-propolis')}</div>
+        ${listSectionHTML(sections, 'participation_method', canContribute, canManage, 'Add a participation method')}
+        ${hasAddons || canContribute ? `
+          <div class="tw:mt-8 tw:rounded-xl tw:bg-amber-wash/60 tw:p-5">
+            ${singleSectionHTML(sections, 'participation_addons', canContribute, 'Add a note', 'tw:min-w-0 tw:flex-1 tw:text-[15px] tw:leading-relaxed tw:text-propolis')}
+          </div>` : ''}`)}
+      ${article('Timeline', singleSectionHTML(sections, 'timeline', canContribute, 'Add a timeline'))}
+    </div>`;
+
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="crumb"><a href="#/projects">Projects</a> ${icons.chevron} <span>${p.code}</span></div>
-        <div class="eyebrow">${p.code}</div>
-        <h1 style="font-size:clamp(1.375rem,2.4vw,1.75rem);max-width:36ch">${esc(p.title)}</h1>
-      </div>
-      <div class="topbar-actions" style="gap:var(--s3)">
-        <span class="tag ${statusVariant[p.status]}">${projectStatusLabels[p.status]}</span>
-        ${isAdmin ? `<button class="btn btn-ghost btn-sm" id="delete-project">${icons.x} Delete project</button>` : ''}
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <div class="grid grid-dash">
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-head"><h2>About this project</h2></div>
-            <div class="panel-body">
-              <p style="font-size:13.5px;color:var(--propolis-60);line-height:1.6;margin-bottom:var(--s4)">${esc(p.summary)}</p>
-              ${listSectionHTML(sections, 'background', canContribute, canManage, 'Add background')}
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><h2>Aims</h2></div>
-            <div class="panel-body">${listSectionHTML(sections, 'aims', canContribute, canManage, 'Add an aim')}</div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><h2>Research questions</h2></div>
-            <div class="panel-body">${listSectionHTML(sections, 'questions', canContribute, canManage, 'Add a question')}</div>
-          </div>
-
-          ${p.topics && p.topics.length ? `
-            <div class="panel">
-              <div class="panel-head">
-                <h2>Topic areas</h2>
-                <span class="spacer"></span>
-                <span class="caption mono">${p.topics.length}</span>
-              </div>
-              <div class="panel-body panel-body-flush">
-                ${p.topics.map((t) => `
-                  <a class="sub" href="${t.href}">
-                    <div class="sub-title">
-                      <strong>${esc(t.name)}</strong>
-                      <span>${esc(t.desc)}</span>
-                    </div>
-                    ${icons.chevron}
-                  </a>`).join('')}
-              </div>
-            </div>` : ''}
-
-          <div class="panel">
-            <div class="panel-head"><h2>Participation</h2></div>
-            <div class="panel-body">
-              <div style="margin-bottom:var(--s4)">${singleSectionHTML(sections, 'participation_summary', canContribute, 'Add a participation summary')}</div>
-              ${listSectionHTML(sections, 'participation_method', canContribute, canManage, 'Add a participation method')}
-              <div style="margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
-                ${singleSectionHTML(sections, 'participation_addons', canContribute, 'Add a note')}
-              </div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><h2>Timeline</h2></div>
-            <div class="panel-body">${singleSectionHTML(sections, 'timeline', canContribute, 'Add a timeline')}</div>
-          </div>
-        </div>
-
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-body">
-              ${isParticipant ? `
-                <div class="row" style="gap:8px">
-                  ${icons.check}
-                  <span style="font-size:13.5px;font-weight:600">You're part of this project</span>
-                </div>
-                <button class="btn btn-ghost btn-sm" id="leave-project" style="margin-top:var(--s3)">Leave project</button>
-              ` : `
-                <button class="btn btn-primary btn-block" id="join-project">${icons.plus} Join this project</button>
-                <p class="caption" style="margin-top:var(--s3)">
-                  ${p.status === 'recruiting' ? 'Actively looking for participants.' : 'Still open to new participants.'}
-                </p>
-              `}
-            </div>
-          </div>
-
-          ${teamPanelHTML(data)}
-
-          <div class="panel">
-            <div class="panel-head"><h2>Sites</h2></div>
-            <div class="panel-body">
-              ${(p.siteDetails || []).length ? `
-                <div class="row row-wrap" style="gap:6px;margin-bottom:var(--s3)">
-                  ${p.siteDetails.map((a) => `<a class="tag tag-outline" href="#/apiaries/${a.id}">${a.code} · ${esc(a.name)}</a>`).join('')}
-                </div>` : ''}
-              <p class="caption">${esc(sitesLine(p))}</p>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Participants</h2>
-              <span class="spacer"></span>
-              <span class="caption mono">${participants.length}</span>
-            </div>
-            <div class="panel-body panel-body-flush">
-              ${participants.length ? participants.map((x) => `
-                <div class="breeder">
-                  ${avatar(x.member)}
-                  <div style="flex:1;min-width:0">
-                    <strong style="font-size:13.5px;font-weight:600;display:block">${esc(x.member.name)}</strong>
-                    <span class="caption">${esc(x.contribution || '')}</span>
-                  </div>
-                </div>`).join('') : `<div class="empty" style="padding:var(--s5)"><p class="caption">No participants yet.</p></div>`}
-            </div>
-          </div>
+    <div class="view">
+      ${banner(p, isAdmin)}
+      <div class="tw:bg-white tw:px-6 tw:py-14 tw:md:py-16">
+        <div class="tw:mx-auto tw:grid tw:max-w-6xl tw:gap-x-16 tw:gap-y-10 tw:lg:grid-cols-[minmax(0,1fr)_20rem] tw:lg:grid-rows-[auto_1fr]">
+          <div class="tw:lg:col-start-2 tw:lg:row-start-1">${joinCard(p, isParticipant)}</div>
+          ${main}
+          <aside class="tw:space-y-6 tw:self-start tw:lg:col-start-2 tw:lg:row-start-2">
+            ${teamPanelHTML(data)}
+            ${sitesCard(p)}
+            ${participantsCard(participants)}
+          </aside>
         </div>
       </div>
     </div>`;

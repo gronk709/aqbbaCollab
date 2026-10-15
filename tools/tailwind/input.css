@@ -36,6 +36,8 @@
   --color-st-poor: var(--st-poor);
   --color-st-treating: var(--st-treating);
 
+  --color-mark-red: var(--mark-red);
+
   --font-display: var(--display);
   --font-sans: var(--ui);
   --font-mono: var(--mono);

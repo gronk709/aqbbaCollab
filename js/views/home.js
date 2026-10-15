@@ -5,38 +5,15 @@
    when, headline numbers, and a numbered how-it-works band.
 
    Everything shown is real data (projects, the latest inspection, live
-   counts). Photography lives in assets/photos/, cropped to the shape it's
-   shown at; a project without a photo gets generated honeycomb artwork.
+   counts). Project cards and their photos come from js/projectArt.js, shared
+   with the projects pages.
    ========================================================================== */
 
-import { statusLabels, projectStatusLabels, relDays } from '../data.js';
+import { statusLabels, relDays } from '../data.js';
 import { currentUser } from '../store.js';
 import { esc } from '../ui.js';
-import { band, button, featureItem, storyCard, statBlock, stepItem } from '../components.js';
-
-/* Pointy-top hex outline centred on (cx, cy): w across the flats. */
-function hexPoints(cx, cy, w) {
-  const r = w / Math.sqrt(3);
-  return [
-    [cx, cy - r], [cx + w / 2, cy - r / 2], [cx + w / 2, cy + r / 2],
-    [cx, cy + r], [cx - w / 2, cy + r / 2], [cx - w / 2, cy - r / 2],
-  ].map((p) => p.map((v) => v.toFixed(1)).join(',')).join(' ');
-}
-
-/* Decorative interlocking comb, stroked only — the cover for any project
-   without a photo of its own. */
-function honeycomb({ cols, rows, w, cls }) {
-  const pitchY = (w / Math.sqrt(3)) * 1.5;
-  let cells = '';
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const cx = c * w + (r % 2 ? w / 2 : 0);
-      cells += `<polygon points="${hexPoints(cx, r * pitchY, w * 0.94)}"/>`;
-    }
-  }
-  return `<svg class="${cls}" viewBox="0 0 ${cols * w} ${rows * pitchY}" preserveAspectRatio="xMidYMid slice"
-              fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">${cells}</svg>`;
-}
+import { band, button, featureItem, statBlock, stepItem } from '../components.js';
+import { hexPoints, projectStoryCard } from '../projectArt.js';
 
 /* ---- "With AQBBA, you can" illustrations: two-tone, honey + propolis --- */
 
@@ -122,50 +99,9 @@ function features() {
   });
 }
 
-/* Full class strings — see js/components.js for why they can't be built. */
-const COVER_TONES = [
-  'tw:bg-linear-to-br tw:from-propolis tw:via-[#5c3f16] tw:to-amber-deep',
-  'tw:bg-linear-to-br tw:from-amber-deep tw:via-amber tw:to-amber-bright',
-  'tw:bg-linear-to-br tw:from-[#3b2a12] tw:via-propolis-60 tw:to-amber',
-];
-
-/* Cover photos by project code (codes are fixed at creation — nothing in
-   the app edits them). Files are pre-cropped to the cards' 3:2. */
-const PROJECT_PHOTOS = {
-  'PRJ-00': { src: 'assets/photos/cordovan-1.jpg', alt: 'A cordovan queen among her workers on brood comb' },
-  'PRJ-02': { src: 'assets/photos/entrance_bees_cropped.jpg', alt: 'Foragers flying in to a hive entrance' },
-  'PRJ-03': { src: 'assets/photos/ubeeo-application.jpg', alt: 'A beekeeper applying the UBeeO assay to a brood frame' },
-};
-
-function projectCover(project, i) {
-  const photo = PROJECT_PHOTOS[project.code];
-  const art = photo
-    ? `<img src="${photo.src}" alt="${esc(photo.alt)}" loading="lazy" width="1200" height="800" class="tw:absolute tw:inset-0 tw:size-full tw:object-cover">`
-    : honeycomb({ cols: 9, rows: 6, w: 52, cls: 'tw:absolute tw:inset-0 tw:size-full tw:text-white/20' });
-  return `
-    <div class="tw:relative tw:size-full ${COVER_TONES[i % COVER_TONES.length]}">
-      ${art}
-      <span class="tw:absolute tw:top-3 tw:left-3 tw:rounded-full tw:bg-black/35 tw:px-2.5 tw:py-1 tw:font-mono tw:text-[11px] tw:font-medium tw:tracking-wider tw:text-white tw:backdrop-blur-sm">${esc(project.code)}</span>
-    </div>`;
-}
-
-function projectMeta(p) {
-  const n = (p.sites || []).length;
-  const reach = n
-    ? `${n} research ${n === 1 ? 'apiary' : 'apiaries'}`
-    : `${p.participantCount} ${p.participantCount === 1 ? 'participant' : 'participants'}`;
-  return `${projectStatusLabels[p.status] || p.status} · ${reach}`;
-}
-
 function projectStories(projects) {
   if (!projects.length) return '';
-  const cards = projects.slice(0, 3).map((p, i) => storyCard({
-    href: `#/projects/${p.id}`,
-    cover: projectCover(p, i),
-    title: p.title,
-    body: p.summary || '',
-    meta: projectMeta(p),
-  })).join('');
+  const cards = projects.slice(0, 3).map(projectStoryCard).join('');
   return band({
     tone: 'white',
     title: 'Research in progress',

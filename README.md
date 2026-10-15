@@ -168,7 +168,9 @@ contribution regardless of team assignment — that's unrelated to content permi
 same as it was before. Of the original five seed projects only PRJ-00 (the VSH program)
 remains; the other four, each originally proposed from a forum discussion by a member,
 were removed, and project creation is Web-Admin-only from here on rather than a
-member-facing "propose" flow.
+member-facing "propose" flow. Both project pages are on the Tailwind look: the index is
+a grid of photo cards with status filters, and each project page opens with its photo as
+a banner (a project without one gets generated honeycomb artwork).
 
 **Forum** (`#/forum`) — real member discussions now (Phase 3 of the backend migration —
 see "Hosting & backend" below), starting empty rather than the six invented seed
@@ -249,6 +251,7 @@ js/
   store.js            Session state: subscriptions, read state, member-authored content
   ui.js               Render helpers, icon set, toasts, modals
   components.js       Tailwind-styled building blocks shared by migrated pages
+  projectArt.js       Project photos/artwork and the project card, shared by home and projects
   views/
     home.js           Signed-in landing page (#/) — the first page on Tailwind
     gate.js           Sign-in
@@ -256,7 +259,7 @@ js/
     comb.js           The honeycomb grid and hive readout
     apiaries.js       Apiary index and per-apiary record
     managers.js       Manager contact details: view, edit, validate
-    projects.js       Research initiatives: index, detail, content editor, team, join
+    projects.js       Research initiatives: index, detail, content editor, team, join (Tailwind)
     forum.js          Topic list, thread view, composer
     repository.js     Tracks, sub-topics, article reader
     marketplace.js    Listings, filters, composer, enquiry
@@ -269,9 +272,11 @@ tools/tailwind/       Dev-time Tailwind compiler (pinned versions, entry file, b
 
 ## Styling with Tailwind
 
-The site is moving onto Tailwind CSS one page at a time, starting with the
-signed-in landing page (`js/views/home.js`). Pages that haven't moved yet keep
-using `css/main.css` and render exactly as before.
+The site is moving onto Tailwind CSS one page at a time. So far: the signed-in
+landing page (`js/views/home.js`) and the projects index and project pages
+(`js/views/projects.js`). Pages that haven't moved yet keep using
+`css/main.css` and render exactly as before; so do pop-up forms (`modal()` in
+`js/ui.js`) everywhere, including on migrated pages.
 
 - **Classes are prefixed `tw:`** — `tw:flex`, `tw:md:grid-cols-3`,
   `tw:hover:bg-white`. The prefix keeps Tailwind's names from colliding with
