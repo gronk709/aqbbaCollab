@@ -257,7 +257,7 @@ export function renderDashboard(data) {
   const allHives = apiaries.flatMap((a) => a.hiveRecords);
   const t = tally(allHives);
   const focus = apiaries.find((a) => a.stage === 'assessment') || apiaries[0];
-  const attention = allHives.filter((h) => h.status === 'poor').length;
+  const attention = allHives.filter((h) => h.status === 'poor' || h.status === 'critical').length;
 
   const html = `
     <div class="topbar">
