@@ -1388,7 +1388,8 @@ function attachLatestWeights(hives, inspRows) {
 /* Retired hives are withdrawn from assessment: loadApiaries/loadApiary leave
    them out entirely (so apiary pages, the dashboard, counts and the home
    page never see them, nor the inspections of hives that aren't loaded),
-   and this is the one place they're read. Each comes with its apiary and
+   and this is the one place they're read. Each comes with its apiary, its
+   whole inspection history and
    whether the signed-in member may reinstate it (Web Admin, or manager of
    that apiary — the same people the hives table's own RLS lets update it). */
 export async function loadRetiredHives() {
@@ -1404,8 +1405,21 @@ export async function loadRetiredHives() {
   if (accErr) throw accErr;
   const admin = isWebAdmin(me.id);
   const managed = new Set(access.filter((a) => a.access_level === 'manage').map((a) => a.apiary_id));
+
+  // Their full inspection history, newest first — nothing else in the app shows it.
+  const ids = rows.map((r) => r.id);
+  const { data: inspRows, error: inspErr } = ids.length
+    ? await supabase.from('inspections').select('*, inspector:members!inspector_id(id, name, initials)').in('hive_id', ids).order('occurred_on', { ascending: false })
+    : { data: [], error: null };
+  if (inspErr) throw inspErr;
+  const inspByHive = {};
+  inspRows.forEach((i) => (inspByHive[i.hive_id] ||= []).push(normalizeInspectionRow(i)));
+
   return {
-    hives: rows.map((r) => ({ ...normalizeHiveRow(r), apiaryInfo: r.apiary, canManage: admin || managed.has(r.apiary_id) })),
+    hives: rows.map((r) => ({
+      ...normalizeHiveRow(r), apiaryInfo: r.apiary, canManage: admin || managed.has(r.apiary_id),
+      inspections: inspByHive[r.id] || [],
+    })),
   };
 }
 

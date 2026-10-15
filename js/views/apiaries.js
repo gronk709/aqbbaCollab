@@ -50,6 +50,55 @@ function hygieneAvg(i) {
   return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10;
 }
 
+/* Every measure an inspection recorded, as short chips — the retired-hives
+   report is the only place a retired hive's history can be read, so unlike
+   the apiary page's list this shows all of them. */
+function inspectionChips(i) {
+  const yn = (v) => (v ? 'present' : 'not found');
+  return [
+    i.productivity != null ? `Productivity ${i.productivity}/5` : null,
+    i.temperament != null ? `Temperament ${i.temperament}/5` : null,
+    i.vigour != null ? `Vigour ${i.vigour}/5` : null,
+    i.broodPattern != null ? `Brood Pattern ${i.broodPattern}/5` : null,
+    i.miteCount != null ? `Mite Count ${i.miteCount}` : null,
+    i.ubeeoPct != null ? `UBeeO ${i.ubeeoPct}` : null,
+    i.pkdPct != null ? `PKD ${i.pkdPct}` : null,
+    i.chalkbrood != null ? `Chalkbrood ${i.chalkbrood}/5` : null,
+    i.sacbrood != null ? `Sacbrood ${i.sacbrood}/5` : null,
+    i.efb != null ? `EFB ${i.efb}/5` : null,
+    i.shb != null ? `SHB ${i.shb}/5` : null,
+    i.harboAssay != null ? `Harbo ${i.harboAssay}/4` : null,
+    i.weightKg != null ? `Colony weight ${formatKg(i.weightKg)}` : null,
+    i.nosemaPresent != null ? `Nosema ${yn(i.nosemaPresent)}` : null,
+    i.waxMothPresent != null ? `Wax moth ${yn(i.waxMothPresent)}` : null,
+    i.viruses ? `Viruses: ${i.viruses}` : null,
+  ].filter(Boolean);
+}
+
+function retiredHistory(h) {
+  const n = h.inspections.length;
+  if (!n) return `<span class="caption">No inspections were ever logged for ${esc(h.id)}.</span>`;
+  return `
+    <details data-history="${esc(h.id)}">
+      <summary style="cursor:pointer;font-size:13px;font-weight:600">Inspection history · ${n} ${n === 1 ? 'inspection' : 'inspections'}</summary>
+      <ul class="list" style="margin-top:var(--s3)">${h.inspections.map((i) => {
+        const chips = inspectionChips(i);
+        return `
+        <li>
+          <div class="line" style="cursor:default;align-items:flex-start">
+            <div class="line-date"><b>${i.date.getDate()}</b>${i.date.toLocaleDateString('en-AU', { month: 'short' })} ${i.date.getFullYear()}</div>
+            <div class="line-body">
+              <strong>${esc(i.kind)}</strong>
+              <span>Conducted by ${i.by ? esc(i.by.name) : 'Unknown'}${i.status ? ` · → ${statusLabels[i.status]}` : ''}${i.done ? '' : ' · Scheduled'}</span>
+              ${chips.length ? `<div class="row row-wrap" style="gap:10px;margin-top:4px">${chips.map((c) => `<span class="caption mono" style="font-size:11px">${esc(c)}</span>`).join('')}</div>` : ''}
+              ${i.note ? `<p class="caption" style="margin-top:3px">${esc(i.note)}</p>` : ''}
+            </div>
+          </div>
+        </li>`;
+      }).join('')}</ul>
+    </details>`;
+}
+
 export function renderApiaries(data) {
   const { apiaries } = data;
 
@@ -157,6 +206,10 @@ export function renderRetiredHives(data) {
           </select>
           <button type="button" class="btn btn-ghost btn-sm" data-reinstate="${esc(h.id)}">Reinstate</button>
         </span>` : '<span class="caption">—</span>'}</td>
+    </tr>
+    <tr data-retired-history-row="${esc(h.id)}">
+      <td></td>
+      <td colspan="7" style="padding-top:0">${retiredHistory(h)}</td>
     </tr>`).join('');
 
   const html = `
@@ -171,7 +224,7 @@ export function renderRetiredHives(data) {
     <div class="wrap view">
       <p class="lede" style="max-width:66ch;margin-bottom:var(--s5)">
         <span class="pip pip-retired" style="margin-right:6px"></span>${esc(statusNote.retired)}. Retired hives
-        don't appear on their apiary's page or in its counts; their records are kept here.
+        don't appear on their apiary's page or in its counts; their records and full inspection history are kept here.
         ${hives.length ? `<strong>${hives.length} retired ${hives.length === 1 ? 'hive' : 'hives'}.</strong>` : ''}
       </p>
       <div class="panel">
