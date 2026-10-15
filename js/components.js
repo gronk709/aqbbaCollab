@@ -34,13 +34,25 @@ export const sectionTitle = (text) => `
 const BUTTON_VARIANTS = {
   primary: 'tw:bg-amber-deep tw:text-white tw:hover:bg-propolis',
   light: 'tw:bg-white tw:text-propolis tw:shadow-lg tw:shadow-black/25 tw:hover:bg-comb',
+  outline: 'tw:border tw:border-comb-shade tw:bg-white tw:text-propolis tw:hover:border-amber tw:hover:bg-comb',
+  // For use over photography.
+  glass: 'tw:bg-black/25 tw:text-white tw:ring-1 tw:ring-white/40 tw:backdrop-blur-sm tw:hover:bg-black/40',
 };
 
-export const button = ({ href, label, variant = 'primary' }) => `
-  <a href="${href}"
-     class="tw:inline-flex tw:items-center tw:justify-center tw:rounded-lg tw:px-6 tw:py-2.5 tw:font-display tw:text-xl tw:font-medium tw:transition tw:duration-200 tw:hover:-translate-y-px ${BUTTON_VARIANTS[variant]}">
-    ${esc(label)}
-  </a>`;
+const BUTTON_SIZES = {
+  md: 'tw:gap-2 tw:px-6 tw:py-2.5 tw:font-display tw:text-xl',
+  sm: 'tw:gap-1.5 tw:px-3.5 tw:py-1.5 tw:text-sm',
+};
+
+/* A link when given `href`, otherwise a <button> (pass `id` to bind it).
+   `icon` is trusted markup, shown before the label. */
+export const button = ({ href, id, label, icon = '', variant = 'primary', size = 'md', block = false }) => {
+  const cls = `tw:inline-flex tw:items-center tw:justify-center tw:rounded-lg tw:font-medium tw:transition tw:duration-200 tw:hover:-translate-y-px tw:disabled:pointer-events-none tw:disabled:opacity-60 ${BUTTON_SIZES[size]} ${BUTTON_VARIANTS[variant]} ${block ? 'tw:w-full' : ''}`;
+  const idAttr = id ? ` id="${id}"` : '';
+  return href
+    ? `<a href="${href}"${idAttr} class="${cls}">${icon}${esc(label)}</a>`
+    : `<button type="button"${idAttr} class="${cls}">${icon}${esc(label)}</button>`;
+};
 
 /* Icon-over-label item for a "what you can do here" row. */
 export const featureItem = ({ href, icon, title, sub }) => `
