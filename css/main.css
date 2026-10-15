@@ -38,6 +38,7 @@
   --st-good:     #7C9A3E;
   --st-average:  var(--mark-yellow);
   --st-poor:     var(--mark-red);
+  --st-critical: #7A1B14;   /* deeper than poor's red: near failure */
   --st-treating: var(--mark-blue);
   --st-retired:  #9A968D;   /* neutral grey: withdrawn, not a result */
 
@@ -469,6 +470,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .pip-good     { background: var(--st-good); }
 .pip-average  { background: var(--st-average); }
 .pip-poor     { background: var(--st-poor); }
+.pip-critical { background: var(--st-critical); }
 .pip-treating { background: var(--st-treating); }
 .pip-retired  { background: var(--st-retired); }
 
@@ -484,6 +486,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .tag-green { background: rgba(74,124,78,0.13); color: #375B3A; }
 .tag-blue  { background: rgba(53,97,143,0.13); color: #274865; }
 .tag-red   { background: rgba(181,55,42,0.12); color: #8C2B21; }
+.tag-critical { background: rgba(122,27,20,0.16); color: #6A1710; }
 .tag-grey  { background: rgba(120,116,106,0.16); color: #57534B; }
 .tag-outline { background: transparent; border: 1px solid var(--comb-shade); }
 
@@ -523,6 +526,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .cell-good     { background: var(--st-good); }
 .cell-average  { background: var(--st-average); }
 .cell-poor     { background: var(--st-poor); }
+.cell-critical { background: var(--st-critical); }
 .cell-treating { background: var(--st-treating); }
 .cell-retired  { background: var(--st-retired); }
 

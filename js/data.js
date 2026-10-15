@@ -94,6 +94,7 @@ export const statusLabels = {
   good:     'Good',
   average:  'Average',
   poor:     'Poor',
+  critical: 'Critical',
   treating: 'Treating',
   retired:  'Retired',
 };
@@ -103,6 +104,7 @@ export const statusNote = {
   good:     'Slightly below thriving benchmarks but stable.',
   average:  'Within normal range. No action required.',
   poor:     'Multiple metrics below threshold. Re-check at next inspection.',
+  critical: 'Colony is near failure',
   treating: 'Under active treatment. Excluded from selection data this cycle.',
   retired:  'Withdrawn from assessment',
 };

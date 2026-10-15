@@ -116,7 +116,7 @@ export function renderApiaries(data) {
         <td class="mono">${ap.hives}</td>
         <td class="mono">${vshAverage(ap.hiveRecords)}%</td>
         <td class="mono">${t.treating || 0}</td>
-        <td class="mono">${t.poor || 0}</td>
+        <td class="mono">${t.critical || 0}</td>
         <td>${ap.dateEstablished ? new Date(ap.dateEstablished).getFullYear() : '—'}</td>
       </tr>`;
   }).join('');

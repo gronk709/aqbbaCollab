@@ -50,7 +50,7 @@ export function renderReadout(hive, { editable = false } = {}) {
     ? 'Under treatment'
     : hive.treatmentFree === 0 ? 'Not yet established' : `${hive.treatmentFree} season${hive.treatmentFree > 1 ? 's' : ''}`;
 
-  const statusVariant = { thriving: 'tag-green', good: 'tag-green', average: 'tag-amber', poor: 'tag-red', treating: 'tag-blue', retired: 'tag-grey' }[hive.status];
+  const statusVariant = { thriving: 'tag-green', good: 'tag-green', average: 'tag-amber', poor: 'tag-red', critical: 'tag-critical', treating: 'tag-blue', retired: 'tag-grey' }[hive.status];
 
   return `
     <div class="readout" id="readout">
