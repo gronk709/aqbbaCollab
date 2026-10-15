@@ -23,7 +23,7 @@ import {
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { button } from '../components.js';
-import { projectCoverArt, projectStoryCard } from '../projectArt.js';
+import { coverIsLight, projectCoverArt, projectStoryCard } from '../projectArt.js';
 
 let activeStatus = 'All';
 
@@ -31,7 +31,7 @@ const STATUS_DOT = { recruiting: 'var(--amber)', active: 'var(--mark-green)', co
 
 function statusPill(status) {
   return `
-    <span class="tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-full tw:bg-white/95 tw:px-3 tw:py-1 tw:text-xs tw:font-semibold tw:text-propolis tw:shadow-sm">
+    <span class="tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-full tw:bg-white/95 tw:px-3 tw:py-1 tw:text-xs tw:font-semibold tw:text-propolis tw:shadow-sm tw:ring-1 tw:ring-black/5">
       <span class="tw:size-2 tw:rounded-full" style="background:${STATUS_DOT[status] || 'var(--propolis-40)'}"></span>${esc(projectStatusLabels[status] || status)}
     </span>`;
 }
@@ -455,27 +455,63 @@ function article(title, body) {
     </section>`;
 }
 
+/* Banners are white text over a darkened photo. A project whose photo is pale
+   (PROJECT_PHOTOS' `light`) uses dark text on its plain ground instead, with
+   no darkening, and keeps its text column clear of the photo's subject:
+   beside it from tablet width up (the subject sits at the right of the wide
+   crop), below it on phones. Whole class strings, per the note in
+   js/components.js. */
+const BANNER_TONES = {
+  dark: {
+    root: 'tw:bg-propolis tw:text-white',
+    imageBox: 'tw:absolute tw:inset-0',
+    scrim: 'tw:bg-linear-to-t tw:from-black/85 tw:via-black/55 tw:to-black/25',
+    back: 'tw:text-white/85 tw:hover:text-white',
+    textTop: 'tw:pt-14',
+    textBox: '',
+    chip: 'tw:bg-black/35 tw:backdrop-blur-sm',
+    textShadow: 'tw:[text-shadow:0_1px_12px_rgb(0_0_0/0.45)]',
+    summary: 'tw:text-white/90',
+    deleteVariant: 'glass',
+  },
+  light: {
+    root: 'tw:border-b tw:border-comb-shade/70 tw:bg-[#eeedee] tw:text-propolis',
+    imageBox: 'tw:absolute tw:inset-x-0 tw:top-0 tw:h-64 tw:[mask-image:linear-gradient(to_bottom,#000_70%,transparent)] tw:md:inset-0 tw:md:h-auto tw:md:[mask-image:none]',
+    scrim: '',
+    back: 'tw:text-propolis/80 tw:hover:text-propolis',
+    textTop: 'tw:pt-60 tw:md:pt-14',
+    textBox: 'tw:md:max-w-[58%]',
+    chip: 'tw:bg-propolis/10 tw:ring-1 tw:ring-propolis/10',
+    textShadow: '',
+    summary: 'tw:text-propolis/80',
+    deleteVariant: 'outline',
+  },
+};
+
 function banner(p, isAdmin) {
+  const t = BANNER_TONES[coverIsLight(p) ? 'light' : 'dark'];
   return `
-    <header class="tw:relative tw:isolate tw:overflow-hidden tw:bg-propolis tw:px-6 tw:pt-7 tw:pb-12 tw:text-white tw:md:pb-16">
-      <div class="tw:absolute tw:inset-0 tw:-z-20">${projectCoverArt(p, { banner: true })}</div>
-      <div class="tw:absolute tw:inset-0 tw:-z-10 tw:bg-linear-to-t tw:from-black/85 tw:via-black/55 tw:to-black/25"></div>
+    <header class="tw:relative tw:isolate tw:overflow-hidden ${t.root} tw:px-6 tw:pt-7 tw:pb-12 tw:md:pb-16">
+      <div class="${t.imageBox} tw:-z-20">${projectCoverArt(p, { banner: true })}</div>
+      ${t.scrim ? `<div class="tw:absolute tw:inset-0 tw:-z-10 ${t.scrim}"></div>` : ''}
       <div class="tw:mx-auto tw:flex tw:min-h-[19rem] tw:max-w-6xl tw:flex-col tw:md:min-h-[24rem]">
         <div class="tw:flex tw:items-center tw:gap-4">
-          <a href="#/projects" class="tw:group tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:text-white/85 tw:transition tw:hover:text-white">
+          <a href="#/projects" class="tw:group tw:inline-flex tw:items-center tw:gap-1 tw:text-sm ${t.back} tw:transition">
             <span class="tw:rotate-180 tw:transition tw:group-hover:-translate-x-0.5">${icons.chevron}</span>
             <span class="tw:group-hover:underline">All projects</span>
           </a>
-          ${isAdmin ? `<div class="tw:ml-auto">${button({ id: 'delete-project', label: 'Delete project', icon: icons.x, variant: 'glass', size: 'sm' })}</div>` : ''}
+          ${isAdmin ? `<div class="tw:ml-auto">${button({ id: 'delete-project', label: 'Delete project', icon: icons.x, variant: t.deleteVariant, size: 'sm' })}</div>` : ''}
         </div>
-        <div class="tw:mt-auto tw:pt-14">
-          <div class="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
-            <span class="tw:rounded-full tw:bg-black/35 tw:px-2.5 tw:py-1 tw:font-mono tw:text-[11px] tw:font-medium tw:tracking-wider tw:backdrop-blur-sm">${esc(p.code)}</span>
-            ${statusPill(p.status)}
-          </div>
-          <div class="tw:[text-shadow:0_1px_12px_rgb(0_0_0/0.45)]">
-            <h1 class="tw:mt-4 tw:max-w-4xl tw:font-display tw:text-4xl tw:font-semibold tw:leading-[1.1] tw:tracking-tight tw:text-balance tw:md:text-5xl">${esc(p.title)}</h1>
-            ${p.summary ? `<p class="tw:mt-4 tw:max-w-3xl tw:text-lg tw:leading-relaxed tw:text-white/90 tw:text-pretty">${esc(p.summary)}</p>` : ''}
+        <div class="tw:mt-auto ${t.textTop}">
+          <div class="${t.textBox}">
+            <div class="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+              <span class="tw:rounded-full ${t.chip} tw:px-2.5 tw:py-1 tw:font-mono tw:text-[11px] tw:font-medium tw:tracking-wider">${esc(p.code)}</span>
+              ${statusPill(p.status)}
+            </div>
+            <div class="${t.textShadow}">
+              <h1 class="tw:mt-4 tw:max-w-4xl tw:font-display tw:text-4xl tw:font-semibold tw:leading-[1.1] tw:tracking-tight tw:text-balance tw:md:text-5xl">${esc(p.title)}</h1>
+              ${p.summary ? `<p class="tw:mt-4 tw:max-w-3xl tw:text-lg tw:leading-relaxed ${t.summary} tw:text-pretty">${esc(p.summary)}</p>` : ''}
+            </div>
           </div>
         </div>
       </div>
