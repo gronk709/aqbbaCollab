@@ -11,6 +11,7 @@ import {
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { renderGate } from './views/gate.js';
+import { renderHome } from './views/home.js';
 import { renderSetPassword } from './views/setPassword.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderApiaries, renderApiary } from './views/apiaries.js';
@@ -32,11 +33,14 @@ import { getSupabase } from './supabaseClient.js';
 const app = document.getElementById('app');
 
 /* Projects is the organizing concept — the VSH program itself is PRJ-00,
-   and the old top-level Dashboard now lives under it as a topic area — so
-   Projects is also the landing page ('#/'). */
+   and the old top-level Dashboard now lives under it as a topic area. The
+   landing page ('#/') is js/views/home.js, which links into all of it.
+   `exact` items only highlight on their own path: '#/' is a prefix of
+   every hash, so a plain startsWith check would light Home up everywhere. */
 const NAV = [
+  { path: '#/',            label: 'Home',         icon: 'home', exact: true },
   { group: 'Research' },
-  { path: '#/projects',    label: 'Projects',     icon: 'beaker', badge: recruitingCount, home: true },
+  { path: '#/projects',    label: 'Projects',     icon: 'beaker', badge: recruitingCount },
   { path: '#/apiaries',    label: 'Apiaries',     icon: 'apiary' },
   { group: 'Collaboration' },
   { path: '#/forum',       label: 'Forum',        icon: 'forum' },
@@ -48,7 +52,9 @@ const NAV = [
 ];
 
 const ROUTES = [
-  { test: /^#\/?$/,                    view: renderProjects, load: loadProjects },
+  { test: /^#\/?$/,                    view: renderHome,
+    load: () => Promise.all([loadApiaries(), loadProjects(), loadQueenLines(), loadPublicStats()])
+      .then(([ap, projects, queenLines, stats]) => ({ ...ap, projects, queenLines, stats })) },
   { test: /^#\/apiaries\/?$/,          view: renderApiaries, load: loadApiaries },
   /* Also loads the project list (Phase 6), just for the "Running here"
      panel — which projects are running at this site. */
@@ -93,7 +99,7 @@ function shellHTML(inner) {
   const hash = location.hash || '#/';
   const nav = NAV.filter((item) => !item.adminOnly || canManageMembers).map((item) => {
     if (item.group) return `<div class="rail-group"><span>${item.group}</span></div>`;
-    const active = hash.startsWith(item.path) || (item.home && /^#\/?$/.test(hash));
+    const active = item.exact ? /^#\/?$/.test(hash) : hash.startsWith(item.path);
     const n = item.badge ? item.badge() : 0;
     return `
       <a class="nav-item ${active ? 'is-on' : ''}" href="${item.path}">
@@ -169,8 +175,8 @@ const notFoundPanel = () => `
   <div class="wrap">
     <div class="empty">
       <h3>That page isn't here</h3>
-      <p>The link may be out of date. Projects is a good place to pick up from.</p>
-      <a class="btn btn-primary" href="#/">Go to projects</a>
+      <p>The link may be out of date. Home is a good place to pick up from.</p>
+      <a class="btn btn-primary" href="#/">Go home</a>
     </div>
   </div>`;
 

@@ -1,0 +1,9 @@
+/* The one stylesheet index.html loads. It exists only to set cascade order:
+   main.css goes in the lowest layer, so a Tailwind utility on an element
+   always beats main.css's element-level base rules (button { background:
+   none }, h1 { font-weight: 500 }, ...). Unlayered styles would otherwise
+   outrank every layered Tailwind utility regardless of specificity. Pages
+   not yet using tw: classes render exactly as before. */
+@layer legacy, theme, base, components, utilities;
+@import url("main.css") layer(legacy);
+@import url("tailwind.css");
