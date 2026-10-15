@@ -1,0 +1,13 @@
+{
+  "name": "aqbba-tailwind-build",
+  "private": true,
+  "description": "Dev-time only: compiles css/tailwind.css. Lives here rather than at the repo root so Vercel keeps serving the site as plain static files, with no install or build step.",
+  "scripts": {
+    "build": "tailwindcss -i ./input.css -o ../../css/tailwind.css --minify",
+    "watch": "tailwindcss -i ./input.css -o ../../css/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.3",
+    "tailwindcss": "4.3.3"
+  }
+}

@@ -1,0 +1,42 @@
+/* Tailwind entry point — compiled to css/tailwind.css by `npm run build`
+   (see README, "Styling with Tailwind"). The compiled file is committed, so
+   Vercel never needs to install or build anything.
+
+   Two deliberate choices keep this safe to adopt one page at a time:
+   - prefix(tw): every utility is written tw:flex, tw:grid, and so on, so
+     none collide with the existing class names in css/main.css (.grid,
+     .row, .panel, .tag, ...).
+   - No preflight: css/main.css already ships its own base reset; Tailwind's
+     would restyle every page that hasn't been migrated yet. */
+
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme) prefix(tw);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+
+@source "../../js";
+@source "../../index.html";
+
+/* Brand tokens resolve to css/main.css's own custom properties at runtime
+   (inline), so a colour or font changed there changes here too. */
+@theme inline {
+  --color-comb: var(--comb);
+  --color-comb-deep: var(--comb-deep);
+  --color-comb-shade: var(--comb-shade);
+  --color-propolis: var(--propolis);
+  --color-propolis-60: var(--propolis-60);
+  --color-propolis-40: var(--propolis-40);
+  --color-amber: var(--amber);
+  --color-amber-deep: var(--amber-deep);
+  --color-amber-wash: var(--amber-wash);
+  --color-amber-bright: var(--amber-bright);
+
+  --color-st-thriving: var(--st-thriving);
+  --color-st-good: var(--st-good);
+  --color-st-average: var(--st-average);
+  --color-st-poor: var(--st-poor);
+  --color-st-treating: var(--st-treating);
+
+  --font-display: var(--display);
+  --font-sans: var(--ui);
+  --font-mono: var(--mono);
+}

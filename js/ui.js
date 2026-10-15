@@ -22,6 +22,7 @@ const svg = (paths, w = 16) =>
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="${w}" height="${w}">${paths}</svg>`;
 
 export const icons = {
+  home:     svg('<path d="M4 10.5L12 4l8 6.5V20a1 1 0 01-1 1h-4.5v-6h-5v6H5a1 1 0 01-1-1z"/>'),
   comb:     svg('<path d="M12 3l7 4v10l-7 4-7-4V7z"/><path d="M12 8l3.5 2v4L12 16l-3.5-2v-4z"/>'),
   apiary:   svg('<rect x="4" y="4" width="16" height="4" rx="1"/><rect x="4" y="10" width="16" height="4" rx="1"/><rect x="4" y="16" width="16" height="4" rx="1"/>'),
   forum:    svg('<path d="M20 14a2 2 0 01-2 2H8l-4 4V6a2 2 0 012-2h12a2 2 0 012 2z"/>'),

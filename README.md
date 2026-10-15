@@ -35,8 +35,13 @@ gets (Background, Aims, Questions, Participation, Timeline, a Project team, Part
 What it has that a single-question project doesn't is a **Topic areas** panel
 (an optional `topics` field on any project) linking to its working surfaces: the research
 dashboard, the apiary records, and the two assessment-related repository sub-topics.
-Because the program is the organizing concept, **Projects is the landing page** (`#/`);
-there is no top-level Dashboard nav item any more.
+Projects lives at `#/projects`; there is no top-level Dashboard nav item any more.
+
+**Home** (`#/`) — the signed-in landing page, laid out after iNaturalist's home page:
+a hero, a "With AQBBA, you can" row linking into each part of the site, the current
+research projects as story cards, the latest inspection told as who/what/where/when
+(with the hive lit up in its apiary's honeycomb), live counts, and a numbered
+assess → record → select band. Everything on it is live data.
 
 **Research dashboard** (`#/projects/p0/dashboard`) — a topic area of PRJ-00, reached from
 the program's summary page and breadcrumbed back to it. Program-wide figures, then a card
@@ -235,13 +240,17 @@ respected.
 
 ```
 index.html
-css/main.css          Design tokens and all component styles
+css/app.css           The one stylesheet index.html loads — sets cascade order, imports the two below
+css/main.css          Design tokens and all component styles for pages not yet on Tailwind
+css/tailwind.css      Compiled Tailwind output (generated — see "Styling with Tailwind")
 js/
   app.js              Shell, hash router, delegated global behaviour
   data.js             Mock data. Seeded generator — hive records are stable across reloads
   store.js            Session state: subscriptions, read state, member-authored content
   ui.js               Render helpers, icon set, toasts, modals
+  components.js       Tailwind-styled building blocks shared by migrated pages
   views/
+    home.js           Signed-in landing page (#/) — the first page on Tailwind
     gate.js           Sign-in
     dashboard.js      Research dashboard
     comb.js           The honeycomb grid and hive readout
@@ -255,7 +264,42 @@ js/
   content.js          Repository content loader + minimal Markdown renderer
 content/repository/   Real repository content: articles, documents, manifest
 tools/rebuild_manifest.py   Regenerates the content manifest from disk
+tools/tailwind/       Dev-time Tailwind compiler (pinned versions, entry file, build script)
 ```
+
+## Styling with Tailwind
+
+The site is moving onto Tailwind CSS one page at a time, starting with the
+signed-in landing page (`js/views/home.js`). Pages that haven't moved yet keep
+using `css/main.css` and render exactly as before.
+
+- **Classes are prefixed `tw:`** — `tw:flex`, `tw:md:grid-cols-3`,
+  `tw:hover:bg-white`. The prefix keeps Tailwind's names from colliding with
+  `main.css`'s own (`.grid`, `.row`, `.panel`...) while both exist side by side.
+- **Brand tokens are shared.** `tw:bg-propolis`, `tw:text-amber-deep`,
+  `tw:font-display` and friends resolve to `main.css`'s own custom properties, so
+  the palette and fonts still have a single source of truth. They're declared in
+  `tools/tailwind/input.css`.
+- **Write class names out in full.** Tailwind finds classes by scanning the
+  source text, so a class assembled from pieces (`'tw:bg-' + tone`) is never
+  generated. Pick from complete strings instead — see `js/components.js`.
+- **No preflight.** `main.css` already has its own base reset; Tailwind's would
+  restyle every unmigrated page.
+
+After adding or changing any `tw:` class, regenerate the compiled CSS and commit
+it alongside your change:
+
+```
+cd tools/tailwind
+npm install        # first time only
+npm run build      # writes css/tailwind.css
+```
+
+(`npm run watch` rebuilds on every save while you work.) The tooling lives in
+`tools/tailwind/` rather than at the repo root on purpose: with no root
+`package.json`, Vercel keeps serving the site as plain static files with no
+install or build step. Forgetting to rebuild doesn't break anything — new
+classes just won't take effect until the next build is committed.
 
 ## Authoring repository content
 
