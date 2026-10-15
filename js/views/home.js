@@ -165,6 +165,7 @@ function inspectionStory(apiaries, inspections) {
     insp.vigour != null ? `Vigour ${insp.vigour}/5` : null,
     insp.broodPattern != null ? `Brood pattern ${insp.broodPattern}/5` : null,
     insp.weightKg != null ? `Colony weight ${formatKg(insp.weightKg)}` : null,
+    insp.weather ? `Weather: ${insp.weather}` : null,
   ].filter(Boolean);
   const dateLabel = insp.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
   const ago = relDays(Math.round((insp.date - new Date()) / 86400000));

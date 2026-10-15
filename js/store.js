@@ -1359,6 +1359,7 @@ function normalizeInspectionRow(i) {
     /* Colony weight in kg (numeric(5,1)), or null when the colony wasn't
        weighed at this inspection. */
     weightKg: i.weight_kg == null ? null : Number(i.weight_kg),
+    weather: i.weather,
     nosemaPresent: i.nosema_present, waxMothPresent: i.wax_moth_present, viruses: i.viruses,
     note: i.note, done: i.done, date: new Date(`${i.occurred_on}T00:00:00`),
   };
@@ -1670,7 +1671,7 @@ function inspectionInsertPayload({
   hiveId, kind, by, status,
   productivity, temperament, vigour, broodPattern,
   miteCount, ubeeoPct, pkdPct, chalkbrood, sacbrood, efb, shb, harboAssay,
-  weightKg, nosemaPresent, waxMothPresent, viruses,
+  weightKg, weather, nosemaPresent, waxMothPresent, viruses,
   note, dateStr, done,
 }) {
   return {
@@ -1681,6 +1682,7 @@ function inspectionInsertPayload({
     mite_count: miteCount ?? null, ubeeo_pct: ubeeoPct ?? null, pkd_pct: pkdPct ?? null,
     chalkbrood: chalkbrood ?? null, sacbrood: sacbrood ?? null, efb: efb ?? null, shb: shb ?? null,
     harbo_assay: harboAssay || null, weight_kg: weightKg || null,
+    weather: weather || null,
     nosema_present: nosemaPresent ?? null, wax_moth_present: waxMothPresent ?? null,
     viruses: viruses || null,
     note: note || null, occurred_on: dateStr, done: !!done,
