@@ -34,6 +34,7 @@
   /* Semantic status — a severity gradient (thriving/good/average/poor) plus
      treating as a separate operational state, not part of the gradient.
      --st-good is status-only, not part of the queen-marking code above. */
+  --st-new:      #C8C5BC;   /* light grey: not yet assessed (retired is a darker grey) */
   --st-thriving: var(--mark-green);
   --st-good:     #7C9A3E;
   --st-average:  var(--mark-yellow);
@@ -466,6 +467,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
    -------------------------------------------------------------------------- */
 
 .pip { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.pip-new      { background: var(--st-new); box-shadow: 0 0 0 1px #AEAAA0; }
 .pip-thriving { background: var(--st-thriving); }
 .pip-good     { background: var(--st-good); }
 .pip-average  { background: var(--st-average); }
@@ -487,6 +489,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .tag-blue  { background: rgba(53,97,143,0.13); color: #274865; }
 .tag-red   { background: rgba(181,55,42,0.12); color: #8C2B21; }
 .tag-critical { background: rgba(122,27,20,0.16); color: #6A1710; }
+.tag-new   { background: rgba(160,156,146,0.2); color: #5E5A51; }
 .tag-grey  { background: rgba(120,116,106,0.16); color: #57534B; }
 .tag-outline { background: transparent; border: 1px solid var(--comb-shade); }
 
@@ -522,6 +525,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   outline: none;
 }
 .cell.is-picked { transform: scale(1.22); box-shadow: 0 0 0 2px var(--propolis); z-index: 4; }
+.cell-new      { background: var(--st-new); }
 .cell-thriving { background: var(--st-thriving); }
 .cell-good     { background: var(--st-good); }
 .cell-average  { background: var(--st-average); }
