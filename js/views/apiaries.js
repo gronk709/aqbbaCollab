@@ -69,6 +69,7 @@ function inspectionChips(i) {
     i.shb != null ? `SHB ${i.shb}/5` : null,
     i.harboAssay != null ? `Harbo ${i.harboAssay}/4` : null,
     i.weightKg != null ? `Colony weight ${formatKg(i.weightKg)}` : null,
+    i.weather ? `Weather: ${i.weather}` : null,
     i.nosemaPresent != null ? `Nosema ${yn(i.nosemaPresent)}` : null,
     i.waxMothPresent != null ? `Wax moth ${yn(i.waxMothPresent)}` : null,
     i.viruses ? `Viruses: ${i.viruses}` : null,
@@ -419,6 +420,7 @@ export function renderApiary(data, id) {
         hygiene != null ? `Hygiene ${hygiene}/5 (avg)` : null,
         i.miteCount != null ? `Mite Count ${i.miteCount}` : null,
         i.weightKg != null ? `Colony weight ${formatKg(i.weightKg)}` : null,
+        i.weather ? `Weather: ${i.weather}` : null,
       ].filter(Boolean);
       return `
         <li>
@@ -1263,6 +1265,10 @@ async function openInspectionForm(ap, hives) {
           <input id="i-weight-kg" type="number" inputmode="decimal" min="0.1" max="500" step="0.1" placeholder="e.g. 38.5">
         </div>
       </div>
+      <div class="field">
+        <label for="i-weather">Weather <span class="caption">(optional, up to ${WEATHER_MAX} characters)</span></label>
+        <input id="i-weather" type="text" maxlength="${WEATHER_MAX}" placeholder="e.g. Sunny, 22C, light wind">
+      </div>
       <div class="row" style="gap:var(--s3);align-items:flex-start">
         ${yesNoOptions('Nosema present', 'i-nosema')}
         ${yesNoOptions('Wax moth present', 'i-wax-moth')}
@@ -1319,6 +1325,12 @@ async function openInspectionForm(ap, hives) {
       return;
     }
 
+    const weather = parseOptionalWeather(scrim.querySelector('#i-weather').value);
+    if (!weather.ok) {
+      toast(weather.error);
+      return;
+    }
+
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
     try {
@@ -1340,6 +1352,7 @@ async function openInspectionForm(ap, hives) {
         shb: scoreOf('#i-shb'),
         harboAssay: scoreOf('#i-harbo-assay'),
         weightKg: weight.value,
+        weather: weather.value,
         nosemaPresent: yesNoOf('#i-nosema'),
         waxMothPresent: yesNoOf('#i-wax-moth'),
         viruses: scrim.querySelector('#i-viruses').value.trim() || null,
@@ -1378,6 +1391,7 @@ function parseOptionalInt(raw, min, max, label) {
    result must still be within the column's own 0.1-500 kg range. Shared by
    the Log inspection form and the CSV upload. */
 const WEIGHT_MAX_KG = 500;
+const WEATHER_MAX = 40; // inspections.weather is varchar(40)
 function parseOptionalWeight(raw, label) {
   if (!raw) return { ok: true, value: null };
   const n = Number(raw);
@@ -1386,6 +1400,14 @@ function parseOptionalWeight(raw, label) {
     return { ok: false, error: `${label} "${raw}" must be between 0.1 and ${WEIGHT_MAX_KG} kg.` };
   }
   return { ok: true, value: kg };
+}
+
+/* Optional weather note: trimmed, blank -> null, at most WEATHER_MAX characters
+   (the column's own limit). Shared by the form and the CSV upload. */
+function parseOptionalWeather(raw) {
+  const v = (raw || '').trim();
+  if (v.length > WEATHER_MAX) return { ok: false, error: `Weather is ${v.length} characters; the limit is ${WEATHER_MAX}.` };
+  return { ok: true, value: v || null };
 }
 
 /* Blank -> null (not assessed); Y/Yes/N/No (any case) -> true/false;
@@ -1422,17 +1444,17 @@ async function openInspectionBulkUploadForm(ap, hives) {
       'Hive ID', 'Date', 'Inspection Type', 'Resulting Status',
       'Productivity', 'Temperament', 'Vigour', 'Brood Pattern',
       'Mite Count', 'UBeeO Score', 'PKD Score',
-      'Chalkbrood', 'Sacbrood', 'EFB', 'SHB', 'Harbo Assay', 'Colony Weight (kg)',
+      'Chalkbrood', 'Sacbrood', 'EFB', 'SHB', 'Harbo Assay', 'Colony Weight (kg)', 'Weather',
       'Nosema Present', 'Wax Moth Present', 'Viruses', 'Conducted By', 'Completed', 'Notes',
     ],
     templateSample: [[
       hives[0].id, todayStr(), defaultKind, 'good',
       '4', '5', '4', '3',
       '2', '85', '90',
-      '1', '1', '1', '1', '3', '38.5',
+      '1', '1', '1', '1', '3', '38.5', 'Sunny, 22C',
       'N', 'N', '', me.name, 'Y', 'Strong hygienic response',
     ]],
-    requiredNote: `Only Hive ID and Date are required (Date as YYYY-MM-DD). Hive ID must already exist at ${ap.name}. Conducted By defaults to your own account if left blank, or must exactly match an existing member's name. Completed defaults to Y (already completed) if left blank. Inspection Type defaults to "${defaultKind}" (valid values: ${inspectionKinds.join(', ')}); Resulting Status, if given, must be one of: ${Object.keys(statusLabels).join(', ')}. The 1-5 score columns (Productivity, Temperament, Vigour, Brood Pattern, Chalkbrood, Sacbrood, EFB, SHB) and Harbo Assay (1-4) are all optional, as is Colony Weight (kg), a weight from 0.1 to ${WEIGHT_MAX_KG} kg (anything finer than 0.1 kg is rounded).`,
+    requiredNote: `Only Hive ID and Date are required (Date as YYYY-MM-DD). Hive ID must already exist at ${ap.name}. Conducted By defaults to your own account if left blank, or must exactly match an existing member's name. Completed defaults to Y (already completed) if left blank. Inspection Type defaults to "${defaultKind}" (valid values: ${inspectionKinds.join(', ')}); Resulting Status, if given, must be one of: ${Object.keys(statusLabels).join(', ')}. The 1-5 score columns (Productivity, Temperament, Vigour, Brood Pattern, Chalkbrood, Sacbrood, EFB, SHB) and Harbo Assay (1-4) are all optional, as is Colony Weight (kg), a weight from 0.1 to ${WEIGHT_MAX_KG} kg (anything finer than 0.1 kg is rounded), and so is Weather (free text, up to ${WEATHER_MAX} characters).`,
 
     validateRow: (row, line) => {
       const hiveId = row['hive id'];
@@ -1477,6 +1499,9 @@ async function openInspectionBulkUploadForm(ap, hives) {
       const weight = parseOptionalWeight(row['colony weight (kg)'], 'Colony Weight (kg)');
       if (!weight.ok) return weight;
 
+      const weather = parseOptionalWeather(row['weather']);
+      if (!weather.ok) return weather;
+
       const nosema = parseOptionalYesNo(row['nosema present'], 'Nosema Present');
       if (!nosema.ok) return nosema;
       const waxMoth = parseOptionalYesNo(row['wax moth present'], 'Wax Moth Present');
@@ -1505,7 +1530,7 @@ async function openInspectionBulkUploadForm(ap, hives) {
           vigour: scores['vigour'], broodPattern: scores['brood pattern'],
           miteCount: scores['mite count'], ubeeoPct: scores['ubeeo score'], pkdPct: scores['pkd score'],
           chalkbrood: scores['chalkbrood'], sacbrood: scores['sacbrood'], efb: scores['efb'], shb: scores['shb'],
-          harboAssay: scores['harbo assay'], weightKg: weight.value,
+          harboAssay: scores['harbo assay'], weightKg: weight.value, weather: weather.value,
           nosemaPresent: nosema.value, waxMothPresent: waxMoth.value,
           viruses: row['viruses'] || null, note: row['notes'] || '', done,
         },
