@@ -95,7 +95,7 @@ is how a hive's status changes after it's first registered, not just a log entry
 categories — Assessment, Maintenance, Biosecurity — rather than a specific assay name;
 older, more specific seed inspections keep that detail in their notes instead. An
 inspection can also record the **colony weight in kg** (optional, 0.1–500 kg to the
-nearest 0.1 kg — the `weight_kg` column, `20261015120000_inspection_colony_weight.sql`;
+nearest 0.1 kg — the `weight_kg` column, `20261015040214_inspection_colony_weight.sql`;
 also a "Colony Weight (kg)" column in the bulk CSV upload). It shows on that
 inspection's report, and the hive's readout shows its most recent recorded weight with
 its date — only when one exists. These
