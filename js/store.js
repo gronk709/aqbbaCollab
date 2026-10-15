@@ -1385,6 +1385,38 @@ function attachLatestWeights(hives, inspRows) {
   });
 }
 
+/* Retired hives are withdrawn from assessment: loadApiaries/loadApiary leave
+   them out entirely (so apiary pages, the dashboard, counts and the home
+   page never see them, nor the inspections of hives that aren't loaded),
+   and this is the one place they're read. Each comes with its apiary and
+   whether the signed-in member may reinstate it (Web Admin, or manager of
+   that apiary — the same people the hives table's own RLS lets update it). */
+export async function loadRetiredHives() {
+  const supabase = await getSupabase();
+  const me = currentUser();
+  const [{ data: rows, error }, { data: access, error: accErr }] = await Promise.all([
+    supabase.from('hives')
+      .select(`*, apiary:apiaries!apiary_id(id, code, name), queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`)
+      .eq('status', 'retired').order('apiary_id').order('id'),
+    supabase.from('apiary_managers').select('apiary_id, access_level').eq('member_id', me.id),
+  ]);
+  if (error) throw error;
+  if (accErr) throw accErr;
+  const admin = isWebAdmin(me.id);
+  const managed = new Set(access.filter((a) => a.access_level === 'manage').map((a) => a.apiary_id));
+  return {
+    hives: rows.map((r) => ({ ...normalizeHiveRow(r), apiaryInfo: r.apiary, canManage: admin || managed.has(r.apiary_id) })),
+  };
+}
+
+/* Puts a retired hive back into assessment under the given status. */
+export async function reinstateHive(hiveId, status) {
+  if (!status || status === 'retired') throw new Error('Choose the status it comes back with.');
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('hives').update({ status }).eq('id', hiveId);
+  if (error) throw error;
+}
+
 /* Every real apiary (excluding decommissioned ones — see updateApiary's
    dateRemoved) with its hives embedded as hiveRecords, and every
    inspection tagged with its hive's apiary (inspections.hive_id is the
@@ -1402,7 +1434,7 @@ export async function loadApiaries() {
 
   const apiaryIds = apiaryRows.map((a) => a.id);
   const { data: hiveRows, error: hiveErr } = await supabase
-    .from('hives').select(`*, queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`).in('apiary_id', apiaryIds);
+    .from('hives').select(`*, queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`).in('apiary_id', apiaryIds).neq('status', 'retired');
   if (hiveErr) throw hiveErr;
 
   const hivesByApiary = {};
@@ -1445,7 +1477,7 @@ export async function loadApiary(id) {
     { data: team, error: teamErr },
   ] = await Promise.all([
     supabase.from('apiaries').select('*').eq('id', id).single(),
-    supabase.from('hives').select(`*, queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`).eq('apiary_id', id).order('id'),
+    supabase.from('hives').select(`*, queen_line_info:queen_lines!queen_line(${QUEEN_LINE_FIELDS})`).eq('apiary_id', id).neq('status', 'retired').order('id'),
     supabase.from('apiary_managers').select(`member_id, access_level, member:members!member_id(${MEMBER_DISPLAY_FIELDS})`).eq('apiary_id', id),
   ]);
   if (apErr) throw apErr;

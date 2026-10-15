@@ -15,7 +15,7 @@
    ========================================================================== */
 
 import {
-  stageLabels, statusLabels,
+  stageLabels, statusLabels, statusNote,
   tally, vshAverage, relDays,
   projectStatusLabels, inspectionKinds, queenColours,
 } from '../data.js';
@@ -23,7 +23,7 @@ import {
   isWebAdmin, isSubscribed, currentUser,
   addApiary, updateApiary, addHive, updateHive, addInspection,
   checkExistingHiveIds, addHivesBulk, addInspectionsBulk,
-  setApiaryTeamMember, removeApiaryTeamMember, loadRealMembers, loadQueenLines,
+  setApiaryTeamMember, removeApiaryTeamMember, loadRealMembers, loadQueenLines, reinstateHive,
 } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast, formatKg } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
@@ -78,6 +78,7 @@ export function renderApiaries(data) {
         <h1>Research apiaries</h1>
       </div>
       <div class="topbar-actions">
+        <a class="btn btn-ghost btn-sm" href="#/reports/retired-hives">Retired hives</a>
         ${subButton('apiary:new', isSubscribed('apiary:new'), 'Notify me of new sites', 'new research apiaries')}
         ${isWebAdmin() ? `<button class="btn btn-primary btn-sm" id="new-apiary">${icons.plus} Add apiary</button>` : ''}
       </div>
@@ -123,6 +124,88 @@ export function renderApiaries(data) {
   setTimeout(() => {
     const btn = document.getElementById('new-apiary');
     if (btn) btn.addEventListener('click', openApiaryForm);
+  }, 0);
+
+  return html;
+}
+
+/* ---- Retired hives report (#/reports/retired-hives) ------------------------
+   Retired hives are withdrawn from assessment and never appear on an apiary
+   page; this is where they're listed. A Web Admin or the apiary's manager
+   can reinstate one under a chosen status, which puts it straight back on
+   its apiary. */
+
+export function renderRetiredHives(data) {
+  const { hives } = data;
+  const reinstateStatuses = Object.entries(statusLabels).filter(([k]) => k !== 'retired');
+  const when = (iso) => (iso ? new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never');
+
+  const rows = hives.map((h) => `
+    <tr data-retired-hive="${esc(h.id)}">
+      <td class="mono" style="font-weight:600">${esc(h.id)}</td>
+      <td><a href="#/apiaries/${esc(h.apiaryInfo.id)}">${esc(h.apiaryInfo.name)}</a>
+          <div class="caption mono" style="font-size:11px">${esc(h.apiaryInfo.code)}</div></td>
+      <td>${h.lineInfo ? esc(h.lineInfo.name) : '—'}</td>
+      <td class="mono">${h.queenId ? esc(h.queenId) : '—'}</td>
+      <td>${h.queenColour ? `<span class="row" style="gap:6px"><span class="pip" style="background:var(--mark-${h.queenColour});box-shadow:0 0 0 1px var(--comb-shade)"></span>${esc(h.queenColour)}${h.queenYear ? ` · ${h.queenYear}` : ''}</span>` : '—'}</td>
+      <td>${when(h.lastInspectedAt)}</td>
+      <td style="max-width:240px">${h.comment ? esc(h.comment) : '<span class="caption">—</span>'}</td>
+      <td style="white-space:nowrap">${h.canManage ? `
+        <span class="row" style="gap:6px">
+          <select data-reinstate-status="${esc(h.id)}" aria-label="Status for ${esc(h.id)} when reinstated" style="width:auto">
+            ${reinstateStatuses.map(([v, label]) => `<option value="${v}" ${v === 'average' ? 'selected' : ''}>${label}</option>`).join('')}
+          </select>
+          <button type="button" class="btn btn-ghost btn-sm" data-reinstate="${esc(h.id)}">Reinstate</button>
+        </span>` : '<span class="caption">—</span>'}</td>
+    </tr>`).join('');
+
+  const html = `
+    <div class="topbar">
+      <div style="width:100%">
+        <div class="crumb"><a href="#/apiaries">Apiaries</a> ${icons.chevron} <span>Retired hives</span></div>
+        <div class="eyebrow">Report</div>
+        <h1>Retired hives</h1>
+      </div>
+    </div>
+
+    <div class="wrap view">
+      <p class="lede" style="max-width:66ch;margin-bottom:var(--s5)">
+        <span class="pip pip-retired" style="margin-right:6px"></span>${esc(statusNote.retired)}. Retired hives
+        don't appear on their apiary's page or in its counts; their records are kept here.
+        ${hives.length ? `<strong>${hives.length} retired ${hives.length === 1 ? 'hive' : 'hives'}.</strong>` : ''}
+      </p>
+      <div class="panel">
+        ${hives.length ? `
+        <div class="tbl-scroll">
+          <table class="tbl">
+            <thead><tr>
+              <th>Hive</th><th>Apiary</th><th>Queen line</th><th>Queen ID</th><th>Queen marked</th><th>Last inspected</th><th>Comments</th><th></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>` : `
+        <div class="empty"><h3>No retired hives</h3><p>A hive appears here once its status is set to Retired.</p></div>`}
+      </div>
+    </div>`;
+
+  setTimeout(() => {
+    document.querySelectorAll('[data-reinstate]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.reinstate;
+        const status = document.querySelector(`[data-reinstate-status="${CSS.escape(id)}"]`).value;
+        btn.disabled = true;
+        try {
+          await reinstateHive(id, status);
+        } catch (err) {
+          toast(`Couldn't reinstate ${id}: ${err.message}`);
+          btn.disabled = false;
+          return;
+        }
+        toast(`${id} reinstated as ${statusLabels[status]}.`);
+        window.__aqbba_invalidateData();
+        window.__aqbba_render();
+      });
+    });
   }, 0);
 
   return html;
@@ -328,6 +411,7 @@ export function renderApiary(data, id) {
       </div>
       <div class="topbar-actions">
         <span class="tag ${stageVariant[ap.stage]}">${stageLabels[ap.stage]}</span>
+        <a class="btn btn-ghost btn-sm" href="#/reports/retired-hives">Retired hives</a>
         ${canManage ? `<button class="btn btn-ghost btn-sm" id="edit-apiary">${icons.pen} Edit apiary</button>` : ''}
       </div>
     </div>

@@ -98,7 +98,11 @@ inspection can also record the **colony weight in kg** (optional, 0.1–500 kg t
 nearest 0.1 kg — the `weight_kg` column, `20261015040214_inspection_colony_weight.sql`;
 also a "Colony Weight (kg)" column in the bulk CSV upload). It shows on that
 inspection's report, and the hive's readout shows its most recent recorded weight with
-its date — only when one exists. These
+its date — only when one exists. A hive's status can also be **Retired**
+(grey, "Withdrawn from assessment"; `20261015043649_hive_status_retired.sql`): a retired
+hive is left out of every apiary view, count and the dashboard, and is listed instead by
+the **Retired hives** report (`#/reports/retired-hives`, linked from the apiaries pages),
+where a Web Admin or that apiary's manager can reinstate it under a chosen status. These
 maintenance flows are meaningfully different from the member-facing composers elsewhere
 (forum, marketplace, repository) — they alter the program's research data rather than
 adding social content, so they're access-gated: adding a new apiary is Web Admin only,
