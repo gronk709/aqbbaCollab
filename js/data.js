@@ -90,6 +90,7 @@ export const stageLabels = {
 
 /* Display vocabulary for `hives.status`. */
 export const statusLabels = {
+  new:      'New',
   thriving: 'Thriving',
   good:     'Good',
   average:  'Average',
@@ -100,6 +101,7 @@ export const statusLabels = {
 };
 
 export const statusNote = {
+  new:      'New colony currently undergoing setup',
   thriving: 'Meeting all assessment thresholds.',
   good:     'Slightly below thriving benchmarks but stable.',
   average:  'Within normal range. No action required.',

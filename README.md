@@ -100,7 +100,9 @@ also a "Colony Weight (kg)" column in the bulk CSV upload). An inspection can al
 **weather** (optional free text, at most 40 characters — `weather varchar(40)`,
 `20261015071728_inspection_weather.sql` — and a "Weather" CSV column). Both show on that
 inspection's report, and the hive's readout shows its most recent recorded weight with
-its date — only when one exists. A hive's status can be **Critical** (deep red, "Colony is near failure";
+its date — only when one exists. A hive's status can be **New** (light grey, "New colony currently undergoing setup";
+`20261015095531_hive_status_new.sql`; unlike Retired it stays on the apiary page),
+**Critical** (deep red, "Colony is near failure";
 `20261015082524_hive_status_critical.sql`; it counts toward the apiaries table's Critical
 column and the dashboard's Needs attention), or **Retired**
 (grey, "Withdrawn from assessment"; `20261015043649_hive_status_retired.sql`): a retired
