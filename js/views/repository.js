@@ -83,6 +83,10 @@ function fmtBytes(n) {
 
 /* --- merging the two content sources into one display list --------------- */
 
+/* An article counts as edited once it has been saved again after being
+   published — a minute's grace so the publish itself never reads as an edit. */
+const isEdited = (a) => a.updated_at && new Date(a.updated_at) - new Date(a.created_at) > 60000;
+
 function mergedArticles(subId, c, dbArticles) {
   const file = (c ? c.articles : []).map((a) => ({
     key: `file:${a.slug}`, source: 'file', slug: a.slug,
@@ -93,7 +97,7 @@ function mergedArticles(subId, c, dbArticles) {
   const db = dbArticles.map((a) => ({
     key: `db:${a.id}`, source: 'db', id: a.id,
     title: a.title, authorName: a.author?.name || 'Member', authorId: a.author?.id,
-    dateLabel: (a.updated_at || a.created_at).slice(0, 10), dateSort: new Date(a.created_at).getTime(),
+    dateLabel: `${(a.updated_at || a.created_at).slice(0, 10)}${isEdited(a) ? ' · edited' : ''}`, dateSort: new Date(a.created_at).getTime(),
     raw: a,
   }));
   return [...file, ...db].sort((x, y) => y.dateSort - x.dateSort);
