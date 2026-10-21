@@ -15,15 +15,15 @@ import { completeCollaboratorPasswordSetup } from '../store.js';
 export function renderSetPassword(mode = 'invite') {
   const isRecovery = mode === 'recovery';
   return `
-    <div class="gate gate--single">
-      <section class="gate-form">
-        <div class="gate-form-inner">
-          <a class="gate-mark" href="#/" style="pointer-events:none">
-            ${brandMark(44)}
-            <span>AQBBA</span>
+    <div class="tw:grid tw:min-h-dvh tw:grid-cols-1 tw:bg-comb">
+      <section class="tw:flex tw:flex-col tw:justify-center tw:px-[clamp(1.5rem,6vw,6rem)] tw:py-16 tw:max-[860px]:px-6 tw:max-[860px]:py-12">
+        <div class="tw:mx-auto tw:w-full tw:max-w-[360px]">
+          <a class="tw:pointer-events-none tw:relative tw:z-2 tw:mb-6 tw:flex tw:items-center tw:gap-4" href="#/">
+            ${brandMark(132)}
+            <span class="tw:max-w-[26ch] tw:font-mono tw:text-[11px] tw:leading-normal tw:font-semibold tw:tracking-[0.04em] tw:uppercase">AQBBA</span>
           </a>
-          <h2>${isRecovery ? 'Reset your password' : 'Set your password'}</h2>
-          <p class="caption">
+          <h2 class="tw:mb-2 tw:font-display tw:text-[1.75rem] tw:text-propolis">${isRecovery ? 'Reset your password' : 'Set your password'}</h2>
+          <p class="tw:mb-8 tw:text-[12.5px] tw:text-propolis-40">
             ${isRecovery
               ? 'Choose a new password for your account.'
               : 'You\'ve been invited to collaborate on this site. Choose a password to finish setting up sign-in — you\'ll use it (with your email) to sign in next time.'}

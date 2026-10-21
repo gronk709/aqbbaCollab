@@ -96,7 +96,7 @@ function bindProjects() {
 
 function openNewProjectForm() {
   const body = `
-    <p class="caption" style="margin-bottom:var(--s5)">
+    <p class="tw:mb-6 tw:text-[12.5px] tw:text-propolis-40">
       You'll be given Project Manager access automatically. Background, aims, questions and the
       rest of the content get added from the project's own page once it exists.
     </p>
@@ -314,16 +314,16 @@ async function openManageTeamModal(projectId, data) {
   const eligible = realMembers.filter((m) => !already.has(m.id));
 
   const body = `
-    <div style="border:1px solid var(--comb-shade);border-radius:4px;margin-bottom:var(--s5)">
+    <div class="tw:mb-6 tw:divide-y tw:divide-comb-shade/70 tw:overflow-hidden tw:rounded-xl tw:border tw:border-comb-shade">
       ${data.team.length ? data.team.map((t) => `
-        <div class="breeder">
+        <div class="tw:flex tw:items-center tw:gap-4 tw:px-5 tw:py-4">
           ${avatar(t.member)}
-          <div style="flex:1;min-width:0">
-            <strong style="font-size:13.5px;font-weight:600;display:block">${esc(t.member.name)}</strong>
-            <span class="caption">${t.access_level === 'manage' ? 'Project Manager' : 'Contributor'}</span>
+          <div class="tw:min-w-0 tw:flex-1">
+            <strong class="tw:block tw:text-[13.5px] tw:font-semibold tw:text-propolis">${esc(t.member.name)}</strong>
+            <span class="tw:text-[12.5px] tw:text-propolis-40">${t.access_level === 'manage' ? 'Project Manager' : 'Contributor'}</span>
           </div>
-          <button type="button" class="attach-remove" data-remove-team="${t.member_id}" aria-label="Remove">${icons.x}</button>
-        </div>`).join('') : `<div class="empty" style="padding:var(--s4)"><p class="caption">No one assigned yet.</p></div>`}
+          <button type="button" class="${ICON_BUTTON} tw:border tw:border-comb-shade tw:bg-white tw:hover:border-propolis-40 tw:[&_svg]:size-3.5" data-remove-team="${t.member_id}" aria-label="Remove">${icons.x}</button>
+        </div>`).join('') : `<div class="tw:p-4 tw:text-center"><p class="tw:text-[12.5px] tw:text-propolis-40">No one assigned yet.</p></div>`}
     </div>
     ${eligible.length ? `
       <div class="field">
@@ -338,7 +338,7 @@ async function openManageTeamModal(projectId, data) {
           <option value="manage">Project Manager — add, edit, delete content</option>
           <option value="contribute">Contributor — add, edit content, no delete</option>
         </select>
-      </div>` : '<p class="caption">Every member is already on this project\'s team.</p>'}`;
+      </div>` : '<p class="tw:text-[12.5px] tw:text-propolis-40">Every member is already on this project\'s team.</p>'}`;
 
   const actions = eligible.length ? `
     <button class="btn btn-ghost" data-close>Close</button>
