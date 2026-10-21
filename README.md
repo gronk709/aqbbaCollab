@@ -4,10 +4,7 @@ A members-only platform for the Australian Queen Bee Breeders Association: a var
 sensitive hygiene (VSH) research dashboard, a topic-driven forum, a structured
 information repository, and a member marketplace.
 
-This is a **high-fidelity prototype**. Every screen, interaction and state transition is
-real; the data behind them is mock data, and the two external integrations (Wild Apricot
-authentication, notification email) are stubbed at their boundaries so they can be
-swapped for live services without reworking the interface.
+>This is a live platform, not a mock-up: every screen, interaction and state transition is real, backed by real Postgres tables (Supabase) with Row Level Security — the original mock-data-and-localStorage prototype has been fully migrated. Both sign-in paths (Wild Apricot OAuth and direct collaborator accounts) and notification email (Resend) are real integrations, not stubs. The only thing still left over from the original prototype is a handful of now-unused mock arrays in js/data.js, kept only as dead-code fallbacks pending the final cleanup pass described below.
 
 ## Running it
 
