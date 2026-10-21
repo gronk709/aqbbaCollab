@@ -868,20 +868,60 @@ export async function addRepositoryArticle(subTopicId, { title, summary, body })
   });
 }
 
+/* Images inside an article body are Markdown `![alt](img:<storage path>)`
+   references to objects in the private repository-documents bucket. The
+   bucket has no row per image, so the body itself is the record of which
+   images an article uses — which is also how orphans are found and removed
+   when an image is dropped from an edit or the article is deleted. */
+const REPO_IMAGE_REF = /!\[[^\]]*\]\(img:([^)\s]+)\)/g;
+export const repositoryImagePaths = (body) => [...String(body || '').matchAll(REPO_IMAGE_REF)].map((m) => m[1]);
+
 export async function updateRepositoryArticle(id, { title, summary, body }) {
   const supabase = await getSupabase();
+  const { data: before } = await supabase.from('repository_articles').select('body').eq('id', id).single();
   const { error } = await supabase
     .from('repository_articles')
     .update({ title, summary, body, updated_at: new Date().toISOString() })
     .eq('id', id);
   if (error) throw error;
+  const kept = new Set(repositoryImagePaths(body));
+  const dropped = repositoryImagePaths(before?.body).filter((p) => !kept.has(p));
+  if (dropped.length) await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).remove(dropped);
 }
 
 export async function deleteRepositoryArticle(id) {
   const supabase = await getSupabase();
+  const { data: before } = await supabase.from('repository_articles').select('body').eq('id', id).single();
   const { error } = await supabase.from('repository_articles').delete().eq('id', id);
   if (error) throw error;
+  const paths = repositoryImagePaths(before?.body);
+  if (paths.length) await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).remove(paths);
 }
+
+/* Uploads one already-prepared image (js/images.js) for use in an article
+   and returns the storage path to reference as `img:<path>`. Uploaded as
+   soon as it is picked, so an image whose article is never published stays
+   in the bucket — small, and the only cost of showing a live preview. */
+export async function uploadRepositoryImage(subTopicId, file) {
+  requireRealMember();
+  const supabase = await getSupabase();
+  const path = `images/${subTopicId}/${crypto.randomUUID()}-${safeStorageSegment(file.name)}`;
+  const { error } = await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).upload(path, file, { contentType: file.type });
+  if (error) throw error;
+  return path;
+}
+
+/* path → short-lived signed URL, for rendering images from a private bucket. */
+async function signPaths(bucket, paths) {
+  const unique = [...new Set(paths)];
+  if (!unique.length) return {};
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrls(unique, 3600);
+  if (error) throw error;
+  return Object.fromEntries(data.filter((d) => d.signedUrl).map((d) => [d.path, d.signedUrl]));
+}
+export const signRepositoryImages = (paths) => signPaths(REPOSITORY_DOCUMENTS_BUCKET, paths);
+export const signForumImages = (paths) => signPaths(ATTACHMENTS_BUCKET, paths);
 
 export async function addRepositoryDocument(subTopicId, file) {
   const me = requireRealMember();

@@ -81,8 +81,14 @@ function docLink(href, label, docs) {
     : label;
 }
 
+/* An image reference — `![alt](img:<storage path>)` — points at an object in
+   a private Storage bucket, so it renders as an <img> with no src and the
+   page calls hydrateImages() afterwards to swap in freshly signed URLs. */
+const MD_IMG = 'tw:my-2 tw:block tw:h-auto tw:max-w-full tw:min-h-24 tw:rounded-lg tw:border tw:border-comb-shade tw:bg-comb';
+
 function inline(md, docs) {
   return esc(md)
+    .replace(/!\[([^\]]*)\]\(img:([^)\s]+)\)/g, (m, alt, path) => `<img class="${MD_IMG}" data-img-path="${path}" alt="${alt}" loading="lazy">`)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
     .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, href) => {
@@ -92,6 +98,20 @@ function inline(md, docs) {
       if (href.startsWith('doc:')) return docLink(href, label, docs);
       return label;
     });
+}
+
+/* Fills in the src of every `img[data-img-path]` under `root`. `sign` is
+   (paths) => Promise<{ [path]: signedUrl }> — passed in, like `docs` above,
+   because this module knows nothing about Storage. */
+export async function hydrateImages(root, sign) {
+  const imgs = [...(root ? root.querySelectorAll('img[data-img-path]') : [])];
+  if (!imgs.length) return;
+  let urls = {};
+  try { urls = await sign(imgs.map((i) => i.dataset.imgPath)); } catch { /* fall through to alt text */ }
+  imgs.forEach((img) => {
+    const url = urls[img.dataset.imgPath];
+    if (url) img.src = url;
+  });
 }
 
 export function mdToHtml(md, docs = []) {

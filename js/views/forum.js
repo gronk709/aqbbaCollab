@@ -13,8 +13,9 @@ import { relDays, projectForThread } from '../data.js';
 import {
   isSubscribed, addThread, addPost, deleteForumPost, state, currentUser, isWebAdmin,
   openForumAttachment, addForumAttachments, updateForumAttachment, deleteForumAttachment,
-  ATTACHMENT_MAX_BYTES, ATTACHMENT_ACCEPT,
+  signForumImages, ATTACHMENT_MAX_BYTES, ATTACHMENT_ACCEPT,
 } from '../store.js';
+import { IMAGE_ACCEPT, prepareImage, isImageMime } from '../images.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 import {
   button, pageHeader, pageBody, twoColumn, card, countBadge, rowList, tag, emptyState,
@@ -76,6 +77,11 @@ function attachFieldsHTML() {
       <label>Documents</label>
       <input type="file" data-files multiple accept="${ATTACHMENT_ACCEPT}">
       <p class="tw:mt-1.5 tw:text-[13px] tw:text-propolis-40">Supported formats: PDF, Word, Spreadsheet, Slides, Text (Max 20MB)</p>
+    </div>
+    <div class="field">
+      <label>Images</label>
+      <input type="file" data-images multiple accept="${IMAGE_ACCEPT}">
+      <p class="tw:mt-1.5 tw:text-[13px] tw:text-propolis-40">JPEG or PNG. Shown in the post and resized for the web automatically.</p>
     </div>`;
 }
 
@@ -106,9 +112,23 @@ function collectLinks(container) {
   }).filter(Boolean);
 }
 
-function collectFiles(container) {
+/* Documents as chosen, plus any images — which are resized and compressed
+   in the browser first (js/images.js), hence async. Returns null (after
+   telling the member why) if an image can't be used, so the caller stops
+   before posting anything. */
+async function collectFiles(container) {
   const input = container.querySelector('[data-files]');
-  return input && input.files ? [...input.files] : [];
+  const docs = input && input.files ? [...input.files] : [];
+  const imageInput = container.querySelector('[data-images]');
+  const picked = imageInput && imageInput.files ? [...imageInput.files] : [];
+  try {
+    const images = [];
+    for (const f of picked) images.push(await prepareImage(f));
+    return [...docs, ...images];
+  } catch (err) {
+    toast(err.message);
+    return null;
+  }
 }
 
 /* Returns the offending file's name if anything is over the limit — the
@@ -303,10 +323,14 @@ function openComposer(categories) {
       return;
     }
     const links = collectLinks(scrim);
-    const files = collectFiles(scrim);
-    const tooBig = oversizeFile(files);
-    if (tooBig) {
-      toast(`${tooBig} is over the 20MB limit — remove it before publishing.`);
+    publishBtn.disabled = true;
+    publishBtn.textContent = 'Preparing…';
+    const files = await collectFiles(scrim);
+    const tooBig = files && oversizeFile(files);
+    if (!files || tooBig) {
+      if (tooBig) toast(`${tooBig} is over the 20MB limit — remove it before publishing.`);
+      publishBtn.disabled = false;
+      publishBtn.textContent = 'Publish topic';
       return;
     }
 
@@ -369,9 +393,20 @@ export function renderThread(data) {
       </span>`;
   };
 
+  const isImage = (a) => a.kind === 'file' && isImageMime(a.mime_type);
+  const IMG_BUTTON = 'tw:absolute tw:top-1.5 tw:right-1.5 tw:grid tw:size-7 tw:place-items-center tw:rounded-full tw:bg-white/90 tw:text-propolis-60 tw:shadow tw:transition tw:hover:text-mark-red tw:[&_svg]:size-3';
+  const imageTile = (a) => `
+    <figure class="tw:relative tw:m-0">
+      <button type="button" class="tw:block tw:cursor-zoom-in" data-open-attachment="${a.id}" aria-label="Open ${esc(a.filename)} full size">
+        <img data-forum-img="${esc(a.storage_path)}" alt="${esc(a.filename)}" loading="lazy" class="tw:block tw:h-auto tw:max-h-[28rem] tw:max-w-full tw:min-h-24 tw:min-w-24 tw:rounded-lg tw:border tw:border-comb-shade tw:bg-comb">
+      </button>
+      ${a.author_id === me.id || admin ? `<button type="button" class="${IMG_BUTTON}" data-delete-attachment="${a.id}" aria-label="Remove image">${icons.x}</button>` : ''}
+    </figure>`;
+
   const postHTML = allPosts.map((p) => {
     const paras = p.body.split('\n\n').map((x) => `<p>${esc(x)}</p>`).join('');
-    const postAttachments = attachmentsByPost[p.id] || [];
+    const postAttachments = (attachmentsByPost[p.id] || []).filter((a) => !isImage(a));
+    const postImages = (attachmentsByPost[p.id] || []).filter(isImage);
     const canAddHere = p.author.id === me.id;
     /* The opening post is the topic itself — frozen, not deletable here.
        A reply was never frozen, so its author (or Web Admin) can remove
@@ -388,6 +423,7 @@ export function renderThread(data) {
             ${canDeleteHere ? `<button type="button" class="tw:grid tw:size-6 tw:shrink-0 tw:place-items-center tw:rounded-md tw:text-propolis-40 tw:transition tw:hover:bg-mark-red/10 tw:hover:text-mark-red tw:[&_svg]:size-3" data-delete-reply="${p.id}" aria-label="Delete reply">${icons.x}</button>` : ''}
           </div>
           <div class="tw:space-y-4 tw:font-display tw:text-[17px] tw:leading-relaxed tw:text-propolis tw:[overflow-wrap:anywhere]">${paras}</div>
+          ${postImages.length ? `<div class="tw:mt-4 tw:flex tw:flex-wrap tw:gap-3">${postImages.map(imageTile).join('')}</div>` : ''}
           ${postAttachments.length ? `<div class="tw:mt-4 tw:flex tw:flex-wrap tw:gap-2">${postAttachments.map(attachmentChip).join('')}</div>` : ''}
           ${canAddHere ? `
             <div class="tw:mt-4 tw:rounded-xl tw:border tw:border-comb-shade tw:bg-comb/60 tw:p-4" data-attach-manage="${p.id}" hidden>
@@ -481,6 +517,14 @@ export function renderThread(data) {
     const replyBox = document.getElementById('reply-box');
     if (replyBox) bindAttachFields(replyBox);
 
+    /* Images live in a private bucket: swap in freshly signed URLs. */
+    const imgEls = [...document.querySelectorAll('img[data-forum-img]')];
+    if (imgEls.length) {
+      signForumImages(imgEls.map((i) => i.dataset.forumImg)).then((urls) => {
+        imgEls.forEach((i) => { if (urls[i.dataset.forumImg]) i.src = urls[i.dataset.forumImg]; });
+      }).catch(() => {});
+    }
+
     document.querySelectorAll('[data-jump-to]').forEach((el) => {
       el.addEventListener('click', () => {
         const target = document.getElementById(el.dataset.jumpTo);
@@ -562,11 +606,17 @@ export function renderThread(data) {
         const postId = saveBtn.dataset.saveAddAttach;
         const box = document.querySelector(`[data-attach-manage="${postId}"]`);
         const links = collectLinks(box);
-        const files = collectFiles(box);
-        if (!links.length && !files.length) { toast('Add a link or a file first.'); return; }
-        const tooBig = oversizeFile(files);
-        if (tooBig) { toast(`${tooBig} is over the 20MB limit.`); return; }
         saveBtn.disabled = true;
+        saveBtn.textContent = 'Preparing…';
+        const files = await collectFiles(box);
+        const tooBig = files && oversizeFile(files);
+        if (!files || !(links.length || files.length) || tooBig) {
+          if (files && !tooBig) toast('Add a link, a file or an image first.');
+          if (tooBig) toast(`${tooBig} is over the 20MB limit.`);
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save';
+          return;
+        }
         saveBtn.textContent = 'Saving…';
         try {
           await addForumAttachments(t.id, postId === 'op' ? null : postId, currentUser().id, links, files);
@@ -589,10 +639,16 @@ export function renderThread(data) {
       const text = box.value.trim();
       if (!text) { toast('Write something before posting.'); return; }
       const links = collectLinks(replyBox);
-      const files = collectFiles(replyBox);
-      const tooBig = oversizeFile(files);
-      if (tooBig) { toast(`${tooBig} is over the 20MB limit — remove it before posting.`); return; }
       btn.disabled = true;
+      btn.textContent = 'Preparing…';
+      const files = await collectFiles(replyBox);
+      const tooBig = files && oversizeFile(files);
+      if (!files || tooBig) {
+        if (tooBig) toast(`${tooBig} is over the 20MB limit — remove it before posting.`);
+        btn.disabled = false;
+        btn.textContent = 'Post reply';
+        return;
+      }
       btn.textContent = 'Posting…';
       try {
         await addPost(t.id, text, links, files);
