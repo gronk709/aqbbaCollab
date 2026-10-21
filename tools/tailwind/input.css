@@ -13,6 +13,13 @@
 @import "tailwindcss/theme.css" layer(theme) prefix(tw);
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 
+@import "./components.css" layer(components);
+@import "./components-apiaries.css" layer(components);
+@import "./components-people.css" layer(components);
+@import "./components-community.css" layer(components);
+@import "./components-repository.css" layer(components);
+@import "./components-access.css" layer(components);
+
 @source "../../js";
 @source "../../index.html";
 
@@ -37,6 +44,8 @@
   --color-st-treating: var(--st-treating);
 
   --color-mark-red: var(--mark-red);
+  --color-mark-green: var(--mark-green);
+  --color-mark-blue: var(--mark-blue);
 
   --font-display: var(--display);
   --font-sans: var(--ui);

@@ -1,12 +1,50 @@
 /* ==========================================================================
    The comb: every hive in an apiary as one interlocking honeycomb field.
    Each cell is a real hive record. Colour is colony status. Click for detail.
+
+   The honeycomb itself (hexagon clip-path, row offsets, the fill animation,
+   status colours, narrow-screen sizes) lives in
+   tools/tailwind/components-apiaries.css under .comb-field / .comb-row /
+   .cell / .cell-<status> / .is-picked; the legend and the hive readout are
+   plain Tailwind utilities.
    ========================================================================== */
 
 import { statusLabels, statusNote, relDays } from '../data.js';
 import { esc, icons, formatKg } from '../ui.js';
+import { button } from '../components.js';
 
 const PER_ROW = 14;
+
+/* Complete class strings per status (the Tailwind compiler reads source text,
+   so none of these can be assembled from fragments). Status colours are the
+   --st-* custom properties from css/main.css. */
+const PIP_TONES = {
+  new: 'tw:bg-[var(--st-new)] tw:ring-1 tw:ring-[#AEAAA0]',
+  thriving: 'tw:bg-[var(--st-thriving)]',
+  good: 'tw:bg-[var(--st-good)]',
+  average: 'tw:bg-[var(--st-average)]',
+  poor: 'tw:bg-[var(--st-poor)]',
+  critical: 'tw:bg-[var(--st-critical)]',
+  treating: 'tw:bg-[var(--st-treating)]',
+  retired: 'tw:bg-[var(--st-retired)]',
+};
+
+const STATUS_TAG_TONES = {
+  new: 'tw:bg-[#A09C92]/20 tw:text-[#5E5A51]',
+  thriving: 'tw:bg-mark-green/15 tw:text-[#375B3A]',
+  good: 'tw:bg-mark-green/15 tw:text-[#375B3A]',
+  average: 'tw:bg-amber-wash tw:text-amber-deep',
+  poor: 'tw:bg-mark-red/15 tw:text-[#8C2B21]',
+  critical: 'tw:bg-[#7A1B14]/15 tw:text-[#6A1710]',
+  treating: 'tw:bg-mark-blue/15 tw:text-[#274865]',
+  retired: 'tw:bg-[#78746A]/15 tw:text-[#57534B]',
+};
+
+const LABEL = 'tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.12em] tw:text-propolis-40';
+
+/* The small status dot (legend, status tag, the retired-hives note). */
+export const statusPip = (status) =>
+  `<span class="tw:inline-block tw:size-2 tw:shrink-0 tw:rounded-full ${PIP_TONES[status] || 'tw:bg-propolis-40'}"></span>`;
 
 export function renderComb(hives, { id = 'comb' } = {}) {
   let rows = '';
@@ -24,20 +62,34 @@ export function renderComb(hives, { id = 'comb' } = {}) {
   const legend = Object.keys(statusLabels)
     .filter((k) => counts[k])
     .map((k) => `
-      <div>
-        <span class="pip pip-${k}"></span>
+      <div class="tw:flex tw:items-center tw:gap-1.5 tw:text-[11.5px] tw:text-propolis-60">
+        ${statusPip(k)}
         <span>${statusLabels[k]}</span>
-        <span class="mono">${counts[k]}</span>
+        <span class="tw:font-mono tw:text-[11px] tw:text-propolis-40">${counts[k]}</span>
       </div>`).join('');
 
   return `
     <div class="comb-field" id="${id}" role="group" aria-label="Hive status grid">${rows}</div>
-    <div class="comb-legend">${legend}</div>`;
+    <div class="tw:mt-4 tw:flex tw:flex-wrap tw:gap-x-5 tw:gap-y-3">${legend}</div>`;
 }
+
+const metric = (label, value) => `
+  <div class="tw:min-w-0">
+    <dt class="tw:font-mono tw:text-[9.5px] tw:uppercase tw:tracking-[0.12em] tw:text-propolis-40">${label}</dt>
+    <dd class="tw:mt-1 tw:ml-0 tw:font-mono tw:text-[13px] tw:text-propolis">${value}</dd>
+  </div>`;
+
+const small = (text) => `<small class="tw:text-[10px] tw:text-propolis-40">${text}</small>`;
+
+const detail = (label, value) => `
+  <div>
+    <div class="${LABEL}">${label}</div>
+    ${value}
+  </div>`;
 
 export function renderReadout(hive, { editable = false } = {}) {
   if (!hive) {
-    return `<div class="readout-empty" id="readout">
+    return `<div class="tw:border-t tw:border-comb-shade/70 tw:px-6 tw:py-5 tw:text-sm tw:text-propolis-40" id="readout">
       Select any cell above to read that hive's record.
     </div>`;
   }
@@ -50,63 +102,44 @@ export function renderReadout(hive, { editable = false } = {}) {
     ? 'Under treatment'
     : hive.treatmentFree === 0 ? 'Not yet established' : `${hive.treatmentFree} season${hive.treatmentFree > 1 ? 's' : ''}`;
 
-  const statusVariant = { new: 'tag-new', thriving: 'tag-green', good: 'tag-green', average: 'tag-amber', poor: 'tag-red', critical: 'tag-critical', treating: 'tag-blue', retired: 'tag-grey' }[hive.status];
-
   return `
-    <div class="readout" id="readout">
-      <div class="readout-head">
-        <div>
-          <h3 class="mono">${hive.id}</h3>
-          <p class="caption" style="margin-top:4px">${esc(statusNote[hive.status])}</p>
+    <div class="readout-in tw:border-t tw:border-comb-shade/70 tw:px-6 tw:py-6" id="readout">
+      <div class="tw:flex tw:flex-wrap tw:items-start tw:gap-x-4 tw:gap-y-3">
+        <div class="tw:min-w-0 tw:flex-1 tw:basis-48">
+          <h3 class="tw:font-mono tw:text-lg tw:tracking-tight tw:text-propolis">${hive.id}</h3>
+          <p class="tw:mt-1 tw:text-sm tw:text-propolis-60">${esc(statusNote[hive.status])}</p>
         </div>
-        <span class="spacer"></span>
-        ${editable ? `<button class="btn btn-ghost btn-sm" id="edit-hive">${icons.pen} Edit</button>` : ''}
-        <span class="tag ${statusVariant}"><span class="pip pip-${hive.status}"></span>${statusLabels[hive.status]}</span>
+        <div class="tw:flex tw:items-center tw:gap-2">
+          ${editable ? button({ id: 'edit-hive', label: 'Edit', icon: icons.pen, variant: 'outline', size: 'sm' }) : ''}
+          <span class="tw:inline-flex tw:items-center tw:gap-1.5 tw:whitespace-nowrap tw:rounded-full tw:px-2.5 tw:py-1 tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.06em] ${STATUS_TAG_TONES[hive.status] || STATUS_TAG_TONES.new}">${statusPip(hive.status)}${statusLabels[hive.status]}</span>
+        </div>
       </div>
 
-      <dl class="readout-metrics">
-        <div>
-          <dt>Mite load</dt>
-          <dd style="font-size:13px">${hive.miteLoad == null ? '—' : hive.miteLoad}<small style="font-size:10px;color:var(--propolis-40)"> /100</small></dd>
-        </div>
-        <div><dt>Hive Configuration</dt><dd style="font-size:13px">${hive.broodFrames || '—'}</dd></div>
-        <div><dt>Last inspected</dt><dd style="font-size:13px">${hive.lastInspectedAt
+      <dl class="tw:mt-6 tw:grid tw:grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] tw:gap-x-4 tw:gap-y-5">
+        ${metric('Mite load', `${hive.miteLoad == null ? '—' : hive.miteLoad}${small(' /100')}`)}
+        ${metric('Hive Configuration', hive.broodFrames || '—')}
+        ${metric('Last inspected', hive.lastInspectedAt
           ? relDays(Math.round((new Date(hive.lastInspectedAt) - new Date()) / 86400000))
-          : 'Never'}</dd></div>
-        <div><dt>Treatment free</dt><dd style="font-size:13px">${tf}</dd></div>
-        ${hive.latestWeight ? `
-        <div>
-          <dt>Colony weight</dt>
-          <dd style="font-size:13px">${formatKg(hive.latestWeight.kg)}<small style="font-size:10px;color:var(--propolis-40)"> · ${hive.latestWeight.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}</small></dd>
-        </div>` : ''}
+          : 'Never')}
+        ${metric('Treatment free', tf)}
+        ${hive.latestWeight ? metric('Colony weight', `${formatKg(hive.latestWeight.kg)}${small(` · ${hive.latestWeight.date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`)}`) : ''}
       </dl>
 
-      <div class="row row-wrap" style="margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade);gap:var(--s5)">
-        <div>
-          <div class="eyebrow">Queen Line</div>
-          <div class="mono" style="font-size:13px;margin-top:3px">${line ? `${esc(line.name)} · gen ${line.gen}` : '—'}</div>
-        </div>
-        <div>
-          <div class="eyebrow">Queen ID</div>
-          <div class="mono" style="font-size:13px;margin-top:3px">${hive.queenId ? esc(hive.queenId) : '—'}</div>
-        </div>
-        <div>
-          <div class="eyebrow">Contributed by</div>
-          <div style="font-size:13px;margin-top:3px">${line ? esc(line.breeder.name) : '—'}</div>
-        </div>
-        <div>
-          <div class="eyebrow">Queen marked</div>
-          <div style="font-size:13px;margin-top:3px;display:flex;align-items:center;gap:6px">
-            <span class="pip" style="background:var(--mark-${hive.queenColour});box-shadow:0 0 0 1px var(--comb-shade)"></span>
+      <div class="tw:mt-6 tw:flex tw:flex-wrap tw:gap-x-8 tw:gap-y-4 tw:border-t tw:border-comb-shade/70 tw:pt-5">
+        ${detail('Queen Line', `<div class="tw:mt-1 tw:font-mono tw:text-[13px] tw:text-propolis">${line ? `${esc(line.name)} · gen ${line.gen}` : '—'}</div>`)}
+        ${detail('Queen ID', `<div class="tw:mt-1 tw:font-mono tw:text-[13px] tw:text-propolis">${hive.queenId ? esc(hive.queenId) : '—'}</div>`)}
+        ${detail('Contributed by', `<div class="tw:mt-1 tw:text-[13px] tw:text-propolis">${line ? esc(line.breeder.name) : '—'}</div>`)}
+        ${detail('Queen marked', `
+          <div class="tw:mt-1 tw:flex tw:items-center tw:gap-1.5 tw:text-[13px] tw:text-propolis">
+            <span class="tw:size-2 tw:shrink-0 tw:rounded-full tw:ring-1 tw:ring-comb-shade" style="background:var(--mark-${hive.queenColour})"></span>
             ${hive.queenColour} · ${hive.queenYear}
-          </div>
-        </div>
+          </div>`)}
       </div>
 
       ${hive.comment ? `
-      <div style="margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
-        <div class="eyebrow">Comments</div>
-        <p style="font-size:13px;margin-top:3px">${esc(hive.comment)}</p>
+      <div class="tw:mt-5 tw:border-t tw:border-comb-shade/70 tw:pt-5">
+        <div class="${LABEL}">Comments</div>
+        <p class="tw:mt-1 tw:text-sm tw:leading-relaxed tw:text-propolis-60">${esc(hive.comment)}</p>
       </div>` : ''}
     </div>`;
 }

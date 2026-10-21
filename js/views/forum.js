@@ -16,8 +16,22 @@ import {
   ATTACHMENT_MAX_BYTES, ATTACHMENT_ACCEPT,
 } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
+import {
+  button, pageHeader, pageBody, twoColumn, card, countBadge, rowList, tag, emptyState,
+  personRow, CARD,
+} from '../components.js';
 
 const roleLabelFrom = (roles) => (roles && roles.length ? roles.join(' & ') : '—');
+
+/* A tag that carries an icon: components.js's tag() escapes its text, so
+   markup with an icon in it gets its own small helper. Same pill, same tones. */
+const ICON_TAG_TONES = {
+  amber: 'tw:bg-amber-wash tw:text-amber-deep',
+  green: 'tw:bg-mark-green/15 tw:text-[#375B3A]',
+  blue: 'tw:bg-mark-blue/15 tw:text-[#274865]',
+};
+const iconTag = (icon, text, tone) => `
+  <span class="tw:inline-flex tw:items-center tw:gap-1.5 tw:whitespace-nowrap tw:rounded-full tw:px-2.5 tw:py-1 tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.06em] tw:[&_svg]:size-3 ${ICON_TAG_TONES[tone]}">${icon} ${esc(text)}</span>`;
 
 function threadCard(t) {
   const key = `thread:${t.id}`;
@@ -25,21 +39,22 @@ function threadCard(t) {
   const project = projectForThread(t.id);
 
   return `
-    <a class="thread ${t.pinned ? 'thread-pinned' : ''}" href="#/forum/${t.id}">
-      <div class="thread-top">
-        <span class="tag tag-outline">${esc(t.category?.name || 'General')}</span>
-        ${t.pinned ? `<span class="tag tag-amber">${icons.pin} Pinned</span>` : ''}
-        ${on ? `<span class="tag tag-green">${icons.bellOn} Subscribed</span>` : ''}
-        ${project ? `<span class="tag tag-blue">${icons.beaker} Became ${project.code}</span>` : ''}
+    <a class="tw:block tw:px-6 tw:py-5 tw:transition-colors tw:hover:bg-comb/60 ${t.pinned ? 'tw:shadow-[inset_3px_0_0_var(--amber)]' : ''}" href="#/forum/${t.id}">
+      <div class="tw:mb-2 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+        ${tag(t.category?.name || 'General', 'outline')}
+        ${t.pinned ? iconTag(icons.pin, 'Pinned', 'amber') : ''}
+        ${on ? iconTag(icons.bellOn, 'Subscribed', 'green') : ''}
+        ${project ? iconTag(icons.beaker, `Became ${project.code}`, 'blue') : ''}
       </div>
-      <h3>${esc(t.title)}</h3>
-      <p class="thread-excerpt">${esc(t.body.slice(0, 190))}</p>
-      <div class="thread-foot">
+      <h3 class="tw:font-display tw:text-xl tw:font-medium tw:leading-snug tw:text-propolis">${esc(t.title)}</h3>
+      <p class="tw:mt-1.5 tw:line-clamp-2 tw:text-[15px] tw:leading-relaxed tw:text-propolis-60">${esc(t.body.slice(0, 190))}</p>
+      <div class="tw:mt-4 tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-2 tw:text-sm tw:text-propolis-40">
         ${avatar(t.author)}
-        <span><strong style="color:var(--propolis);font-weight:600">${esc(t.author.name)}</strong> · ${relDays(daysAgo(t.created_at))}</span>
-        <span class="spacer"></span>
-        <span class="mono">${t.replyCount} ${t.replyCount === 1 ? 'reply' : 'replies'}</span>
-        <span class="mono">${t.watchers} watching</span>
+        <span><strong class="tw:font-semibold tw:text-propolis">${esc(t.author.name)}</strong> · ${relDays(daysAgo(t.created_at))}</span>
+        <span class="tw:ml-auto tw:flex tw:flex-wrap tw:gap-x-4 tw:font-mono tw:text-xs">
+          <span>${t.replyCount} ${t.replyCount === 1 ? 'reply' : 'replies'}</span>
+          <span>${t.watchers} watching</span>
+        </span>
       </div>
     </a>`;
 }
@@ -54,23 +69,23 @@ function attachFieldsHTML() {
   return `
     <div class="field">
       <label>Links</label>
-      <div class="attach-links" data-links></div>
+      <div data-links></div>
       <button type="button" class="btn btn-ghost btn-sm" data-add-link>${icons.link} Add a link</button>
     </div>
     <div class="field">
       <label>Documents</label>
       <input type="file" data-files multiple accept="${ATTACHMENT_ACCEPT}">
-      <p class="caption" style="margin-top:6px">Supported formats: PDF, Word, Spreadsheet, Slides, Text (Max 20MB)</p>
+      <p class="tw:mt-1.5 tw:text-[13px] tw:text-propolis-40">Supported formats: PDF, Word, Spreadsheet, Slides, Text (Max 20MB)</p>
     </div>`;
 }
 
 function addLinkRow(list) {
   const row = document.createElement('div');
-  row.className = 'attach-link-row';
+  row.className = 'tw:mb-2 tw:flex tw:items-center tw:gap-2';
   row.innerHTML = `
-    <input type="url" placeholder="https://…" data-link-url>
-    <input type="text" placeholder="Label (optional)" data-link-title>
-    <button type="button" class="attach-remove" aria-label="Remove link">${icons.x}</button>`;
+    <input type="url" placeholder="https://…" data-link-url class="tw:min-w-0 tw:flex-1">
+    <input type="text" placeholder="Label (optional)" data-link-title class="tw:min-w-0 tw:flex-1">
+    <button type="button" class="attach-remove tw:grid tw:size-9 tw:shrink-0 tw:place-items-center tw:rounded-lg tw:border tw:border-comb-shade tw:bg-white tw:text-propolis-40 tw:transition tw:hover:border-propolis-40 tw:hover:text-propolis tw:[&_svg]:size-3.5" aria-label="Remove link">${icons.x}</button>`;
   row.querySelector('.attach-remove').addEventListener('click', () => row.remove());
   list.appendChild(row);
 }
@@ -181,59 +196,42 @@ export function renderForum(data) {
   const rest = threads.filter((t) => !t.pinned);
   const subCount = state.subs.filter((s) => s.startsWith('thread:')).length;
 
-  const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="eyebrow">Member discussion</div>
-        <h1>Forum</h1>
-      </div>
-      <div class="topbar-actions">
-        <button class="btn btn-primary btn-sm" id="new-topic">${icons.plus} New topic</button>
-      </div>
-    </div>
+  const topics = threads.length
+    ? rowList([...pinned, ...rest].map(threadCard))
+    : emptyState({ title: 'No topics yet', text: 'Be the first to start a discussion.', bordered: false });
 
-    <div class="wrap view">
-      <div class="grid grid-dash">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>All topics</h2>
-            <span class="spacer"></span>
-            <span class="caption mono">${threads.length}</span>
-          </div>
-          <div>${threads.length ? [...pinned, ...rest].map(threadCard).join('') : `
-            <div class="empty" style="padding:var(--s6) 0">
-              <h3>No topics yet</h3>
-              <p>Be the first to start a discussion.</p>
-            </div>`}</div>
+  const categoryRows = categories.map((c) => {
+    const n = threads.filter((t) => t.category?.id === c.id).length;
+    return `
+      <div class="tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-3.5">
+        <div class="tw:min-w-0 tw:flex-1">
+          <strong class="tw:block tw:text-[15px] tw:font-semibold tw:text-propolis">${esc(c.name)}</strong>
+          <span class="tw:text-sm tw:text-propolis-60">${n} ${n === 1 ? 'topic' : 'topics'}</span>
         </div>
+        ${subButton(`cat:${c.id}`, isSubscribed(`cat:${c.id}`), 'Notify')}
+      </div>`;
+  });
 
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-head"><h2>Categories</h2></div>
-            <div class="panel-body panel-body-flush">
-              ${categories.map((c) => {
-                const n = threads.filter((t) => t.category?.id === c.id).length;
-                return `
-                  <div class="sub">
-                    <div class="sub-title">
-                      <strong>${esc(c.name)}</strong>
-                      <span>${n} ${n === 1 ? 'topic' : 'topics'}</span>
-                    </div>
-                    ${subButton(`cat:${c.id}`, isSubscribed(`cat:${c.id}`), 'Notify')}
-                  </div>`;
-              }).join('')}
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head"><h2>Your notifications</h2></div>
-            <div class="panel-body">
-              <p style="font-size:13px;color:var(--propolis-60)">
+  const html = `
+    <div class="view">
+      ${pageHeader({
+        eyebrow: 'Member discussion',
+        title: 'Forum',
+        actions: button({ id: 'new-topic', label: 'New topic', icon: icons.plus, size: 'sm' }),
+      })}
+      ${pageBody(twoColumn({
+        main: card({ title: 'All topics', right: countBadge(threads.length), flush: true, body: topics }),
+        side: `
+          ${card({ title: 'Categories', flush: true, body: rowList(categoryRows) })}
+          ${card({
+            title: 'Your notifications',
+            body: `
+              <p class="tw:text-sm tw:leading-relaxed tw:text-propolis-60">
                 You are subscribed to ${subCount} ${subCount === 1 ? 'topic' : 'topics'}.
-                New posts are emailed to <span class="mono" style="font-size:12px">${esc(currentUser().email || '')}</span>
+                New posts are emailed to <span class="tw:font-mono tw:text-xs">${esc(currentUser().email || '')}</span>
                 on file.
               </p>
-              <div class="field" style="margin-top:var(--s4)">
+              <div class="field tw:mt-4">
                 <label for="digest">Delivery</label>
                 <select id="digest">
                   <option value="instant" ${state.digest === 'instant' ? 'selected' : ''}>Email each new post</option>
@@ -241,13 +239,11 @@ export function renderForum(data) {
                   <option value="weekly" ${state.digest === 'weekly' ? 'selected' : ''}>Weekly digest, Monday</option>
                 </select>
               </div>
-              <p class="caption">
+              <p class="tw:text-[13px] tw:leading-relaxed tw:text-propolis-40">
                 Subscribing to a category notifies you when any member opens a new topic in it.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+              </p>`,
+          })}`,
+      }))}
     </div>`;
 
   setTimeout(() => bindForum(categories), 0);
@@ -268,7 +264,7 @@ function bindForum(categories) {
 
 function openComposer(categories) {
   const body = `
-    <p class="caption" style="margin-bottom:var(--s5)">
+    <p class="tw:mb-5 tw:text-[13px] tw:text-propolis-40">
       Subscribers to the category you choose are notified as soon as you publish.
     </p>
     <form id="topic-form">
@@ -360,15 +356,16 @@ export function renderThread(data) {
      permissions migration's header comment): frozen once published,
      which is exactly why attachment upkeep doesn't route through editing
      the post at all. */
+  const CHIP_BUTTON = 'tw:grid tw:w-8 tw:shrink-0 tw:place-items-center tw:border-l tw:border-comb-shade tw:text-propolis-40 tw:transition tw:hover:bg-comb tw:hover:text-propolis tw:[&_svg]:size-3';
   const attachmentChip = (a) => {
     const own = a.author_id === me.id;
     return `
-      <span class="attach-chip">
-        <button type="button" class="attach-chip-open" data-open-attachment="${a.id}">
-          ${a.kind === 'url' ? icons.link : icons.attach}<span>${esc(a.filename)}</span>
+      <span class="tw:inline-flex tw:max-w-full tw:items-stretch tw:overflow-hidden tw:rounded-full tw:border tw:border-comb-shade tw:bg-white tw:transition tw:hover:border-amber">
+        <button type="button" class="tw:inline-flex tw:min-w-0 tw:items-center tw:gap-1.5 tw:py-1.5 tw:pr-3 tw:pl-3.5 tw:text-[13px] tw:font-medium tw:text-propolis-60 tw:transition tw:hover:text-amber-deep tw:[&_svg]:size-3.5 tw:[&_svg]:shrink-0" data-open-attachment="${a.id}">
+          ${a.kind === 'url' ? icons.link : icons.attach}<span class="tw:truncate">${esc(a.filename)}</span>
         </button>
-        ${own && a.kind === 'url' ? `<button type="button" class="attach-chip-btn" data-edit-attachment="${a.id}" aria-label="Edit link">${icons.pen}</button>` : ''}
-        ${own || admin ? `<button type="button" class="attach-chip-btn" data-delete-attachment="${a.id}" aria-label="Remove attachment">${icons.x}</button>` : ''}
+        ${own && a.kind === 'url' ? `<button type="button" class="${CHIP_BUTTON}" data-edit-attachment="${a.id}" aria-label="Edit link">${icons.pen}</button>` : ''}
+        ${own || admin ? `<button type="button" class="${CHIP_BUTTON}" data-delete-attachment="${a.id}" aria-label="Remove attachment">${icons.x}</button>` : ''}
       </span>`;
   };
 
@@ -381,130 +378,103 @@ export function renderThread(data) {
        it outright. */
     const canDeleteHere = p.id !== 'op' && (p.author.id === me.id || admin);
     return `
-      <article class="post" id="post-${p.id}">
+      <article class="tw:grid tw:grid-cols-[2rem_minmax(0,1fr)] tw:gap-4 tw:px-6 tw:py-6" id="post-${p.id}">
         ${avatar(p.author)}
-        <div>
-          <div class="post-who">
-            <strong>${esc(p.author.name)}</strong>
-            <span class="caption">${esc(roleLabelFrom(p.author.roles))}</span>
-            <span class="spacer"></span>
-            <span class="caption mono">${relDays(daysAgo(p.created_at))}</span>
-            ${canDeleteHere ? `<button type="button" class="post-delete" data-delete-reply="${p.id}" aria-label="Delete reply">${icons.x}</button>` : ''}
+        <div class="tw:min-w-0">
+          <div class="tw:mb-2 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-0.5">
+            <strong class="tw:text-[15px] tw:font-semibold tw:text-propolis">${esc(p.author.name)}</strong>
+            <span class="tw:text-sm tw:text-propolis-40">${esc(roleLabelFrom(p.author.roles))}</span>
+            <span class="tw:ml-auto tw:font-mono tw:text-xs tw:text-propolis-40">${relDays(daysAgo(p.created_at))}</span>
+            ${canDeleteHere ? `<button type="button" class="tw:grid tw:size-6 tw:shrink-0 tw:place-items-center tw:rounded-md tw:text-propolis-40 tw:transition tw:hover:bg-mark-red/10 tw:hover:text-mark-red tw:[&_svg]:size-3" data-delete-reply="${p.id}" aria-label="Delete reply">${icons.x}</button>` : ''}
           </div>
-          <div class="post-body">${paras}</div>
-          ${postAttachments.length ? `<div class="attach-inline">${postAttachments.map(attachmentChip).join('')}</div>` : ''}
+          <div class="tw:space-y-4 tw:font-display tw:text-[17px] tw:leading-relaxed tw:text-propolis tw:[overflow-wrap:anywhere]">${paras}</div>
+          ${postAttachments.length ? `<div class="tw:mt-4 tw:flex tw:flex-wrap tw:gap-2">${postAttachments.map(attachmentChip).join('')}</div>` : ''}
           ${canAddHere ? `
-            <div class="attach-manage" data-attach-manage="${p.id}" hidden>
+            <div class="tw:mt-4 tw:rounded-xl tw:border tw:border-comb-shade tw:bg-comb/60 tw:p-4" data-attach-manage="${p.id}" hidden>
               ${attachFieldsHTML()}
-              <div class="row" style="justify-content:flex-end;gap:var(--s2)">
+              <div class="tw:flex tw:justify-end tw:gap-2">
                 <button type="button" class="btn btn-ghost btn-sm" data-cancel-add-attach="${p.id}">Cancel</button>
                 <button type="button" class="btn btn-primary btn-sm" data-save-add-attach="${p.id}">Save</button>
               </div>
             </div>
-            <button type="button" class="btn btn-ghost btn-sm attach-add-toggle" data-toggle-add-attach="${p.id}">${icons.plus} Add attachment</button>` : ''}
+            <button type="button" class="tw:mt-4 tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-full tw:border tw:border-dashed tw:border-amber/60 tw:px-3.5 tw:py-1.5 tw:text-sm tw:font-medium tw:text-amber-deep tw:transition tw:hover:border-amber tw:hover:bg-amber-wash tw:[&[hidden]]:hidden" data-toggle-add-attach="${p.id}">${icons.plus} Add attachment</button>` : ''}
         </div>
       </article>`;
   }).join('');
 
-  const attachmentSummaryHTML = attachments.length ? `
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Attachments</h2>
-        <span class="spacer"></span>
-        <span class="caption mono">${attachments.length}</span>
-      </div>
-      <div class="panel-body panel-body-flush">
-        ${attachments.map((a) => `
-          <div class="sub">
-            <div class="sub-title">
-              <strong>${esc(a.filename)}</strong>
-              <span>${a.kind === 'url' ? 'Link' : (a.mime_type || 'Document')} · ${relDays(daysAgo(a.created_at))}</span>
-            </div>
-            <button type="button" class="sub-btn" data-jump-to="post-${a.post_id || 'op'}">${icons.chevron}<span>Jump to post</span></button>
-          </div>`).join('')}
-      </div>
-    </div>` : '';
+  const attachmentSummaryHTML = attachments.length ? card({
+    title: 'Attachments',
+    right: countBadge(attachments.length),
+    flush: true,
+    body: rowList(attachments.map((a) => `
+      <div class="tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-3.5">
+        <div class="tw:min-w-0 tw:flex-1">
+          <strong class="tw:line-clamp-2 tw:text-[15px] tw:font-semibold tw:leading-snug tw:text-propolis tw:[overflow-wrap:anywhere]">${esc(a.filename)}</strong>
+          <span class="tw:block tw:truncate tw:text-sm tw:text-propolis-60">${a.kind === 'url' ? 'Link' : (a.mime_type || 'Document')} · ${relDays(daysAgo(a.created_at))}</span>
+        </div>
+        <button type="button" class="tw:inline-flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded-full tw:border tw:border-comb-shade tw:bg-white tw:px-3 tw:py-1.5 tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.08em] tw:text-propolis-60 tw:transition tw:hover:border-amber tw:hover:text-amber-deep tw:[&_svg]:size-3" data-jump-to="post-${a.post_id || 'op'}">${icons.chevron}<span>Jump to post</span></button>
+      </div>`)),
+  }) : '';
 
   const project = projectForThread(t.id);
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="crumb">
-          <a href="#/forum">Forum</a> ${icons.chevron}
-          <span>${esc(t.category?.name || 'General')}</span>
-        </div>
-        <h1 style="font-size:clamp(1.375rem,2.4vw,1.75rem);max-width:34ch">${esc(t.title)}</h1>
-      </div>
-      <div class="topbar-actions">
-        ${subButton(key, on, 'Subscribe')}
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <div class="grid grid-dash">
-        <div class="panel">
-          <div class="panel-body">
-            ${postHTML}
-          </div>
-
-          <div id="reply-box" style="padding:var(--s5);border-top:1px solid var(--comb-shade);background:var(--comb)">
-            <div class="field">
-              <label for="reply">Add a reply</label>
-              <textarea id="reply" placeholder="Reply to ${esc(t.author.name.split(' ')[0])}."></textarea>
+    <div class="view">
+      ${pageHeader({
+        crumbs: [{ label: 'Forum', href: '#/forum' }, { label: t.category?.name || 'General' }],
+        title: t.title,
+        compact: true,
+        actions: subButton(key, on, 'Subscribe'),
+      })}
+      ${pageBody(twoColumn({
+        main: `
+          <section class="${CARD} tw:min-w-0 tw:overflow-hidden">
+            <div class="tw:divide-y tw:divide-comb-shade/70">
+              ${postHTML}
             </div>
-            ${attachFieldsHTML()}
-            <div class="row">
-              <p class="caption" style="flex:1">
-                Replies are emailed to everyone watching. Posting subscribes you to the topic.
-              </p>
-              <button class="btn btn-primary btn-sm" id="post-reply">Post reply</button>
-            </div>
-          </div>
-        </div>
 
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-head"><h2>Topic</h2></div>
-            <div class="panel-body">
-              <div class="row" style="gap:var(--s3)">
-                ${avatar(t.author)}
-                <div>
-                  <div style="font-size:13.5px;font-weight:600">${esc(t.author.name)}</div>
-                  <div class="caption">Opened ${relDays(daysAgo(t.created_at))}</div>
-                </div>
+            <div id="reply-box" class="tw:border-t tw:border-comb-shade tw:bg-comb/60 tw:p-6">
+              <div class="field">
+                <label for="reply">Add a reply</label>
+                <textarea id="reply" placeholder="Reply to ${esc(t.author.name.split(' ')[0])}."></textarea>
               </div>
-              <div class="row" style="justify-content:space-between;margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
-                <span style="font-size:13px">Replies</span>
-                <span class="mono" style="font-size:13px">${posts.length}</span>
-              </div>
-              <div class="row" style="justify-content:space-between;margin-top:var(--s2)">
-                <span style="font-size:13px">Watching</span>
-                <span class="mono" style="font-size:13px">${watchers}</span>
-              </div>
-            </div>
-          </div>
-
-          ${attachmentSummaryHTML}
-
-          ${project ? `
-            <div class="panel">
-              <div class="panel-head"><h2>Became a project</h2></div>
-              <div class="panel-body">
-                <p class="caption" style="margin-bottom:var(--s3)">
-                  This discussion turned into a coordinated research project.
+              ${attachFieldsHTML()}
+              <div class="tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-3">
+                <p class="tw:min-w-52 tw:flex-1 tw:text-[13px] tw:leading-relaxed tw:text-propolis-40">
+                  Replies are emailed to everyone watching. Posting subscribes you to the topic.
                 </p>
-                <a class="thread" style="border:1px solid var(--comb-shade);border-radius:3px;padding:var(--s3)" href="#/projects/${project.id}">
-                  <div class="row" style="gap:6px;margin-bottom:4px">
-                    <span class="tag tag-outline">${project.code}</span>
-                  </div>
-                  <h3 style="font-size:13.5px">${esc(project.title)}</h3>
-                  <p class="caption" style="margin-top:4px">View the project ${icons.chevron}</p>
-                </a>
+                ${button({ id: 'post-reply', label: 'Post reply', size: 'sm' })}
               </div>
-            </div>` : ''}
-        </div>
-      </div>
+            </div>
+          </section>`,
+        side: `
+          ${card({
+            title: 'Topic',
+            body: `
+              ${personRow({ initials: t.author.initials, name: t.author.name, sub: `Opened ${relDays(daysAgo(t.created_at))}` })}
+              <div class="tw:mt-5 tw:flex tw:items-center tw:justify-between tw:border-t tw:border-comb-shade/70 tw:pt-4 tw:text-sm tw:text-propolis-60">
+                <span>Replies</span>
+                <span class="tw:font-mono tw:text-propolis">${posts.length}</span>
+              </div>
+              <div class="tw:mt-2 tw:flex tw:items-center tw:justify-between tw:text-sm tw:text-propolis-60">
+                <span>Watching</span>
+                <span class="tw:font-mono tw:text-propolis">${watchers}</span>
+              </div>`,
+          })}
+          ${attachmentSummaryHTML}
+          ${project ? card({
+            title: 'Became a project',
+            body: `
+              <p class="tw:mb-4 tw:text-sm tw:leading-relaxed tw:text-propolis-60">
+                This discussion turned into a coordinated research project.
+              </p>
+              <a class="tw:block tw:rounded-xl tw:border tw:border-comb-shade tw:p-4 tw:transition tw:hover:border-amber tw:hover:bg-comb/60" href="#/projects/${project.id}">
+                ${tag(project.code, 'outline')}
+                <h3 class="tw:mt-2 tw:font-display tw:text-lg tw:font-medium tw:leading-snug tw:text-propolis">${esc(project.title)}</h3>
+                <p class="tw:mt-2 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:font-medium tw:text-amber-deep">View the project ${icons.chevron}</p>
+              </a>`,
+          }) : ''}`,
+      }))}
     </div>`;
 
   setTimeout(() => {

@@ -5,6 +5,7 @@
 import { listingKinds, relDays } from '../data.js';
 import { addListing, loadListings } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
+import { button, pageHeader, pageBody, card, emptyState, filterPill } from '../components.js';
 
 let activeKind = 'All';
 
@@ -28,7 +29,7 @@ function listingArt(kind, seed) {
                  stroke="${tone}" stroke-width="0.6" stroke-opacity="0.28"/>`;
     }
   }
-  return `<svg viewBox="0 0 250 100" preserveAspectRatio="xMidYMid slice">${cells}</svg>`;
+  return `<svg class="tw:absolute tw:inset-0 tw:size-full" viewBox="0 0 250 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${cells}</svg>`;
 }
 
 /* created_at comes back from Postgres as an ISO timestamp, not the
@@ -46,24 +47,23 @@ function daysAgo(isoTimestamp) {
 function listingCard(l, i) {
   const seller = l.seller;
   return `
-    <article class="listing">
-      <div class="listing-art">
-        <span class="listing-kind">${esc(l.kind)}</span>
+    <article class="tw:flex tw:flex-col tw:overflow-hidden tw:rounded-2xl tw:border-2 tw:border-comb-shade/80 tw:bg-white tw:transition tw:duration-300 tw:hover:-translate-y-1 tw:hover:border-amber/60 tw:hover:shadow-xl tw:hover:shadow-propolis/10">
+      <div class="tw:relative tw:h-32 tw:overflow-hidden tw:bg-amber-wash">
+        <span class="tw:absolute tw:top-3 tw:left-3 tw:z-10 tw:rounded-full tw:bg-propolis/85 tw:px-2.5 tw:py-1 tw:font-mono tw:text-[10px] tw:uppercase tw:tracking-[0.1em] tw:text-comb">${esc(l.kind)}</span>
         ${listingArt(l.kind, i + 3)}
       </div>
-      <div class="listing-body">
-        <h3>${esc(l.title)}</h3>
-        <div class="listing-price">$${Number(l.price).toLocaleString('en-AU')} <small>${esc(l.unit)}</small></div>
-        <p class="caption" style="line-height:1.5">${esc(l.detail)}</p>
-        <p class="caption mono" style="font-size:11px">${esc(l.qty)}</p>
-        <div class="listing-foot">
+      <div class="tw:flex tw:flex-1 tw:flex-col tw:gap-2 tw:p-5">
+        <h3 class="tw:font-display tw:text-xl tw:font-medium tw:leading-snug tw:text-propolis">${esc(l.title)}</h3>
+        <div class="tw:font-mono tw:text-lg tw:text-propolis">$${Number(l.price).toLocaleString('en-AU')} <small class="tw:text-[11px] tw:text-propolis-40">${esc(l.unit)}</small></div>
+        <p class="tw:text-sm tw:leading-relaxed tw:text-propolis-60">${esc(l.detail)}</p>
+        <p class="tw:font-mono tw:text-xs tw:text-propolis-40">${esc(l.qty)}</p>
+        <div class="tw:mt-auto tw:flex tw:items-center tw:gap-3 tw:border-t tw:border-comb-shade/70 tw:pt-4">
           ${avatar(seller)}
-          <div style="min-width:0">
-            <div style="font-size:12.5px;color:var(--propolis);font-weight:600">${esc(seller.name)}</div>
-            <div style="font-size:11px">${esc(l.state || '')} · listed ${relDays(daysAgo(l.created_at))}</div>
+          <div class="tw:min-w-0 tw:flex-1">
+            <div class="tw:truncate tw:text-[13px] tw:font-semibold tw:text-propolis">${esc(seller.name)}</div>
+            <div class="tw:text-xs tw:text-propolis-40">${esc(l.state || '')} · listed ${relDays(daysAgo(l.created_at))}</div>
           </div>
-          <span class="spacer"></span>
-          <button class="btn btn-ghost btn-sm" data-enquire="${l.id}">Enquire</button>
+          ${button({ label: 'Enquire', variant: 'outline', size: 'sm', attrs: `data-enquire="${l.id}"` })}
         </div>
       </div>
     </article>`;
@@ -74,50 +74,43 @@ export function renderMarketplace(listings) {
   const shown = activeKind === 'All' ? all : all.filter((l) => l.kind === activeKind);
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="eyebrow">Member to member · queens, stock and equipment</div>
-        <h1>Marketplace</h1>
-      </div>
-      <div class="topbar-actions">
-        <button class="btn btn-primary btn-sm" id="new-listing">${icons.plus} List an item</button>
-      </div>
-    </div>
+    <div class="view">
+      ${pageHeader({
+        eyebrow: 'Member to member · queens, stock and equipment',
+        title: 'Marketplace',
+        actions: button({ id: 'new-listing', label: 'List an item', icon: icons.plus, size: 'sm' }),
+        lede: `Listings are visible to members only. AQBBA does not broker sales or hold funds —
+          arrange payment and freight directly with the seller.`,
+        below: `<div class="tw:flex tw:flex-wrap tw:gap-2" role="group" aria-label="Filter listings by kind">
+          ${listingKinds.map((k) => filterPill({
+            label: k,
+            count: k !== 'All' ? all.filter((l) => l.kind === k).length : null,
+            on: k === activeKind,
+            attrs: `data-kind="${k}"`,
+          })).join('')}
+        </div>`,
+      })}
+      ${pageBody(`
+        <div class="tw:space-y-10">
+          ${shown.length === 0
+            ? emptyState({
+              title: `No ${activeKind.toLowerCase()} listed right now`,
+              text: `Members list stock as it becomes available. If you have ${activeKind.toLowerCase()} to sell, add a listing.`,
+              action: button({ id: 'empty-list', label: 'List an item' }),
+            })
+            : `<div class="tw:grid tw:gap-8 tw:sm:grid-cols-2 tw:lg:grid-cols-3">${shown.map(listingCard).join('')}</div>`}
 
-    <div class="wrap view">
-      <p class="lede" style="max-width:62ch;margin-bottom:var(--s5)">
-        Listings are visible to members only. AQBBA does not broker sales or hold funds —
-        arrange payment and freight directly with the seller.
-      </p>
-
-      <div class="filters">
-        ${listingKinds.map((k) => `
-          <button class="chip ${k === activeKind ? 'is-on' : ''}" data-kind="${k}">
-            ${k}${k !== 'All' ? ` <span class="mono" style="opacity:.6">${all.filter((l) => l.kind === k).length}</span>` : ''}
-          </button>`).join('')}
-      </div>
-
-      ${shown.length === 0 ? `
-        <div class="panel">
-          <div class="empty">
-            <h3>No ${activeKind.toLowerCase()} listed right now</h3>
-            <p>Members list stock as it becomes available. If you have ${activeKind.toLowerCase()} to sell, add a listing.</p>
-            <button class="btn btn-primary" id="empty-list">List an item</button>
-          </div>
-        </div>` : `
-        <div class="grid grid-3">${shown.map(listingCard).join('')}</div>`}
-
-      <div class="panel" style="margin-top:var(--s6)">
-        <div class="panel-head"><h2>Movement and permits</h2></div>
-        <div class="panel-body">
-          <p style="font-size:13.5px;color:var(--propolis-60);max-width:70ch">
-            Interstate movement of bees and used equipment is regulated differently in each
-            state, and Western Australia does not permit entry of bees from the eastern
-            states. Confirm the current requirements with the destination state's
-            department before you arrange freight.
-          </p>
-        </div>
-      </div>
+          ${card({
+            title: 'Movement and permits',
+            body: `
+              <p class="tw:max-w-3xl tw:leading-relaxed tw:text-propolis-60">
+                Interstate movement of bees and used equipment is regulated differently in each
+                state, and Western Australia does not permit entry of bees from the eastern
+                states. Confirm the current requirements with the destination state's
+                department before you arrange freight.
+              </p>`,
+          })}
+        </div>`)}
     </div>`;
 
   setTimeout(() => bindMarket(all), 0);
@@ -159,12 +152,12 @@ function openListingForm() {
         <label for="l-title">Title</label>
         <input id="l-title" required placeholder="e.g. Tambo 22 mated queens">
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="tw:flex tw:items-start tw:gap-3">
+        <div class="field tw:min-w-0 tw:flex-1">
           <label for="l-price">Price (AUD)</label>
           <input id="l-price" type="number" min="0" required placeholder="78">
         </div>
-        <div class="field" style="flex:1">
+        <div class="field tw:min-w-0 tw:flex-1">
           <label for="l-unit">Per</label>
           <input id="l-unit" placeholder="each" value="each">
         </div>
@@ -217,16 +210,14 @@ function openListingForm() {
 
 function openEnquiry(l, seller) {
   const body = `
-    <p style="font-size:13.5px;margin-bottom:var(--s5)">
-      Your enquiry goes to <strong>${esc(seller.name)}</strong> with your name and the email
+    <p class="tw:mb-5 tw:text-sm tw:leading-relaxed tw:text-propolis-60">
+      Your enquiry goes to <strong class="tw:font-semibold tw:text-propolis">${esc(seller.name)}</strong> with your name and the email
       on your Wild Apricot record.
     </p>
-    <div class="panel" style="background:var(--comb);margin-bottom:var(--s5)">
-      <div class="panel-body" style="padding:var(--s4)">
-        <div style="font-size:13.5px;font-weight:600">${esc(l.title)}</div>
-        <div class="mono" style="font-size:13px;margin-top:2px">$${l.price.toLocaleString('en-AU')} ${esc(l.unit)}</div>
-        <div class="caption" style="margin-top:4px">${esc(l.qty)}</div>
-      </div>
+    <div class="tw:mb-5 tw:rounded-xl tw:border tw:border-comb-shade tw:bg-comb/60 tw:p-4">
+      <div class="tw:text-sm tw:font-semibold tw:text-propolis">${esc(l.title)}</div>
+      <div class="tw:mt-0.5 tw:font-mono tw:text-sm tw:text-propolis">$${l.price.toLocaleString('en-AU')} ${esc(l.unit)}</div>
+      <div class="tw:mt-1 tw:text-[13px] tw:text-propolis-40">${esc(l.qty)}</div>
     </div>
     <div class="field">
       <label for="e-body">Message</label>

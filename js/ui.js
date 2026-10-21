@@ -58,7 +58,7 @@ export const icons = {
    aspect ratio is ~871:997. */
 export const brandMark = (w = 26) => `
 <img src="assets/logo.png" alt="AQBBA" width="${w}" height="${Math.round(w * 997 / 871)}"
-     style="display:block;object-fit:contain" />`;
+     class="tw:block tw:object-contain" />`;
 
 /* --- toasts -------------------------------------------------------------- */
 
@@ -67,14 +67,14 @@ let toastHost;
 export function toast(message) {
   if (!toastHost) {
     toastHost = document.createElement('div');
-    toastHost.className = 'toasts';
+    toastHost.className = 'tw:fixed tw:inset-x-4 tw:bottom-4 tw:z-[90] tw:flex tw:flex-col tw:gap-2 tw:sm:inset-x-auto tw:sm:right-6 tw:sm:bottom-6';
     toastHost.setAttribute('role', 'status');
     toastHost.setAttribute('aria-live', 'polite');
     document.body.appendChild(toastHost);
   }
   const el = document.createElement('div');
-  el.className = 'toast';
-  el.innerHTML = `<span class="pip"></span><span>${esc(message)}</span>`;
+  el.className = 'toast tw:flex tw:items-center tw:gap-3 tw:rounded-xl tw:bg-propolis tw:px-4 tw:py-3 tw:text-[13px] tw:text-comb tw:shadow-xl tw:shadow-propolis/25 tw:sm:max-w-[330px] tw:animate-[toast-in_0.32s_var(--ease-out)_both]';
+  el.innerHTML = `<span class="tw:size-2 tw:shrink-0 tw:rounded-full tw:bg-amber-bright"></span><span>${esc(message)}</span>`;
   toastHost.appendChild(el);
   setTimeout(() => {
     el.style.transition = 'opacity 0.3s, transform 0.3s';
@@ -91,15 +91,15 @@ let openModal = null;
 export function modal({ title, body, actions }) {
   closeModal();
   const scrim = document.createElement('div');
-  scrim.className = 'modal-scrim';
+  scrim.className = 'modal-scrim tw:fixed tw:inset-0 tw:z-[100] tw:grid tw:place-items-center tw:bg-propolis/45 tw:p-4 tw:animate-[fade-in_0.2s_var(--ease)_both] tw:sm:p-6';
   scrim.innerHTML = `
-    <div class="modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
-      <div class="modal-head">
-        <h2>${esc(title)}</h2>
-        <button class="modal-x" data-close aria-label="Close">${icons.x}</button>
+    <div class="modal tw:max-h-[88vh] tw:w-full tw:max-w-[540px] tw:overflow-y-auto tw:rounded-2xl tw:bg-white tw:shadow-2xl tw:shadow-propolis/30 tw:animate-[modal-in_0.3s_var(--ease-out)_both]" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+      <div class="tw:flex tw:items-center tw:gap-3 tw:border-b tw:border-comb-shade/70 tw:px-6 tw:py-5">
+        <h2 class="tw:font-display tw:text-2xl tw:font-medium tw:text-propolis">${esc(title)}</h2>
+        <button class="tw:ml-auto tw:grid tw:size-8 tw:place-items-center tw:rounded-lg tw:text-propolis-40 tw:transition tw:hover:bg-comb tw:hover:text-propolis" data-close aria-label="Close">${icons.x}</button>
       </div>
-      <div class="modal-body">${body}</div>
-      <div class="modal-foot">${actions}</div>
+      <div class="modal-body tw:px-6 tw:py-6">${body}</div>
+      <div class="tw:flex tw:flex-wrap tw:justify-end tw:gap-3 tw:border-t tw:border-comb-shade/70 tw:px-6 tw:py-5">${actions}</div>
     </div>`;
   document.body.appendChild(scrim);
   openModal = scrim;
@@ -123,11 +123,11 @@ export function closeModal() {
 /* --- small pieces -------------------------------------------------------- */
 
 export const avatar = (member, cls = '') =>
-  `<span class="avatar ${cls}" aria-hidden="true">${member.initials}</span>`;
+  `<span class="tw:grid tw:size-8 tw:shrink-0 tw:place-items-center tw:rounded-full tw:bg-amber-wash tw:font-mono tw:text-[11.5px] tw:font-semibold tw:text-propolis ${cls}" aria-hidden="true">${member.initials}</span>`;
 
-export const tag = (text, variant = '') =>
-  `<span class="tag ${variant}">${esc(text)}</span>`;
-
+/* The bell toggle. js/app.js flips its `is-on` class and label in place when
+   clicked, so its on/off look is a pair of state classes (see .sub-btn in
+   tools/tailwind/components.css) rather than utilities chosen at render. */
 export const subButton = (key, on, label = 'Subscribe', what = '') => `
   <button class="sub-btn ${on ? 'is-on' : ''}" data-sub="${key}"${what ? ` data-sub-label="${esc(what)}"` : ''}
           aria-pressed="${on}">

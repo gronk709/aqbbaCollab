@@ -1,0 +1,11 @@
+/* Page-specific styles for the repository views, authored with Tailwind (@apply tw:...).
+   Only for what utilities in the markup cannot express (keyframes, state classes
+   set from JS, clip-paths, pseudo-element tricks). */
+
+/* A row in the Documents card that an article's [label](doc:...) link has
+   scrolled to: js/views/repository.js adds .flash for 1.6s. */
+.doc-row.flash { animation: repo-doc-flash 1.6s ease-out; }
+@keyframes repo-doc-flash {
+  0%, 100% { background-color: transparent; }
+  15% { background-color: var(--amber-wash); }
+}

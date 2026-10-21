@@ -9,7 +9,10 @@
 
 import { relDays, subById, threadById } from '../data.js';
 import { feed, markAllRead, markRead, state, unreadCount, currentUser } from '../store.js';
-import { esc, icons, avatar, toast } from '../ui.js';
+import { esc, icons, toast } from '../ui.js';
+import {
+  button, pageHeader, pageBody, twoColumn, card, countBadge, tag, personRow, emptyState,
+} from '../components.js';
 
 /* created_at is a real Postgres timestamp — relDays/relHours in data.js
    expect a day-offset-from-today number instead, same reasoning as
@@ -26,12 +29,20 @@ function agoLabel(isoTimestamp) {
 }
 
 const kindMeta = {
-  reply:  { label: 'Reply',       icon: 'forum',  variant: 'tag-outline' },
-  thread: { label: 'New topic',   icon: 'forum',  variant: 'tag-amber' },
-  repo:   { label: 'Repository',  icon: 'book',   variant: 'tag-blue' },
-  insp:   { label: 'Inspection',  icon: 'apiary', variant: 'tag-green' },
-  apiary: { label: 'New apiary',  icon: 'apiary', variant: 'tag-amber' },
-  market: { label: 'Marketplace', icon: 'tag',    variant: 'tag-outline' },
+  reply:  { label: 'Reply',       icon: 'forum',  tone: 'outline' },
+  thread: { label: 'New topic',   icon: 'forum',  tone: 'amber' },
+  repo:   { label: 'Repository',  icon: 'book',   tone: 'blue' },
+  insp:   { label: 'Inspection',  icon: 'apiary', tone: 'green' },
+  apiary: { label: 'New apiary',  icon: 'apiary', tone: 'amber' },
+  market: { label: 'Marketplace', icon: 'tag',    tone: 'outline' },
+};
+
+/* The "what you follow" chips that link somewhere (complete class strings,
+   not assembled, so the compiler can see them). */
+const CHIP_LINK_BASE = 'tw:inline-flex tw:max-w-full tw:items-center tw:gap-1.5 tw:rounded-2xl tw:px-2.5 tw:py-1 tw:text-left tw:leading-snug tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.06em] tw:transition';
+const CHIP_LINKS = {
+  outline: `${CHIP_LINK_BASE} tw:border tw:border-comb-shade tw:text-propolis-60 tw:hover:border-amber tw:hover:text-amber-deep`,
+  amber: `${CHIP_LINK_BASE} tw:bg-amber-wash tw:text-amber-deep tw:hover:bg-amber/25`,
 };
 
 export function renderNotifications() {
@@ -46,106 +57,84 @@ export function renderNotifications() {
   const rows = items.map((n) => {
     const meta = kindMeta[n.kind] || kindMeta.reply;
     return `
-      <li>
-        <a class="line" href="${n.link_path}" data-notif="${n.id}"
-           style="${n.unread ? 'background:var(--amber-wash)' : ''}">
-          <span class="pip" style="background:${n.unread ? 'var(--amber)' : 'transparent'};margin-left:4px"></span>
-          <div class="line-body">
-            <div class="row" style="gap:var(--s2);margin-bottom:2px">
-              <span class="tag ${meta.variant}">${meta.label}</span>
-              <span class="caption">${esc(n.source_name)}</span>
-            </div>
-            <strong style="font-weight:${n.unread ? 600 : 400}">${esc(n.body)}</strong>
+      <a class="tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-4 tw:transition ${n.unread ? 'tw:bg-amber-wash tw:hover:bg-amber-wash/60' : 'tw:hover:bg-comb/60'}" href="${n.link_path}" data-notif="${n.id}">
+        <span class="tw:size-2 tw:shrink-0 ${n.unread ? 'tw:bg-amber' : 'tw:bg-transparent'} tw:rounded-full"></span>
+        <div class="tw:min-w-0 tw:flex-1">
+          <div class="tw:mb-1 tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+            ${tag(meta.label, meta.tone)}
+            <span class="tw:text-sm tw:text-propolis-40">${esc(n.source_name)}</span>
           </div>
-          <div class="line-meta">
-            <div class="caption mono">${agoLabel(n.created_at)}</div>
-          </div>
-        </a>
-      </li>`;
-  }).join('');
+          <strong class="tw:block tw:text-[15px] ${n.unread ? 'tw:font-semibold' : 'tw:font-normal'} tw:text-propolis">${esc(n.body)}</strong>
+        </div>
+        <div class="tw:shrink-0 tw:text-right tw:font-mono tw:text-xs tw:text-propolis-40">${agoLabel(n.created_at)}</div>
+      </a>`;
+  });
+
+  const feedCard = card({
+    title: 'Recent activity',
+    right: countBadge(items.length),
+    flush: true,
+    body: items.length
+      ? `<ul class="tw:divide-y tw:divide-comb-shade/70">${rows.map((r) => `<li>${r}</li>`).join('')}</ul>`
+      : emptyState({
+        title: 'Nothing here yet',
+        text: 'Subscribe to a forum topic or a repository sub-topic and activity will appear here.',
+        action: button({ href: '#/forum', label: 'Browse the forum' }),
+        bordered: false,
+      }),
+  });
+
+  const me = currentUser();
+  const deliveryCard = card({
+    title: 'Delivery',
+    body: `
+      ${personRow({ initials: me.initials, name: me.name, sub: me.wa })}
+      <div class="field tw:mt-5">
+        <label for="n-digest">Email frequency</label>
+        <select id="n-digest">
+          <option value="instant" ${state.digest === 'instant' ? 'selected' : ''}>Each new post</option>
+          <option value="daily" ${state.digest === 'daily' ? 'selected' : ''}>Daily digest, 6am AEST</option>
+          <option value="weekly" ${state.digest === 'weekly' ? 'selected' : ''}>Weekly digest, Monday</option>
+        </select>
+      </div>
+      <p class="tw:text-sm tw:text-propolis-60">
+        ${me.wa
+          ? 'The address comes from your Wild Apricot record. Change it there and it updates here at next sign-in.'
+          : 'Update the address this goes to from <a href="#/settings" class="tw:underline tw:transition tw:hover:text-amber-deep">Account settings</a>.'}
+      </p>`,
+  });
+
+  const followCard = card({
+    title: 'What you follow',
+    right: countBadge(state.subs.length),
+    body: `
+      ${section('Forum topics', threadSubs.map((k) => {
+        /* threadById only knows the old mock seed threads — a real
+           Postgres thread (Phase 3) isn't resolvable here yet, so a
+           real thread subscription just doesn't get a title in this
+           list rather than crashing. Unrelated to notifications
+           themselves being real now (that's the activity feed
+           above) — this is only the subscription-chips sidebar. */
+        const t = threadById(k.slice(7));
+        return t ? `<a class="${CHIP_LINKS.outline}" href="#/forum/${k.slice(7)}">${esc(t.title.slice(0, 46))}${t.title.length > 46 ? '…' : ''}</a>` : '';
+      }))}
+      ${section('Repository sub-topics', repoSubs.map((k) => {
+        const s = subById(k.slice(5));
+        return s ? `<a class="${CHIP_LINKS.amber}" href="#/repository/${s.id}">${esc(s.name)}</a>` : '';
+      }))}
+      ${section('Categories', catSubs.map((k) => tag(k.slice(4), 'blue')))}
+      ${section('Research apiaries', apiarySubs.map(() => `<a class="${CHIP_LINKS.amber}" href="#/apiaries">New research apiaries</a>`))}
+      ${state.subs.length === 0 ? '<p class="tw:text-sm tw:text-propolis-60">Nothing followed yet.</p>' : ''}`,
+  });
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="eyebrow">${unread ? `${unread} unread` : 'All caught up'}</div>
-        <h1>Notifications</h1>
-      </div>
-      <div class="topbar-actions">
-        ${unread ? `<button class="btn btn-ghost btn-sm" id="mark-read">${icons.check} Mark all read</button>` : ''}
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <div class="grid grid-dash">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Recent activity</h2>
-            <span class="spacer"></span>
-            <span class="caption mono">${items.length}</span>
-          </div>
-          ${items.length ? `<ul class="list">${rows}</ul>` : `
-            <div class="empty">
-              <h3>Nothing here yet</h3>
-              <p>Subscribe to a forum topic or a repository sub-topic and activity will appear here.</p>
-              <a class="btn btn-primary" href="#/forum">Browse the forum</a>
-            </div>`}
-        </div>
-
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-head"><h2>Delivery</h2></div>
-            <div class="panel-body">
-              <div class="row" style="gap:var(--s3)">
-                ${avatar(currentUser())}
-                <div style="min-width:0">
-                  <div style="font-size:13.5px;font-weight:600">${esc(currentUser().name)}</div>
-                  <div class="caption mono" style="font-size:11.5px">${esc(currentUser().wa)}</div>
-                </div>
-              </div>
-              <div class="field" style="margin-top:var(--s5)">
-                <label for="n-digest">Email frequency</label>
-                <select id="n-digest">
-                  <option value="instant" ${state.digest === 'instant' ? 'selected' : ''}>Each new post</option>
-                  <option value="daily" ${state.digest === 'daily' ? 'selected' : ''}>Daily digest, 6am AEST</option>
-                  <option value="weekly" ${state.digest === 'weekly' ? 'selected' : ''}>Weekly digest, Monday</option>
-                </select>
-              </div>
-              <p class="caption">
-                ${currentUser().wa
-                  ? 'The address comes from your Wild Apricot record. Change it there and it updates here at next sign-in.'
-                  : 'Update the address this goes to from <a href="#/settings" style="text-decoration:underline">Account settings</a>.'}
-              </p>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>What you follow</h2>
-              <span class="spacer"></span>
-              <span class="caption mono">${state.subs.length}</span>
-            </div>
-            <div class="panel-body">
-              ${section('Forum topics', threadSubs.map((k) => {
-                /* threadById only knows the old mock seed threads — a real
-                   Postgres thread (Phase 3) isn't resolvable here yet, so a
-                   real thread subscription just doesn't get a title in this
-                   list rather than crashing. Unrelated to notifications
-                   themselves being real now (that's the activity feed
-                   above) — this is only the subscription-chips sidebar. */
-                const t = threadById(k.slice(7));
-                return t ? `<a class="tag tag-outline" href="#/forum/${k.slice(7)}">${esc(t.title.slice(0, 46))}${t.title.length > 46 ? '…' : ''}</a>` : '';
-              }))}
-              ${section('Repository sub-topics', repoSubs.map((k) => {
-                const s = subById(k.slice(5));
-                return s ? `<a class="tag tag-amber" href="#/repository/${s.id}">${esc(s.name)}</a>` : '';
-              }))}
-              ${section('Categories', catSubs.map((k) => `<span class="tag tag-blue">${esc(k.slice(4))}</span>`))}
-              ${section('Research apiaries', apiarySubs.map(() => '<a class="tag tag-amber" href="#/apiaries">New research apiaries</a>'))}
-              ${state.subs.length === 0 ? '<p class="caption">Nothing followed yet.</p>' : ''}
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="view">
+      ${pageHeader({
+        eyebrow: unread ? `${unread} unread` : 'All caught up',
+        title: 'Notifications',
+        actions: unread ? button({ id: 'mark-read', label: 'Mark all read', icon: icons.check, variant: 'outline', size: 'sm' }) : '',
+      })}
+      ${pageBody(twoColumn({ main: feedCard, side: deliveryCard + followCard }))}
     </div>`;
 
   setTimeout(() => {
@@ -188,8 +177,8 @@ function section(label, chips) {
   const clean = chips.filter(Boolean);
   if (!clean.length) return '';
   return `
-    <div style="margin-bottom:var(--s4)">
-      <div class="eyebrow" style="margin-bottom:var(--s2)">${label}</div>
-      <div class="row row-wrap" style="gap:6px">${clean.join('')}</div>
+    <div class="tw:mb-4 tw:last:mb-0">
+      <div class="tw:mb-2 tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.12em] tw:text-propolis-40">${label}</div>
+      <div class="tw:flex tw:flex-wrap tw:gap-1.5">${clean.join('')}</div>
     </div>`;
 }

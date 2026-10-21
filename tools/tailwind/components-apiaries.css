@@ -1,0 +1,70 @@
+/* Page-specific styles for the apiaries views, authored with Tailwind (@apply tw:...).
+   Only for what utilities in the markup cannot express (keyframes, state classes
+   set from JS, clip-paths, pseudo-element tricks). */
+
+/* ---- The comb (js/views/comb.js) ---------------------------------------
+   Every hive in an apiary as one honeycomb field. Pointy-top hexagon cells:
+   rows sit at three-quarter pitch and alternate rows shift half a cell, so
+   the field interlocks the way drawn comb does. JS hooks: .comb-field,
+   .comb-row, .cell, .cell-<status>, .is-picked. */
+
+.comb-field {
+  @apply tw:overflow-x-auto tw:rounded-xl tw:bg-comb-deep tw:p-5;
+}
+.comb-row { @apply tw:flex tw:gap-0.5; }
+.comb-row + .comb-row { margin-top: -8px; }
+.comb-row:nth-child(even) { margin-left: 15px; }
+
+.cell {
+  @apply tw:relative tw:cursor-pointer;
+  width: 28px;
+  height: 32px;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+  background: var(--propolis-40);
+  transition: transform 0.16s var(--ease), filter 0.16s var(--ease);
+  animation: comb-cell-fill 0.5s var(--ease-out) both;
+}
+.cell:hover, .cell:focus-visible {
+  @apply tw:z-3 tw:outline-none;
+  transform: scale(1.22);
+  filter: saturate(1.25) brightness(1.06);
+}
+.cell.is-picked {
+  @apply tw:z-4;
+  transform: scale(1.22);
+  box-shadow: 0 0 0 2px var(--propolis);
+}
+.cell-new      { background: var(--st-new); }
+.cell-thriving { background: var(--st-thriving); }
+.cell-good     { background: var(--st-good); }
+.cell-average  { background: var(--st-average); }
+.cell-poor     { background: var(--st-poor); }
+.cell-critical { background: var(--st-critical); }
+.cell-treating { background: var(--st-treating); }
+.cell-retired  { background: var(--st-retired); }
+
+@keyframes comb-cell-fill {
+  from { opacity: 0; transform: scale(0.5); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Smaller cells on narrow screens so the whole apiary still fits in one view
+   rather than becoming a sideways scroll. */
+@media (max-width: 720px) {
+  .comb-field { @apply tw:p-4; }
+  .cell { width: 22px; height: 25px; }
+  .comb-row + .comb-row { margin-top: -6px; }
+  .comb-row:nth-child(even) { margin-left: 12px; }
+}
+@media (max-width: 420px) {
+  .cell { width: 18px; height: 21px; }
+  .comb-row + .comb-row { margin-top: -5px; }
+  .comb-row:nth-child(even) { margin-left: 10px; }
+}
+
+/* The hive readout fades in when a cell is picked. */
+.readout-in { animation: comb-readout-in 0.3s var(--ease-out) both; }
+@keyframes comb-readout-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

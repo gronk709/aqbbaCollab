@@ -65,15 +65,17 @@ export function slugify(s) {
    list js/views/repository.js already builds (mergedDocuments); passed in
    here because this module has no idea a "documents panel" exists
    otherwise — it's just a Markdown renderer. */
+const DOC_JUMP = 'tw:text-amber-deep tw:underline tw:decoration-dotted tw:underline-offset-2 tw:hover:text-amber tw:[&_svg]:mr-[3px] tw:[&_svg]:inline tw:[&_svg]:size-[13px] tw:[&_svg]:align-[-2px]';
+
 function docLink(href, label, docs) {
   const target = href.slice(4).toLowerCase();
   const match = docs.find((d) => slugify(d.name).includes(target));
-  /* class="doc-jump" (css/main.css) plus the same link icon the Documents
-     panel already shows next to a link-type attachment — so the mention in
-     the article visually reads as "this points to that list", not just an
-     ordinary link. */
+  /* Dotted amber underline plus the same link icon the Documents panel
+     already shows next to a link-type attachment — so the mention in the
+     article visually reads as "this points to that list", not just an
+     ordinary link. Utilities, so it works wherever the HTML is injected. */
   return match
-    ? `<a href="#" class="doc-jump" data-jump-doc="${esc(match.key)}">${icons.link}${label}</a>`
+    ? `<a href="#" class="${DOC_JUMP}" data-jump-doc="${esc(match.key)}">${icons.link}${label}</a>`
     : label;
 }
 
@@ -106,7 +108,7 @@ export function mdToHtml(md, docs = []) {
     }
     if (/^\d+\.\s+/m.test(b) && b.split('\n').every((l) => /^\d+\.\s+/.test(l.trim()))) {
       const items = b.split('\n').map((l) => `<li>${inline(l.trim().replace(/^\d+\.\s+/, ''), docs)}</li>`).join('');
-      return `<ol style="padding-left:var(--s5);margin:var(--s3) 0">${items}</ol>`;
+      return `<ol>${items}</ol>`;
     }
     return `<p>${inline(b.replace(/\n/g, ' '), docs)}</p>`;
   }).join('');

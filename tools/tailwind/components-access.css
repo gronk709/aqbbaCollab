@@ -1,0 +1,7 @@
+/* Page-specific styles for the access views, authored with Tailwind (@apply tw:...).
+   Only for what utilities in the markup cannot express (keyframes, state classes
+   set from JS, clip-paths, pseudo-element tricks). */
+
+/* The sign-in page's ambient comb: each hex fades in (js/views/gate.js sets a
+   per-cell animation-delay) via tw:animate-[cell-draw_...]. */
+@keyframes cell-draw { to { opacity: 1; } }
