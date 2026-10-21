@@ -97,7 +97,9 @@ export const statBlock = ({ value, label }) => `
 /* The tinted band that opens a page: breadcrumb, eyebrow, title, actions on
    the title's line, an optional lede and optional extra content (filters).
    `crumbs` is [{label, href?}]; `actions` is trusted markup (buttons). */
-export function pageHeader({ crumbs = [], eyebrow = '', title, badge = '', lede = '', actions = '', below = '' }) {
+/* `compact` is for titles that are sentences (a forum topic, an article):
+   a size down so two lines don't dominate the page. */
+export function pageHeader({ crumbs = [], eyebrow = '', title, badge = '', lede = '', actions = '', below = '', compact = false }) {
   const trail = crumbs.length ? `
     <nav aria-label="Breadcrumb" class="tw:mb-4 tw:flex tw:flex-wrap tw:items-center tw:gap-1 tw:text-sm tw:text-propolis-60">
       ${crumbs.map((c, i) => `${i ? `<span class="tw:text-propolis-40">${CHEVRON}</span>` : ''}${c.href
@@ -111,7 +113,7 @@ export function pageHeader({ crumbs = [], eyebrow = '', title, badge = '', lede 
         <div class="tw:flex tw:flex-wrap tw:items-end tw:gap-x-6 tw:gap-y-4">
           <div class="tw:min-w-0 tw:flex-1 tw:basis-80">
             ${eyebrow ? `<p class="tw:mb-3 tw:font-mono tw:text-xs tw:font-medium tw:uppercase tw:tracking-[0.18em] tw:text-amber-deep">${eyebrow}</p>` : ''}
-            <h1 class="tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-2 tw:font-display tw:text-4xl tw:font-semibold tw:tracking-tight tw:text-propolis tw:md:text-5xl">${esc(title)}${badge}</h1>
+            <h1 class="tw:flex tw:flex-wrap tw:items-center tw:gap-x-4 tw:gap-y-2 tw:font-display tw:font-semibold tw:tracking-tight tw:text-propolis ${compact ? 'tw:text-3xl tw:md:text-4xl' : 'tw:text-4xl tw:md:text-5xl'}">${esc(title)}${badge}</h1>
           </div>
           ${actions ? `<div class="tw:flex tw:flex-wrap tw:items-center tw:gap-2">${actions}</div>` : ''}
         </div>
@@ -147,7 +149,7 @@ export function card({ title = '', right = '', body, flush = false, id = '' }) {
   return `
     <section${id ? ` id="${id}"` : ''} class="${CARD} tw:min-w-0 tw:overflow-hidden">
       ${title || right ? `
-      <div class="tw:flex tw:items-center tw:gap-3 ${flush ? 'tw:border-b tw:border-comb-shade/70 tw:px-6 tw:py-4' : 'tw:px-6 tw:pt-5'}">
+      <div class="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 ${flush ? 'tw:border-b tw:border-comb-shade/70 tw:px-6 tw:py-4' : 'tw:px-6 tw:pt-5'}">
         ${title ? `<h2 class="tw:font-display tw:text-xl tw:font-medium tw:text-propolis">${esc(title)}</h2>` : ''}
         ${right ? `<div class="tw:ml-auto tw:flex tw:items-center tw:gap-2">${right}</div>` : ''}
       </div>` : ''}
@@ -174,7 +176,7 @@ export const emptyState = ({ title, text = '', action = '', bordered = true }) =
    <tr> rows as markup. Cell padding, header type and row rules come from this
    wrapper, so rows only need plain <td>s. */
 const TABLE_CLS = [
-  'tw:w-full tw:text-left tw:text-sm',
+  'tw:w-full tw:border-collapse tw:text-left tw:text-sm',
   'tw:[&_th]:whitespace-nowrap tw:[&_th]:px-5 tw:[&_th]:py-3.5 tw:[&_th]:font-mono tw:[&_th]:text-[10px] tw:[&_th]:font-medium tw:[&_th]:uppercase tw:[&_th]:tracking-[0.12em] tw:[&_th]:text-propolis-40',
   'tw:[&_td]:px-5 tw:[&_td]:py-3.5 tw:[&_td]:align-middle',
   'tw:[&_tbody_tr]:border-t tw:[&_tbody_tr]:border-comb-shade/70 tw:[&_tbody_tr]:transition-colors tw:[&_tbody_tr:hover]:bg-comb/60',
@@ -202,6 +204,7 @@ const TAG_TONES = {
   red: 'tw:bg-mark-red/15 tw:text-[#8C2B21]',
   critical: 'tw:bg-[#7A1B14]/15 tw:text-[#6A1710]',
   grey: 'tw:bg-[#78746A]/15 tw:text-[#57534B]',
+  new: 'tw:bg-[#A09C92]/20 tw:text-[#5E5A51]',
   outline: 'tw:border tw:border-comb-shade tw:text-propolis-60',
 };
 

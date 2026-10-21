@@ -13,6 +13,9 @@
    css/main.css's custom properties via the @theme block in input.css).
    ========================================================================== */
 
+/* Browser defaults Tailwind's (disabled) preflight would have reset. */
+dd { margin-left: 0; }
+
 /* ---- Page chrome -------------------------------------------------------- */
 
 /* One content column for the whole site: 72rem wide, 1.5rem gutters, centred.
@@ -85,6 +88,8 @@
 
 /* ---- Forms -------------------------------------------------------------- */
 
+.field { margin-bottom: 1rem; }
+.field textarea { resize: vertical; min-height: 120px; line-height: 1.6; }
 .field > label:first-child { @apply tw:mb-2 tw:block tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.12em] tw:text-propolis-60; }
 .field input, .field select, .field textarea {
   @apply tw:w-full tw:rounded-lg tw:border tw:border-comb-shade tw:bg-white tw:px-3.5 tw:py-2.5 tw:text-[14.5px] tw:text-propolis tw:transition;

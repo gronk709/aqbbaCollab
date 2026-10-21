@@ -217,7 +217,7 @@ export function renderForum(data) {
       ${pageHeader({
         eyebrow: 'Member discussion',
         title: 'Forum',
-        actions: button({ id: 'new-topic', label: 'New topic', icon: icons.plus }),
+        actions: button({ id: 'new-topic', label: 'New topic', icon: icons.plus, size: 'sm' }),
       })}
       ${pageBody(twoColumn({
         main: card({ title: 'All topics', right: countBadge(threads.length), flush: true, body: topics }),
@@ -423,6 +423,7 @@ export function renderThread(data) {
       ${pageHeader({
         crumbs: [{ label: 'Forum', href: '#/forum' }, { label: t.category?.name || 'General' }],
         title: t.title,
+        compact: true,
         actions: subButton(key, on, 'Subscribe'),
       })}
       ${pageBody(twoColumn({

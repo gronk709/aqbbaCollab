@@ -61,7 +61,7 @@ export function renderProjects(all) {
       ${pageHeader({
         eyebrow: 'Coordinated research initiatives',
         title: 'Projects',
-        actions: admin ? button({ id: 'new-project', label: 'Add project', icon: icons.plus }) : '',
+        actions: admin ? button({ id: 'new-project', label: 'Add project', icon: icons.plus, size: 'sm' }) : '',
         lede: `A project is a question with a method attached, not a place — it can run at one research
           apiary, span all three, or wait for a member to volunteer a site. A Web Admin creates a
           project; the Project Managers and Contributors assigned to it build out its content from

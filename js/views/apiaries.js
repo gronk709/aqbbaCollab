@@ -176,7 +176,7 @@ export function renderApiaries(data) {
         actions: `
           ${button({ href: '#/reports/retired-hives', label: 'Retired hives', variant: 'outline', size: 'sm' })}
           ${subButton('apiary:new', isSubscribed('apiary:new'), 'Notify me of new sites', 'new research apiaries')}
-          ${isWebAdmin() ? button({ id: 'new-apiary', label: 'Add apiary', icon: icons.plus }) : ''}`,
+          ${isWebAdmin() ? button({ id: 'new-apiary', label: 'Add apiary', icon: icons.plus, size: 'sm' }) : ''}`,
       })}
       ${pageBody(`
         <div class="tw:space-y-8">

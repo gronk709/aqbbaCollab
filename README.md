@@ -259,23 +259,23 @@ respected.
 ```
 index.html
 css/app.css           The one stylesheet index.html loads — sets cascade order, imports the two below
-css/main.css          Design tokens and all component styles for pages not yet on Tailwind
+css/main.css          Design tokens (colours, fonts), the base reset and shared keyframes — nothing page-specific
 css/tailwind.css      Compiled Tailwind output (generated — see "Styling with Tailwind")
 js/
   app.js              Shell, hash router, delegated global behaviour
   data.js             Mock data. Seeded generator — hive records are stable across reloads
   store.js            Session state: subscriptions, read state, member-authored content
   ui.js               Render helpers, icon set, toasts, modals
-  components.js       Tailwind-styled building blocks shared by migrated pages
+  components.js       Shared Tailwind building blocks: pageHeader, pageBody, card, table, tag, button, ...
   projectArt.js       Project photos/artwork and the project card, shared by home and projects
   views/
-    home.js           Signed-in landing page (#/) — the first page on Tailwind
+    home.js           Signed-in landing page (#/)
     gate.js           Sign-in
     dashboard.js      Research dashboard
     comb.js           The honeycomb grid and hive readout
     apiaries.js       Apiary index and per-apiary record
     managers.js       Manager contact details: view, edit, validate
-    projects.js       Research initiatives: index, detail, content editor, team, join (Tailwind)
+    projects.js       Research initiatives: index, detail, content editor, team, join
     forum.js          Topic list, thread view, composer
     repository.js     Tracks, sub-topics, article reader
     marketplace.js    Listings, filters, composer, enquiry
@@ -283,29 +283,37 @@ js/
   content.js          Repository content loader + minimal Markdown renderer
 content/repository/   Real repository content: articles, documents, manifest
 tools/rebuild_manifest.py   Regenerates the content manifest from disk
-tools/tailwind/       Dev-time Tailwind compiler (pinned versions, entry file, build script)
+tools/tailwind/       Dev-time Tailwind compiler (pinned versions, entry file, build script) and
+                      the shared component styles: components.css, components-<area>.css
 ```
 
 ## Styling with Tailwind
 
-The site is moving onto Tailwind CSS one page at a time. So far: the signed-in
-landing page (`js/views/home.js`) and the projects index and project pages
-(`js/views/projects.js`). Pages that haven't moved yet keep using
-`css/main.css` and render exactly as before; so do pop-up forms (`modal()` in
-`js/ui.js`) everywhere, including on migrated pages.
+The whole site is styled with Tailwind CSS. Every page is built from the same
+pieces, so a header, card, table, tag or button looks the same wherever it
+appears.
 
+- **Page structure** comes from `js/components.js`: `pageHeader` (the tinted
+  band with breadcrumb, eyebrow, title and actions), `pageBody`, `twoColumn`,
+  `card`, `table`, `rowList`, `tag`, `filterPill`, `personRow`, `emptyState`,
+  `button` and friends. Write a new page from these rather than from raw markup.
 - **Classes are prefixed `tw:`** — `tw:flex`, `tw:md:grid-cols-3`,
-  `tw:hover:bg-white`. The prefix keeps Tailwind's names from colliding with
-  `main.css`'s own (`.grid`, `.row`, `.panel`...) while both exist side by side.
+  `tw:hover:bg-white`.
 - **Brand tokens are shared.** `tw:bg-propolis`, `tw:text-amber-deep`,
-  `tw:font-display` and friends resolve to `main.css`'s own custom properties, so
-  the palette and fonts still have a single source of truth. They're declared in
-  `tools/tailwind/input.css`.
+  `tw:font-display` and friends resolve to the custom properties in
+  `css/main.css` (declared for Tailwind in `tools/tailwind/input.css`), so the
+  palette and fonts have a single source of truth.
+- **`css/main.css`** now holds only those tokens, the base reset and the
+  keyframes. Everything else is Tailwind.
+- **Shared and page-specific styles** that utilities in markup can't express
+  (the hive grid's clip-path cells, the sign-in page's animated comb, state
+  classes toggled from JS, the pop-up form fields and buttons `.field`/`.btn`)
+  live in `tools/tailwind/components.css` and `components-<area>.css`, written
+  with `@apply tw:...` and compiled in the `components` layer.
 - **Write class names out in full.** Tailwind finds classes by scanning the
   source text, so a class assembled from pieces (`'tw:bg-' + tone`) is never
   generated. Pick from complete strings instead — see `js/components.js`.
-- **No preflight.** `main.css` already has its own base reset; Tailwind's would
-  restyle every unmigrated page.
+- **No preflight.** `main.css` ships the base reset; Tailwind's is switched off.
 
 After adding or changing any `tw:` class, regenerate the compiled CSS and commit
 it alongside your change:

@@ -58,7 +58,7 @@ export const icons = {
    aspect ratio is ~871:997. */
 export const brandMark = (w = 26) => `
 <img src="assets/logo.png" alt="AQBBA" width="${w}" height="${Math.round(w * 997 / 871)}"
-     style="display:block;object-fit:contain" />`;
+     class="tw:block tw:object-contain" />`;
 
 /* --- toasts -------------------------------------------------------------- */
 

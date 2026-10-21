@@ -78,7 +78,7 @@ export function renderMarketplace(listings) {
       ${pageHeader({
         eyebrow: 'Member to member · queens, stock and equipment',
         title: 'Marketplace',
-        actions: button({ id: 'new-listing', label: 'List an item', icon: icons.plus }),
+        actions: button({ id: 'new-listing', label: 'List an item', icon: icons.plus, size: 'sm' }),
         lede: `Listings are visible to members only. AQBBA does not broker sales or hold funds —
           arrange payment and freight directly with the seller.`,
         below: `<div class="tw:flex tw:flex-wrap tw:gap-2" role="group" aria-label="Filter listings by kind">

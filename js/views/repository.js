@@ -179,7 +179,7 @@ export function renderRepository(tracks) {
       ${pageHeader({
         eyebrow: `Member knowledge base · ${totalItems} items`,
         title: 'Repository',
-        actions: contributable.length ? button({ id: 'contribute', label: 'Contribute', icon: icons.pen }) : '',
+        actions: contributable.length ? button({ id: 'contribute', label: 'Contribute', icon: icons.pen, size: 'sm' }) : '',
         lede: `Three tracks in sequence. Foundation assumes nothing; Queen Production assumes
           Foundation; Queen Breeding assumes both. Subscribe to any sub-topic to be emailed
           when a member adds to it.`,
@@ -799,6 +799,7 @@ export function renderArticle(data, subId, slug) {
         ],
         eyebrow: `${esc(track.ord)} · ${esc(track.name)}`,
         title,
+        compact: true,
         actions: `${canEdit ? button({ id: 'edit-this-article', label: 'Edit', icon: icons.pen, variant: 'outline', size: 'sm' }) : ''}${canDelete ? button({ id: 'delete-this-article', label: 'Delete', icon: icons.x, variant: 'outline', size: 'sm' }) : ''}${subButton(key, on, 'Subscribe')}`,
       })}
       ${pageBody(twoColumn({
