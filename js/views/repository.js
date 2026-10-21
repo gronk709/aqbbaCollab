@@ -30,7 +30,7 @@ import {
   addRepositoryArticle, updateRepositoryArticle, deleteRepositoryArticle,
   addRepositoryDocument, addRepositoryLink, deleteRepositoryDocument, openRepositoryDocument,
   setRepositoryTeamMember, removeRepositoryTeamMember, loadRealMembers, loadSubTopicDocuments,
-  isSubscribed, uploadRepositoryImage, signRepositoryImages,
+  isSubscribed, currentUser, uploadRepositoryImage, signRepositoryImages,
   REPOSITORY_DOC_MAX_BYTES, REPOSITORY_DOC_ACCEPT,
 } from '../store.js';
 import { contentFor, articleFor, fetchArticleBody, mdToHtml, hydrateImages, slugify } from '../content.js';
@@ -694,7 +694,9 @@ export function renderSubTopic(data) {
 
   let mainColumn;
   if (newest) {
-    const canEditNewest = newest.source === 'db' && canContribute;
+    /* Editing is author-only (a Web Admin can also correct one) — mirrors the
+       repository_articles_update policy. */
+    const canEditNewest = newest.source === 'db' && canContribute && (data.isAdmin || newest.authorId === currentUser().id);
     const canDeleteNewest = newest.source === 'db' && canManage;
     mainColumn = `
       <article class="${CARD} tw:min-w-0 tw:overflow-hidden">
@@ -827,7 +829,7 @@ export function renderArticle(data, subId, slug) {
   const title = dbArticle ? dbArticle.title : fileArticle.title;
   const who = dbArticle ? { name: dbArticle.author?.name || 'Member', sub: 'Contributor' } : authorDisplay(fileArticle.author);
   const dateLabel = dbArticle ? (dbArticle.updated_at || dbArticle.created_at).slice(0, 10) : fileArticle.date;
-  const canEdit = dbArticle && canContribute;
+  const canEdit = dbArticle && canContribute && (data.isAdmin || dbArticle.author?.id === currentUser().id);
   const canDelete = dbArticle && canManage;
 
   const html = `
