@@ -398,7 +398,7 @@ association material.
 `js/images.js` resizes every picked image in the browser before upload — longest
 side 1600px, re-encoded and shrunk toward ~500KB — so what is stored is always
 web-sized. In a repository article, "Add image" uploads it to the private
-`repository-documents` bucket under `images/<sub-topic>/` and inserts
+`repository-documents` bucket under `<sub-topic>/images/` (the first path segment must be the sub-topic id: the storage policy checks access to it) and inserts
 `![description](img:<path>)` into the Markdown; the page swaps in short-lived
 signed URLs when it renders, and removing an image from the text (or deleting
 the article) deletes the stored file. In the forum, the "Images" field on a new

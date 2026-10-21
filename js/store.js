@@ -582,6 +582,27 @@ export async function addPost(threadId, body, links = [], files = []) {
   }
 }
 
+/* Editing a topic's title/opening post or a reply's text. Both are limited
+   to the author (or a Web Admin) by RLS — forum_threads_update and
+   forum_posts_update — these checks just give a clear error first. */
+export async function updateForumThread(thread, { title, body }) {
+  const me = requireRealMember();
+  if (thread.author.id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only edit your own topic.');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('forum_threads').update({ title, body }).eq('id', thread.id).select('id');
+  if (error) throw error;
+  if (!data.length) throw new Error('You can only edit your own topic.');
+}
+
+export async function updateForumPost(post, body) {
+  const me = requireRealMember();
+  if (post.author.id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only edit your own replies.');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('forum_posts').update({ body }).eq('id', post.id).select('id');
+  if (error) throw error;
+  if (!data.length) throw new Error('You can only edit your own replies.');
+}
+
 /* A reply, unlike the topic itself, was never frozen (see the permissions
    migration's header comment for why those two are treated differently)
    — its author can still remove it outright, same as Web Admin
@@ -905,7 +926,7 @@ export async function deleteRepositoryArticle(id) {
 export async function uploadRepositoryImage(subTopicId, file) {
   requireRealMember();
   const supabase = await getSupabase();
-  const path = `images/${subTopicId}/${crypto.randomUUID()}-${safeStorageSegment(file.name)}`;
+  const path = `${subTopicId}/images/${crypto.randomUUID()}-${safeStorageSegment(file.name)}`;
   const { error } = await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).upload(path, file, { contentType: file.type });
   if (error) throw error;
   return path;

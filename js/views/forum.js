@@ -11,7 +11,7 @@
 
 import { relDays, projectForThread } from '../data.js';
 import {
-  isSubscribed, addThread, addPost, deleteForumPost, state, currentUser, isWebAdmin,
+  isSubscribed, addThread, addPost, deleteForumPost, updateForumThread, updateForumPost, state, currentUser, isWebAdmin,
   openForumAttachment, addForumAttachments, updateForumAttachment, deleteForumAttachment,
   signForumImages, ATTACHMENT_MAX_BYTES, ATTACHMENT_ACCEPT,
 } from '../store.js';
@@ -169,6 +169,46 @@ function openEditAttachmentModal(a, onSaved) {
     }
     closeModal();
     toast('Link updated.');
+    onSaved();
+  });
+}
+
+/* Edit a topic (title + opening post) or a reply (text only). Authors edit
+   their own; the same button shows for a Web Admin correcting one. */
+function openEditPostModal(post, thread, onSaved) {
+  const isOp = post.id === 'op';
+  const body = `
+    ${isOp ? `
+    <div class="field">
+      <label for="ep-title">Topic title</label>
+      <input id="ep-title" value="${esc(thread.title)}">
+    </div>` : ''}
+    <div class="field">
+      <label for="ep-body">${isOp ? 'First post' : 'Reply'}</label>
+      <textarea id="ep-body">${esc(post.body)}</textarea>
+    </div>`;
+  const actions = `
+    <button class="btn btn-ghost" data-close>Cancel</button>
+    <button class="btn btn-primary" id="save-post">Save</button>`;
+  const scrim = modal({ title: isOp ? 'Edit topic' : 'Edit reply', body, actions });
+
+  scrim.querySelector('#save-post').addEventListener('click', async (e) => {
+    const text = scrim.querySelector('#ep-body').value.trim();
+    const title = isOp ? scrim.querySelector('#ep-title').value.trim() : null;
+    if (!text || (isOp && !title)) { toast(isOp ? 'A title and a first post are required.' : 'A reply can\u2019t be empty.'); return; }
+    e.target.disabled = true;
+    e.target.textContent = 'Saving…';
+    try {
+      if (isOp) await updateForumThread(thread, { title, body: text });
+      else await updateForumPost(post, text);
+    } catch (err) {
+      toast(`Couldn't save: ${err.message}`);
+      e.target.disabled = false;
+      e.target.textContent = 'Save';
+      return;
+    }
+    closeModal();
+    toast(isOp ? 'Topic updated.' : 'Reply updated.');
     onSaved();
   });
 }
@@ -411,6 +451,7 @@ export function renderThread(data) {
     /* The opening post is the topic itself — frozen, not deletable here.
        A reply was never frozen, so its author (or Web Admin) can remove
        it outright. */
+    const canEditHere = p.author.id === me.id || admin;
     const canDeleteHere = p.id !== 'op' && (p.author.id === me.id || admin);
     return `
       <article class="tw:grid tw:grid-cols-[2rem_minmax(0,1fr)] tw:gap-4 tw:px-6 tw:py-6" id="post-${p.id}">
@@ -420,6 +461,7 @@ export function renderThread(data) {
             <strong class="tw:text-[15px] tw:font-semibold tw:text-propolis">${esc(p.author.name)}</strong>
             <span class="tw:text-sm tw:text-propolis-40">${esc(roleLabelFrom(p.author.roles))}</span>
             <span class="tw:ml-auto tw:font-mono tw:text-xs tw:text-propolis-40">${relDays(daysAgo(p.created_at))}</span>
+            ${canEditHere ? `<button type="button" class="tw:grid tw:size-6 tw:shrink-0 tw:place-items-center tw:rounded-md tw:text-propolis-40 tw:transition tw:hover:bg-comb tw:hover:text-propolis tw:[&_svg]:size-3" data-edit-post="${p.id}" aria-label="${p.id === 'op' ? 'Edit topic' : 'Edit reply'}">${icons.pen}</button>` : ''}
             ${canDeleteHere ? `<button type="button" class="tw:grid tw:size-6 tw:shrink-0 tw:place-items-center tw:rounded-md tw:text-propolis-40 tw:transition tw:hover:bg-mark-red/10 tw:hover:text-mark-red tw:[&_svg]:size-3" data-delete-reply="${p.id}" aria-label="Delete reply">${icons.x}</button>` : ''}
           </div>
           <div class="tw:space-y-4 tw:font-display tw:text-[17px] tw:leading-relaxed tw:text-propolis tw:[overflow-wrap:anywhere]">${paras}</div>
@@ -548,6 +590,15 @@ export function renderThread(data) {
     document.querySelectorAll('[data-edit-attachment]').forEach((el) => {
       el.addEventListener('click', () => {
         openEditAttachmentModal(attachmentsById[el.dataset.editAttachment], () => {
+          window.__aqbba_invalidateData();
+          window.__aqbba_render();
+        });
+      });
+    });
+
+    document.querySelectorAll('[data-edit-post]').forEach((el) => {
+      el.addEventListener('click', () => {
+        openEditPostModal(postsById[el.dataset.editPost], t, () => {
           window.__aqbba_invalidateData();
           window.__aqbba_render();
         });
