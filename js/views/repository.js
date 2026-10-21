@@ -36,6 +36,30 @@ import {
 import { contentFor, articleFor, fetchArticleBody, mdToHtml, slugify } from '../content.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 import { members } from '../data.js';
+import {
+  button, pageHeader, pageBody, twoColumn, card, CARD, countBadge, rowList, personRow, emptyState,
+  ICON_BUTTON, ICON_BUTTON_DANGER,
+} from '../components.js';
+
+/* Article body (js/content.js's Markdown renderer) is injected HTML, so its
+   type is set from a wrapper with arbitrary variants rather than on each tag.
+   Serif body ~15.5px / 1.72; headings carry the amber underline bar used by
+   sectionHeading; blockquote has the amber rule. Whole class strings only. */
+const MD_PROSE = [
+  'tw:font-display tw:text-[15.5px] tw:leading-[1.72] tw:text-[#33291C] tw:md:text-[16.5px]',
+  'tw:[&_p]:mt-4 tw:[&_p:first-child]:mt-0',
+  'tw:[&_h3]:mt-12 tw:[&_h3]:mb-5 tw:[&_h3]:font-display tw:[&_h3]:text-2xl tw:[&_h3]:font-medium tw:[&_h3]:leading-snug tw:[&_h3]:tracking-tight tw:[&_h3]:text-propolis tw:[&_h3:first-child]:mt-0',
+  "tw:[&_h3]:after:mt-2.5 tw:[&_h3]:after:block tw:[&_h3]:after:h-1 tw:[&_h3]:after:w-10 tw:[&_h3]:after:rounded-full tw:[&_h3]:after:bg-amber tw:[&_h3]:after:content-['']",
+  'tw:[&_ul]:my-5 tw:[&_ul]:list-disc tw:[&_ul]:pl-6 tw:[&_ol]:my-5 tw:[&_ol]:list-decimal tw:[&_ol]:pl-6',
+  'tw:[&_li]:mb-2 tw:[&_li]:pl-1 tw:[&_li]:marker:text-amber',
+  'tw:[&_blockquote]:my-7 tw:[&_blockquote]:border-l-[3px] tw:[&_blockquote]:border-amber tw:[&_blockquote]:pl-5 tw:[&_blockquote]:italic tw:[&_blockquote]:text-propolis-60',
+  'tw:[&_strong]:font-semibold tw:[&_strong]:text-propolis',
+  'tw:[&_a]:text-amber-deep tw:[&_a]:underline tw:[&_a]:underline-offset-2 tw:[&_a]:hover:text-amber',
+].join(' ');
+
+const LOADING = '<p class="tw:text-sm tw:text-propolis-40">Loading…</p>';
+
+const initialsOf = (name) => String(name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
 /* Article authors in front-matter are member ids where possible (resolved
    via the seed roster — real, non-seed authors aren't supported by this
@@ -99,14 +123,14 @@ function subRow(s) {
   const c = contentFor(s.id);
   const n = itemCount(s);
   return `
-    <div class="sub">
-      <div class="sub-title">
-        <strong><a href="#/repository/${s.id}">${esc(s.name)}</a></strong>
-        <span>${esc(s.summary)}</span>
+    <div class="tw:flex tw:flex-wrap tw:items-center tw:gap-x-5 tw:gap-y-3 tw:px-6 tw:py-4 tw:transition tw:hover:bg-comb/60 tw:md:px-8">
+      <div class="tw:min-w-0 tw:flex-1 tw:basis-64">
+        <a href="#/repository/${s.id}" class="tw:block tw:font-display tw:text-lg tw:font-medium tw:text-propolis tw:transition tw:hover:text-amber-deep">${esc(s.name)}</a>
+        <p class="tw:mt-0.5 tw:text-sm tw:leading-snug tw:text-propolis-60">${esc(s.summary)}</p>
       </div>
-      <div style="flex:none;text-align:right;min-width:96px">
-        <div class="mono" style="font-size:12.5px">${n} ${n === 1 ? 'item' : 'items'}</div>
-        <div class="caption" style="font-size:11px">${c || s.dbCount ? 'documents attached' : 'no content yet'}</div>
+      <div class="tw:shrink-0 tw:text-left tw:sm:min-w-28 tw:sm:text-right">
+        <div class="tw:font-mono tw:text-[13px] tw:text-propolis">${n} ${n === 1 ? 'item' : 'items'}</div>
+        <div class="tw:font-mono tw:text-[10.5px] tw:uppercase tw:tracking-[0.12em] tw:text-propolis-40">${c || s.dbCount ? 'documents attached' : 'no content yet'}</div>
       </div>
       ${subButton(key, on, 'Subscribe')}
     </div>`;
@@ -119,58 +143,48 @@ export function renderRepository(tracks) {
   const contributable = allSubsFlat.filter((s) => s.canContribute);
 
   const tracksHTML = tracks.map((track) => `
-    <section class="track">
-      <div class="track-head">
-        <div class="track-ord mono">${track.ord}</div>
-        <div>
-          <h2>${esc(track.name)}</h2>
-          <p>${esc(track.blurb)}</p>
+    <section class="${CARD} tw:overflow-hidden">
+      <div class="tw:flex tw:items-start tw:gap-4 tw:px-6 tw:py-7 tw:md:gap-6 tw:md:px-8">
+        <div class="tw:w-11 tw:shrink-0 tw:font-display tw:text-3xl tw:leading-none tw:font-medium tw:text-amber/50 tw:md:w-20 tw:md:text-6xl">${track.ord}</div>
+        <div class="tw:min-w-0">
+          <h2 class="tw:font-display tw:text-2xl tw:font-medium tw:tracking-tight tw:text-propolis tw:md:text-3xl">${esc(track.name)}</h2>
+          <p class="tw:mt-2 tw:max-w-[62ch] tw:leading-relaxed tw:text-propolis-60">${esc(track.blurb)}</p>
         </div>
       </div>
-      <div class="track-subs">${track.subs.map(subRow).join('')}</div>
+      <div class="tw:divide-y tw:divide-comb-shade/70 tw:border-t tw:border-comb-shade/70">${track.subs.map(subRow).join('')}</div>
     </section>`).join('');
 
+  const subscribed = allSubsFlat.filter((s) => isSubscribed(`repo:${s.id}`));
+  const subscriptions = card({
+    title: 'Your subscriptions',
+    right: countBadge(subCount),
+    body: subCount === 0
+      ? emptyState({
+        title: 'Nothing subscribed yet',
+        text: 'Subscribe to a sub-topic and new contributions arrive by email.',
+        bordered: false,
+      })
+      : `
+        <div class="tw:flex tw:flex-wrap tw:gap-2">
+          ${subscribed.map((s) =>
+            `<a class="tw:inline-flex tw:items-center tw:gap-1.5 tw:whitespace-nowrap tw:rounded-full tw:bg-amber-wash tw:px-3 tw:py-1.5 tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.06em] tw:text-amber-deep tw:transition tw:hover:bg-amber/25" href="#/repository/${s.id}">${icons.bellOn} ${esc(s.name)}</a>`).join('')}
+        </div>
+        <p class="tw:mt-4 tw:text-sm tw:text-propolis-60">
+          Delivered to the address on your Wild Apricot record.
+        </p>`,
+  });
+
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="eyebrow">Member knowledge base · ${totalItems} items</div>
-        <h1>Repository</h1>
-      </div>
-      <div class="topbar-actions">
-        ${contributable.length ? `<button class="btn btn-primary btn-sm" id="contribute">${icons.pen} Contribute</button>` : ''}
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <p class="lede" style="max-width:64ch;margin-bottom:var(--s6)">
-        Three tracks in sequence. Foundation assumes nothing; Queen Production assumes
-        Foundation; Queen Breeding assumes both. Subscribe to any sub-topic to be emailed
-        when a member adds to it.
-      </p>
-
-      ${tracksHTML}
-
-      <div class="panel" style="margin-top:var(--s6)">
-        <div class="panel-head">
-          <h2>Your subscriptions</h2>
-          <span class="spacer"></span>
-          <span class="caption mono">${subCount}</span>
-        </div>
-        <div class="panel-body">
-          ${subCount === 0 ? `
-            <div class="empty" style="padding:var(--s5) 0">
-              <h3>Nothing subscribed yet</h3>
-              <p>Subscribe to a sub-topic and new contributions arrive by email.</p>
-            </div>` : `
-            <div class="row row-wrap" style="gap:var(--s2)">
-              ${allSubsFlat.filter((s) => isSubscribed(`repo:${s.id}`)).map((s) =>
-                `<a class="tag tag-amber" href="#/repository/${s.id}">${icons.bellOn} ${esc(s.name)}</a>`).join('')}
-            </div>
-            <p class="caption" style="margin-top:var(--s4)">
-              Delivered to the address on your Wild Apricot record.
-            </p>`}
-        </div>
-      </div>
+    <div class="view">
+      ${pageHeader({
+        eyebrow: `Member knowledge base · ${totalItems} items`,
+        title: 'Repository',
+        actions: contributable.length ? button({ id: 'contribute', label: 'Contribute', icon: icons.pen }) : '',
+        lede: `Three tracks in sequence. Foundation assumes nothing; Queen Production assumes
+          Foundation; Queen Breeding assumes both. Subscribe to any sub-topic to be emailed
+          when a member adds to it.`,
+      })}
+      ${pageBody(`<div class="tw:space-y-8">${tracksHTML}${subscriptions}</div>`)}
     </div>`;
 
   setTimeout(() => {
@@ -211,21 +225,21 @@ function openContribute(eligibleSubs, preselect) {
       <div class="field">
         <label for="c-body">Content</label>
         <textarea id="c-body" placeholder="Write for a member who knows the previous track but not this one."></textarea>
-        <p class="caption" style="margin-top:6px">Markdown — headings, **bold**, *italic*, lists, links.</p>
+        <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Markdown — headings, **bold**, *italic*, lists, links.</p>
       </div>
       <div class="field">
         <label for="c-doc-picker">Add document or link</label>
         <select id="c-doc-picker">
           <option value="">Choose one to insert into the content above…</option>
         </select>
-        <p class="caption" style="margin-top:6px">Inserts a link that jumps to that item in the Documents list once published — add the document or link itself first if it isn't in the list yet.</p>
+        <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Inserts a link that jumps to that item in the Documents list once published — add the document or link itself first if it isn't in the list yet.</p>
       </div>
     </div>
     <div id="c-document-fields" hidden>
       <div class="field">
         <label for="c-file">File</label>
         <input type="file" id="c-file" accept="${REPOSITORY_DOC_ACCEPT}">
-        <p class="caption" style="margin-top:6px">Supported formats: PDF, Word, Spreadsheet, Slides, Text, Images/JPG (Max 20MB)</p>
+        <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Supported formats: PDF, Word, Spreadsheet, Slides, Text, Images/JPG (Max 20MB)</p>
       </div>
     </div>
     <div id="c-link-fields" hidden>
@@ -329,14 +343,14 @@ function openEditArticleModal(article, subId, onSaved) {
     <div class="field">
       <label for="e-body">Content</label>
       <textarea id="e-body">${esc(article.body)}</textarea>
-      <p class="caption" style="margin-top:6px">Markdown — headings, **bold**, *italic*, lists, links.</p>
+      <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Markdown — headings, **bold**, *italic*, lists, links.</p>
     </div>
     <div class="field">
       <label for="e-doc-picker">Add document or link</label>
       <select id="e-doc-picker">
         <option value="">Choose one to insert into the content above…</option>
       </select>
-      <p class="caption" style="margin-top:6px">Inserts a link that jumps to that item in the Documents list once published — add the document or link itself first if it isn't in the list yet.</p>
+      <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Inserts a link that jumps to that item in the Documents list once published — add the document or link itself first if it isn't in the list yet.</p>
     </div>`;
   const actions = `
     <button class="btn btn-ghost" data-close>Cancel</button>
@@ -367,25 +381,15 @@ function openEditArticleModal(article, subId, onSaved) {
 /* --- team (Repository Manager / Creator assignment) ----------------------- */
 
 function teamPanelHTML(data) {
-  return `
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Repository team</h2>
-        <span class="spacer"></span>
-        ${data.isAdmin ? `<button type="button" class="btn btn-ghost btn-sm" id="manage-repo-team">${icons.pen} Manage</button>` : ''}
-      </div>
-      <div class="panel-body panel-body-flush">
-        ${data.team.length ? data.team.map((t) => `
-          <div class="breeder">
-            ${avatar(t.member)}
-            <div style="flex:1;min-width:0">
-              <strong style="font-size:13.5px;font-weight:600;display:block">${esc(t.member.name)}</strong>
-              <span class="caption">${t.access_level === 'manage' ? 'Repository Manager' : 'Creator'}</span>
-            </div>
-          </div>`).join('') : `
-          <div class="empty" style="padding:var(--s5)"><p class="caption">No one assigned yet — a Web Admin assigns Repository Managers and Creators here.</p></div>`}
-      </div>
-    </div>`;
+  const manage = data.isAdmin
+    ? `<button type="button" id="manage-repo-team" class="tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-lg tw:px-2.5 tw:py-1 tw:text-sm tw:font-medium tw:text-amber-deep tw:transition tw:hover:bg-amber-wash">${icons.pen} Manage</button>`
+    : '';
+  return card({
+    title: 'Repository team', right: manage,
+    body: data.team.length
+      ? `<ul class="tw:space-y-3">${data.team.map((t) => `<li>${personRow({ ...t.member, sub: t.access_level === 'manage' ? 'Repository Manager' : 'Creator' })}</li>`).join('')}</ul>`
+      : '<p class="tw:text-sm tw:text-propolis-60">No one assigned yet — a Web Admin assigns Repository Managers and Creators here.</p>',
+  });
 }
 
 async function openManageRepoTeamModal(subId, data) {
@@ -400,16 +404,16 @@ async function openManageRepoTeamModal(subId, data) {
   const eligible = realMembers.filter((m) => !already.has(m.id));
 
   const body = `
-    <div style="border:1px solid var(--comb-shade);border-radius:4px;margin-bottom:var(--s5)">
+    <div class="tw:mb-5 tw:divide-y tw:divide-comb-shade/70 tw:rounded-xl tw:border tw:border-comb-shade">
       ${data.team.length ? data.team.map((t) => `
-        <div class="breeder">
+        <div class="tw:flex tw:items-center tw:gap-3 tw:px-4 tw:py-3">
           ${avatar(t.member)}
-          <div style="flex:1;min-width:0">
-            <strong style="font-size:13.5px;font-weight:600;display:block">${esc(t.member.name)}</strong>
-            <span class="caption">${t.access_level === 'manage' ? 'Repository Manager' : 'Creator'}</span>
+          <div class="tw:min-w-0 tw:flex-1">
+            <strong class="tw:block tw:text-sm tw:font-semibold">${esc(t.member.name)}</strong>
+            <span class="tw:text-xs tw:text-propolis-40">${t.access_level === 'manage' ? 'Repository Manager' : 'Creator'}</span>
           </div>
-          <button type="button" class="attach-remove" data-remove-repo-team="${t.member_id}" aria-label="Remove">${icons.x}</button>
-        </div>`).join('') : `<div class="empty" style="padding:var(--s4)"><p class="caption">No one assigned yet.</p></div>`}
+          <button type="button" class="${ICON_BUTTON_DANGER}" data-remove-repo-team="${t.member_id}" aria-label="Remove">${icons.x}</button>
+        </div>`).join('') : `<p class="tw:p-4 tw:text-sm tw:text-propolis-40">No one assigned yet.</p>`}
     </div>
     ${eligible.length ? `
       <div class="field">
@@ -424,7 +428,7 @@ async function openManageRepoTeamModal(subId, data) {
           <option value="manage">Repository Manager — add, edit, delete content</option>
           <option value="contribute">Creator — add, edit content, no delete</option>
         </select>
-      </div>` : '<p class="caption">Every member is already on this sub-topic\'s team.</p>'}`;
+      </div>` : '<p class="tw:text-sm tw:text-propolis-40">Every member is already on this sub-topic\'s team.</p>'}`;
 
   const actions = eligible.length ? `
     <button class="btn btn-ghost" data-close>Close</button>
@@ -490,8 +494,7 @@ function bindDocJumpLinks(container) {
     const el = document.getElementById(docAnchorId(a.dataset.jumpDoc));
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    /* Same .flash/post-flash convention as the forum's "Jump to post"
-       (js/views/forum.js) — one shared animation, two call sites. */
+    /* .doc-row.flash is the highlight animation (tools/tailwind/components-repository.css). */
     el.classList.add('flash');
     setTimeout(() => el.classList.remove('flash'), 1600);
   });
@@ -550,62 +553,48 @@ function bindDocPicker(scrim, pickerId, bodyFieldId, subIdOf, watchEl) {
 
 function attachmentsPanel(docs, canContribute, canManage) {
   if (!docs.length) return '';
-  return `
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Documents</h2>
-        <span class="spacer"></span>
-        <span class="caption mono">${docs.length}</span>
-      </div>
-      <div class="panel-body panel-body-flush">
-        ${docs.map((d) => {
-          if (d.source === 'file') {
-            return `
-              <a class="sub" id="${docAnchorId(d.key)}" href="${d.href}" target="_blank" rel="noopener">
-                <div class="sub-title">
-                  <strong>${esc(d.name)}</strong>
-                  <span>${esc(d.meta)}</span>
-                </div>
-              </a>`;
-          }
-          return `
-            <div class="sub" id="${docAnchorId(d.key)}">
-              <button type="button" class="sub-title" style="text-align:left;background:none;border:none;cursor:pointer" data-open-doc="${d.id}">
-                <strong>${d.isLink ? `${icons.link} ` : ''}${esc(d.name)}</strong>
-                <span>${esc(d.meta)}</span>
-              </button>
-              ${canManage ? `<button type="button" class="attach-remove" data-delete-doc="${d.id}" aria-label="Delete">${icons.x}</button>` : ''}
-            </div>`;
-        }).join('')}
-      </div>
-    </div>`;
+  const ROW = 'doc-row tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-3.5 tw:transition tw:hover:bg-comb/60';
+  return card({
+    title: 'Documents', right: countBadge(docs.length), flush: true,
+    body: rowList(docs.map((d) => {
+      if (d.source === 'file') {
+        return `
+          <a class="${ROW}" id="${docAnchorId(d.key)}" href="${d.href}" target="_blank" rel="noopener">
+            <div class="tw:min-w-0 tw:flex-1">
+              <strong class="tw:block tw:text-sm tw:font-semibold tw:text-propolis">${esc(d.name)}</strong>
+              <span class="tw:block tw:text-xs tw:leading-snug tw:text-propolis-40 tw:[overflow-wrap:anywhere]">${esc(d.meta)}</span>
+            </div>
+          </a>`;
+      }
+      return `
+        <div class="${ROW}" id="${docAnchorId(d.key)}">
+          <button type="button" class="tw:min-w-0 tw:flex-1 tw:cursor-pointer tw:text-left" data-open-doc="${d.id}">
+            <strong class="tw:block tw:text-sm tw:font-semibold tw:text-propolis">${d.isLink ? `${icons.link} ` : ''}${esc(d.name)}</strong>
+            <span class="tw:block tw:text-xs tw:leading-snug tw:text-propolis-40 tw:[overflow-wrap:anywhere]">${esc(d.meta)}</span>
+          </button>
+          ${canManage ? `<button type="button" class="${ICON_BUTTON_DANGER}" data-delete-doc="${d.id}" aria-label="Delete">${icons.x}</button>` : ''}
+        </div>`;
+    })),
+  });
 }
 
 function articleListPanel(s, articles, activeKey = null) {
   if (!articles.length) return '';
-  return `
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Articles</h2>
-        <span class="spacer"></span>
-        <span class="caption mono">${articles.length}</span>
-      </div>
-      <div class="panel-body panel-body-flush">
-        ${articles.map((a) => {
-          const here = a.key === activeKey;
-          const href = a.source === 'file' ? `#/repository/${s.id}/${a.slug}` : `#/repository/${s.id}/${a.id}`;
-          return `
-            <a class="sub" href="${href}"
-               style="${here ? 'background:var(--amber-wash)' : ''}">
-              <div class="sub-title">
-                <strong>${esc(a.title)}</strong>
-                <span>${esc(a.authorName)}${a.dateLabel ? ` · ${esc(a.dateLabel)}` : ''}</span>
-              </div>
-              ${icons.chevron}
-            </a>`;
-        }).join('')}
-      </div>
-    </div>`;
+  return card({
+    title: 'Articles', right: countBadge(articles.length), flush: true,
+    body: rowList(articles.map((a) => {
+      const here = a.key === activeKey;
+      const href = a.source === 'file' ? `#/repository/${s.id}/${a.slug}` : `#/repository/${s.id}/${a.id}`;
+      return `
+        <a class="tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-3.5 tw:transition ${here ? 'tw:bg-amber-wash' : 'tw:hover:bg-comb/60'}" href="${href}">
+          <div class="tw:min-w-0 tw:flex-1">
+            <strong class="tw:block tw:text-sm tw:font-semibold tw:text-propolis">${esc(a.title)}</strong>
+            <span class="tw:text-xs tw:text-propolis-40">${esc(a.authorName)}${a.dateLabel ? ` · ${esc(a.dateLabel)}` : ''}</span>
+          </div>
+          <span class="tw:shrink-0 tw:text-propolis-40">${icons.chevron}</span>
+        </a>`;
+    })),
+  });
 }
 
 /* Fetch a file-based article body into the placeholder the page rendered. */
@@ -617,7 +606,7 @@ function hydrateFileArticle(article, docs) {
       const md = await fetchArticleBody(article);
       el.innerHTML = mdToHtml(md, docs);
     } catch {
-      el.innerHTML = '<p class="caption">This article could not be loaded. Check that the content files were pushed alongside the manifest.</p>';
+      el.innerHTML = '<p class="tw:text-sm tw:text-propolis-40">This article could not be loaded. Check that the content files were pushed alongside the manifest.</p>';
     }
   }, 0);
 }
@@ -667,99 +656,72 @@ export function renderSubTopic(data) {
     const canEditNewest = newest.source === 'db' && canContribute;
     const canDeleteNewest = newest.source === 'db' && canManage;
     mainColumn = `
-      <article class="panel">
-        <div class="panel-head">
-          <div style="min-width:0">
-            <div class="eyebrow">Most recent</div>
-            <h2 style="margin-top:2px;line-height:1.3">${esc(newest.title)}</h2>
+      <article class="${CARD} tw:min-w-0 tw:overflow-hidden">
+        <div class="tw:flex tw:items-start tw:gap-3 tw:px-6 tw:pt-6 tw:md:px-10 tw:md:pt-8">
+          <div class="tw:min-w-0">
+            <p class="tw:font-mono tw:text-[10.5px] tw:uppercase tw:tracking-[0.12em] tw:text-propolis-40">Most recent</p>
+            <h2 class="tw:mt-1 tw:font-display tw:text-2xl tw:leading-tight tw:font-medium tw:tracking-tight tw:text-propolis tw:md:text-3xl">${esc(newest.title)}</h2>
           </div>
-          <span class="spacer"></span>
-          ${canEditNewest ? `<button type="button" class="attach-remove" data-edit-article="${newest.id}" aria-label="Edit">${icons.pen}</button>` : ''}
-          ${canDeleteNewest ? `<button type="button" class="attach-remove" data-delete-article="${newest.id}" aria-label="Delete">${icons.x}</button>` : ''}
+          <div class="tw:ml-auto tw:flex tw:shrink-0 tw:items-center tw:gap-1">
+            ${canEditNewest ? `<button type="button" class="${ICON_BUTTON}" data-edit-article="${newest.id}" aria-label="Edit">${icons.pen}</button>` : ''}
+            ${canDeleteNewest ? `<button type="button" class="${ICON_BUTTON_DANGER}" data-delete-article="${newest.id}" aria-label="Delete">${icons.x}</button>` : ''}
+          </div>
         </div>
-        <div class="panel-body">
-          <div class="row" style="gap:var(--s3);padding-bottom:var(--s5);border-bottom:1px solid var(--comb-shade)">
-            <div>
-              <div style="font-size:13.5px;font-weight:600">${esc(newest.authorName)}</div>
-              <div class="caption">${newest.dateLabel ? esc(newest.dateLabel) : ''}</div>
-            </div>
+        <div class="tw:px-6 tw:pt-5 tw:pb-8 tw:md:px-10 tw:md:pb-10">
+          <div class="tw:border-b tw:border-comb-shade/70 tw:pb-5">
+            <div class="tw:text-[15px] tw:font-semibold tw:text-propolis">${esc(newest.authorName)}</div>
+            <div class="tw:text-sm tw:text-propolis-60">${newest.dateLabel ? esc(newest.dateLabel) : ''}</div>
           </div>
-          <div class="prose" style="margin-top:var(--s5)" id="md-body">
-            <p class="caption">Loading…</p>
+          <div class="${MD_PROSE} tw:mt-7" id="md-body">
+            ${LOADING}
           </div>
         </div>
       </article>
       ${attachmentsPanel(docs, canContribute, canManage)}`;
   } else {
-    mainColumn = `
-      <div class="panel">
-        <div class="panel-body">
-          <div class="empty" style="padding:var(--s5) 0">
-            <h3>No content here yet</h3>
-            <p>
-              ${canContribute ? 'Use "Add item" to publish the first article or document here.' : `
-              Add Markdown articles and documents under
-              <span class="mono" style="font-size:11.5px">content/repository/${s.id}/</span>,
-              or ask a Web Admin for repository access to publish here directly.`}
-            </p>
-          </div>
-        </div>
-      </div>`;
+    mainColumn = emptyState({
+      title: 'No content here yet',
+      text: canContribute ? 'Use "Add item" to publish the first article or document here.' : `
+        Add Markdown articles and documents under
+        <span class="tw:font-mono tw:text-[12px]">content/repository/${s.id}/</span>,
+        or ask a Web Admin for repository access to publish here directly.`,
+    });
   }
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="crumb">
-          <a href="#/repository">Repository</a> ${icons.chevron}
-          <span>${esc(track.ord)} · ${esc(track.name)}</span>
-        </div>
-        <div class="eyebrow">${itemCount({ id: s.id, dbCount: dbArticles.length + dbDocuments.length })} items</div>
-        <h1>${esc(s.name)}</h1>
-      </div>
-      <div class="topbar-actions">
-        ${subButton(key, on, 'Subscribe')}
-        ${canContribute ? `<button class="btn btn-primary btn-sm" id="add-here">${icons.plus} Add item</button>` : ''}
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <div class="grid grid-dash">
-        <div class="stack">
-          ${mainColumn}
-        </div>
-
-        <div class="stack">
+    <div class="view">
+      ${pageHeader({
+        crumbs: [{ label: 'Repository', href: '#/repository' }, { label: `${track.ord} · ${track.name}` }],
+        eyebrow: `${itemCount({ id: s.id, dbCount: dbArticles.length + dbDocuments.length })} items`,
+        title: s.name,
+        actions: `${subButton(key, on, 'Subscribe')}${canContribute ? button({ id: 'add-here', label: 'Add item', icon: icons.plus, size: 'sm' }) : ''}`,
+      })}
+      ${pageBody(twoColumn({
+        main: mainColumn,
+        side: `
           ${articleListPanel(s, articles.slice(1), newest ? newest.key : null)}
-
-          <div class="panel">
-            <div class="panel-head"><h2>Notifications</h2></div>
-            <div class="panel-body">
-              <p style="font-size:13px;color:var(--propolis-60)">
-                New items in <strong>${esc(s.name)}</strong> are emailed to subscribers as
+          ${card({
+            title: 'Notifications',
+            body: `
+              <p class="tw:text-sm tw:leading-relaxed tw:text-propolis-60">
+                New items in <strong class="tw:font-semibold tw:text-propolis">${esc(s.name)}</strong> are emailed to subscribers as
                 soon as they are published.
               </p>
-              <div style="margin-top:var(--s4)">${subButton(key, on, 'Subscribe')}</div>
-            </div>
-          </div>
-
+              <div class="tw:mt-4">${subButton(key, on, 'Subscribe')}</div>`,
+          })}
           ${teamPanelHTML(data)}
-
-          <div class="panel">
-            <div class="panel-head"><h2>${esc(track.ord)} · ${esc(track.name)}</h2></div>
-            <div class="panel-body panel-body-flush">
-              ${siblings.map((x) => `
-                <div class="sub">
-                  <div class="sub-title">
-                    <strong><a href="#/repository/${x.id}">${esc(x.name)}</a></strong>
-                    <span>${itemCount(x)} items</span>
-                  </div>
-                  ${icons.chevron}
-                </div>`).join('')}
-            </div>
-          </div>
-        </div>
-      </div>
+          ${card({
+            title: `${track.ord} · ${track.name}`, flush: true,
+            body: rowList(siblings.map((x) => `
+              <div class="tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-3.5 tw:transition tw:hover:bg-comb/60">
+                <div class="tw:min-w-0 tw:flex-1">
+                  <a href="#/repository/${x.id}" class="tw:block tw:text-sm tw:font-semibold tw:text-propolis tw:transition tw:hover:text-amber-deep">${esc(x.name)}</a>
+                  <span class="tw:text-xs tw:text-propolis-40">${itemCount(x)} items</span>
+                </div>
+                <span class="tw:shrink-0 tw:text-propolis-40">${icons.chevron}</span>
+              </div>`)),
+          })}`,
+      }))}
     </div>`;
 
   if (newest) {
@@ -828,46 +790,31 @@ export function renderArticle(data, subId, slug) {
   const canDelete = dbArticle && canManage;
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="crumb">
-          <a href="#/repository">Repository</a> ${icons.chevron}
-          <a href="#/repository/${s.id}">${esc(s.name)}</a> ${icons.chevron}
-          <span>Article</span>
-        </div>
-        <div class="eyebrow">${esc(track.ord)} · ${esc(track.name)}</div>
-        <h1 style="font-size:clamp(1.375rem,2.4vw,1.75rem);max-width:36ch">${esc(title)}</h1>
-      </div>
-      <div class="topbar-actions" style="gap:var(--s2)">
-        ${canEdit ? `<button class="btn btn-ghost btn-sm" id="edit-this-article">${icons.pen} Edit</button>` : ''}
-        ${canDelete ? `<button class="btn btn-ghost btn-sm" id="delete-this-article">${icons.x} Delete</button>` : ''}
-        ${subButton(key, on, 'Subscribe')}
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <div class="grid grid-dash">
-        <div class="stack">
-          <article class="panel">
-            <div class="panel-body">
-              <div class="row" style="gap:var(--s3);padding-bottom:var(--s5);border-bottom:1px solid var(--comb-shade)">
-                <div>
-                  <div style="font-size:13.5px;font-weight:600">${esc(who.name)}</div>
-                  <div class="caption">${esc(who.sub)}${dateLabel ? ` · ${esc(dateLabel)}` : ''}</div>
-                </div>
-              </div>
-              <div class="prose" style="margin-top:var(--s5)" id="md-body">
-                <p class="caption">Loading…</p>
-              </div>
+    <div class="view">
+      ${pageHeader({
+        crumbs: [
+          { label: 'Repository', href: '#/repository' },
+          { label: s.name, href: `#/repository/${s.id}` },
+          { label: 'Article' },
+        ],
+        eyebrow: `${esc(track.ord)} · ${esc(track.name)}`,
+        title,
+        actions: `${canEdit ? button({ id: 'edit-this-article', label: 'Edit', icon: icons.pen, variant: 'outline', size: 'sm' }) : ''}${canDelete ? button({ id: 'delete-this-article', label: 'Delete', icon: icons.x, variant: 'outline', size: 'sm' }) : ''}${subButton(key, on, 'Subscribe')}`,
+      })}
+      ${pageBody(twoColumn({
+        main: `
+          <article class="${CARD} tw:min-w-0 tw:px-6 tw:py-8 tw:md:px-12 tw:md:py-12">
+            <div class="tw:border-b tw:border-comb-shade/70 tw:pb-6">
+              ${personRow({ initials: dbArticle?.author?.initials || initialsOf(who.name), name: who.name, sub: `${who.sub}${dateLabel ? ` · ${dateLabel}` : ''}` })}
             </div>
-          </article>
-        </div>
-
-        <div class="stack">
+            <div class="${MD_PROSE} tw:mt-8 tw:max-w-[70ch]" id="md-body">
+              ${LOADING}
+            </div>
+          </article>`,
+        side: `
           ${articleListPanel(s, articles, dbArticle ? `db:${dbArticle.id}` : `file:${slug}`)}
-          ${attachmentsPanel(docs, canContribute, canManage)}
-        </div>
-      </div>
+          ${attachmentsPanel(docs, canContribute, canManage)}`,
+      }))}
     </div>`;
 
   if (dbArticle) {
