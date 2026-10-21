@@ -1,3 +1,12 @@
 /* Page-specific styles for the community views, authored with Tailwind (@apply tw:...).
    Only for what utilities in the markup cannot express (keyframes, state classes
    set from JS, clip-paths, pseudo-element tricks). */
+
+/* Forum: "Jump to post" in the Attachments card scrolls to a post and
+   toggles .flash on it for 1.6s (js/views/forum.js), so landing there
+   doesn't feel like nothing happened. */
+@keyframes community-post-flash {
+  0%, 100% { background-color: transparent; }
+  15% { background-color: var(--amber-wash); }
+}
+[id^="post-"].flash { animation: community-post-flash 1.6s var(--ease); }
