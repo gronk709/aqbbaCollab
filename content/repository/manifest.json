@@ -1,17 +1,4 @@
 {
- "rs-assess": {
-  "articles": [
-   {
-    "slug": "scoring-partial-removals-fkb",
-    "file": "content/repository/rs-assess/scoring-partial-removals-fkb.md",
-    "title": "Scoring partial removals in the freeze-killed brood assay",
-    "author": "m9",
-    "date": "2026-08-07",
-    "summary": "Why an uncapped-but-not-removed cell is its own category, and the three-column scoring the program uses."
-   }
-  ],
-  "attachments": []
- },
  "rs-graft": {
   "articles": [
    {
