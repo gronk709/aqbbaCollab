@@ -19,11 +19,49 @@ import {
 } from '../store.js';
 import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
 import { renderComb, renderReadout, bindComb } from './comb.js';
+import {
+  button, pageHeader, pageBody, twoColumn, card, CARD, tag, emptyState,
+} from '../components.js';
 
-function stageTag(stage) {
-  const v = { establishing: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green', requeening: 'tag-red' }[stage];
-  return `<span class="tag ${v}">${stageLabels[stage]}</span>`;
-}
+const STAGE_TONES = { establishing: 'amber', assessment: 'blue', maintenance: 'green', requeening: 'red' };
+
+const stageTag = (stage) => tag(stageLabels[stage], STAGE_TONES[stage]);
+
+const MONO_LABEL = 'tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.12em] tw:text-propolis-40';
+
+/* The title row of a card: small mono eyebrow over a serif title (or just a
+   title), anything for the right-hand end. Same rule-under-header look as
+   the shared card(); it lives inside a flush card so the figures below can
+   run edge to edge. */
+const cardHead = ({ eyebrow = '', title, right = '', level = 2 }) => `
+  <div class="tw:flex tw:items-center tw:gap-3 tw:border-b tw:border-comb-shade/70 tw:px-6 tw:py-4">
+    <div class="tw:min-w-0">
+      ${eyebrow ? `<div class="${MONO_LABEL}">${eyebrow}</div>` : ''}
+      <h${level} class="${eyebrow ? 'tw:mt-0.5 ' : ''}tw:font-display tw:text-xl tw:font-medium tw:text-propolis">${title}</h${level}>
+    </div>
+    ${right ? `<div class="tw:ml-auto tw:flex tw:shrink-0 tw:items-center tw:gap-3">${right}</div>` : ''}
+  </div>`;
+
+/* A row of figures sharing one rounded frame, divided by hairlines. */
+const figureRow = (items) => `
+  <dl class="tw:grid tw:grid-cols-3 tw:divide-x tw:divide-comb-shade tw:overflow-hidden tw:rounded-xl tw:border tw:border-comb-shade">
+    ${items.map(({ label, value }) => `
+      <div class="tw:min-w-0 tw:px-3.5 tw:py-3">
+        <dt class="${MONO_LABEL} tw:text-[9.5px] tw:leading-snug">${label}</dt>
+        <dd class="tw:ml-0 tw:mt-1 tw:font-display tw:text-2xl tw:font-semibold tw:leading-none tw:tracking-tight tw:text-propolis tw:tabular-nums">${value}</dd>
+      </div>`).join('')}
+  </dl>`;
+
+/* The three headline figures across the top of the page. */
+const headlineTiles = (items) => `
+  <dl class="tw:grid tw:divide-y tw:divide-comb-shade tw:overflow-hidden tw:rounded-2xl tw:border tw:border-comb-shade tw:bg-white tw:sm:grid-cols-3 tw:sm:divide-x tw:sm:divide-y-0">
+    ${items.map(({ label, value, note }) => `
+      <div class="tw:px-6 tw:py-5">
+        <dt class="${MONO_LABEL} tw:text-[10px]">${label}</dt>
+        <dd class="tw:ml-0 tw:mt-2 tw:font-display tw:text-4xl tw:font-semibold tw:leading-none tw:tracking-tight tw:text-propolis tw:tabular-nums">${value}</dd>
+        <div class="tw:mt-2 tw:text-xs tw:text-propolis-60">${note}</div>
+      </div>`).join('')}
+  </dl>`;
 
 function apiaryCard(ap) {
   const t = tally(ap.hiveRecords);
@@ -31,30 +69,18 @@ function apiaryCard(ap) {
   const tf = ap.hiveRecords.filter((h) => h.treatmentFree >= 3).length;
 
   return `
-    <a class="panel" href="#/apiaries/${ap.id}" style="display:block;transition:box-shadow .2s var(--ease),transform .2s var(--ease)">
-      <div class="panel-head">
-        <div style="min-width:0">
-          <div class="eyebrow">${ap.code}</div>
-          <h3 style="margin-top:2px">${esc(ap.name)}</h3>
+    <a class="${CARD} tw:block tw:min-w-0 tw:overflow-hidden tw:transition tw:duration-200 tw:hover:-translate-y-0.5 tw:hover:border-amber/60 tw:hover:shadow-lg tw:hover:shadow-propolis/10" href="#/apiaries/${ap.id}">
+      ${cardHead({ eyebrow: ap.code, title: esc(ap.name), level: 3, right: stageTag(ap.stage) })}
+      <div class="tw:px-6 tw:py-5">
+        <p class="tw:text-sm tw:text-propolis-60">${esc(ap.region)}</p>
+        ${ap.address ? `<p class="tw:mt-0.5 tw:font-mono tw:text-[11px] tw:text-propolis-40">${esc(ap.address)}</p>` : ''}
+        <div class="tw:mt-4">
+          ${figureRow([
+            { label: 'Hives', value: ap.hives },
+            { label: 'Treating', value: inTreatment },
+            { label: 'TF 3+ seasons', value: tf },
+          ])}
         </div>
-        <span class="spacer"></span>
-        ${stageTag(ap.stage)}
-      </div>
-      <div class="panel-body">
-        <p class="caption">${esc(ap.region)}</p>
-        ${ap.address ? `<p class="mono caption" style="font-size:11px;margin-top:2px">${esc(ap.address)}</p>` : ''}
-
-        <dl class="tiles" style="margin-top:var(--s4);border-radius:3px">
-          <div class="tile" style="padding:var(--s3) var(--s4)">
-            <dt>Hives</dt><dd style="font-size:1.375rem">${ap.hives}</dd>
-          </div>
-          <div class="tile" style="padding:var(--s3) var(--s4)">
-            <dt>Treating</dt><dd style="font-size:1.375rem">${inTreatment}</dd>
-          </div>
-          <div class="tile" style="padding:var(--s3) var(--s4)">
-            <dt>TF 3+ seasons</dt><dd style="font-size:1.375rem">${tf}</dd>
-          </div>
-        </dl>
       </div>
     </a>`;
 }
@@ -70,44 +96,38 @@ function colonyStatusPanel(allHives) {
     if (!n) return '';
     const pct = ((n / total) * 100).toFixed(1);
     return `
-      <div style="margin-bottom:var(--s3)">
-        <div class="row" style="gap:var(--s2);margin-bottom:4px">
-          <span class="pip pip-${k}"></span>
-          <span style="font-size:13px">${statusLabels[k]}</span>
-          <span class="spacer"></span>
-          <span class="mono" style="font-size:12.5px">${n}</span>
-          <span class="mono caption" style="font-size:11px;width:44px;text-align:right">${pct}%</span>
+      <div>
+        <div class="tw:flex tw:items-center tw:gap-2 tw:text-sm">
+          <span class="tw:size-2.5 tw:shrink-0 tw:rounded-full tw:ring-1 tw:ring-inset tw:ring-black/10" style="background:var(--st-${k})"></span>
+          <span class="tw:text-propolis">${statusLabels[k]}</span>
+          <span class="tw:ml-auto tw:font-mono tw:text-[13px] tw:tabular-nums tw:text-propolis">${n}</span>
+          <span class="tw:w-12 tw:text-right tw:font-mono tw:text-[11px] tw:tabular-nums tw:text-propolis-40">${pct}%</span>
         </div>
-        <div class="meter">
-          <i style="width:${pct}%;background:var(--st-${k})"></i>
+        <div class="tw:mt-1.5 tw:h-1.5 tw:overflow-hidden tw:rounded-full tw:bg-comb-deep">
+          <i class="tw:block tw:h-full tw:rounded-full tw:transition-[width] tw:duration-500" style="width:${pct}%;background:var(--st-${k})"></i>
         </div>
       </div>`;
   }).join('');
 
-  return `
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Colony status</h2>
-        <span class="spacer"></span>
-        <span class="caption mono">${total} hives</span>
-      </div>
-      <div class="panel-body">
-        ${total ? bars : '<p class="caption">No hives registered yet.</p>'}
-        <div style="margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
-          <div class="row" style="justify-content:space-between">
-            <span style="font-size:13px">Treatment free, any duration</span>
-            <span class="mono" style="font-size:13px">${treatmentFree}</span>
-          </div>
-          <div class="row" style="justify-content:space-between;margin-top:var(--s2)">
-            <span style="font-size:13px">Treatment free, three seasons or more</span>
-            <span class="mono" style="font-size:13px">${tf3}</span>
-          </div>
-          <p class="caption" style="margin-top:var(--s3)">
-            Colonies under treatment are excluded from selection data for the current cycle.
-          </p>
+  return card({
+    title: 'Colony status',
+    right: `<span class="tw:font-mono tw:text-xs tw:text-propolis-40">${total} hives</span>`,
+    body: `
+      ${total ? `<div class="tw:space-y-3.5">${bars}</div>` : '<p class="tw:text-sm tw:text-propolis-60">No hives registered yet.</p>'}
+      <div class="tw:mt-6 tw:space-y-2 tw:border-t tw:border-comb-shade/70 tw:pt-5 tw:text-sm tw:text-propolis">
+        <div class="tw:flex tw:items-baseline tw:justify-between tw:gap-4">
+          <span>Treatment free, any duration</span>
+          <span class="tw:font-mono tw:tabular-nums">${treatmentFree}</span>
         </div>
-      </div>
-    </div>`;
+        <div class="tw:flex tw:items-baseline tw:justify-between tw:gap-4">
+          <span>Treatment free, three seasons or more</span>
+          <span class="tw:font-mono tw:tabular-nums">${tf3}</span>
+        </div>
+        <p class="tw:pt-1 tw:text-[13px] tw:text-propolis-60">
+          Colonies under treatment are excluded from selection data for the current cycle.
+        </p>
+      </div>`,
+  });
 }
 
 function breedersPanel(lines, allHives) {
@@ -116,36 +136,33 @@ function breedersPanel(lines, allHives) {
     const b = line.breeder;
     const inProgram = allHives.filter((h) => h.line === line.code).length;
     return `
-      <div class="breeder">
+      <div class="tw:flex tw:flex-wrap tw:gap-x-4 tw:gap-y-2 tw:border-b tw:border-comb-shade/70 tw:px-6 tw:py-4 tw:last:border-b-0 tw:sm:flex-nowrap">
         ${avatar(b)}
-        <div style="flex:1;min-width:0">
-          <div class="row" style="gap:var(--s2)">
-            <strong style="font-size:13.5px">${esc(b.name)}</strong>
-            <span class="caption">${esc(b.state || '')}</span>
+        <div class="tw:min-w-0 tw:flex-1 tw:basis-48">
+          <div class="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2">
+            <strong class="tw:text-[15px] tw:font-semibold tw:text-propolis">${esc(b.name)}</strong>
+            <span class="tw:text-sm tw:text-propolis-40">${esc(b.state || '')}</span>
           </div>
-          <div class="mono" style="font-size:12px;color:var(--propolis-60);margin-top:2px">
+          <div class="tw:mt-0.5 tw:font-mono tw:text-xs tw:text-propolis-60">
             ${esc(line.name)} · generation ${line.gen}
           </div>
-          <p class="caption" style="margin-top:4px">${esc(line.note)}</p>
+          <p class="tw:mt-1 tw:text-sm tw:text-propolis-60">${esc(line.note)}</p>
         </div>
-        <div style="flex:none;text-align:right">
-          <div class="mono" style="font-size:1.0625rem">${line.vshMean}<small style="font-size:10px;color:var(--propolis-40)">%</small></div>
-          <div class="caption" style="font-size:11px">${inProgram} hives</div>
-          ${canManage ? `<button class="btn btn-ghost btn-sm" style="margin-top:6px" data-edit-line="${line.code}">${icons.pen} Edit</button>` : ''}
+        <div class="tw:shrink-0 tw:text-right">
+          <div class="tw:font-mono tw:text-lg tw:text-propolis">${line.vshMean}<small class="tw:text-[10px] tw:text-propolis-40">%</small></div>
+          <div class="tw:text-xs tw:text-propolis-40">${inProgram} hives</div>
+          ${canManage ? `<button class="btn btn-ghost btn-sm tw:mt-1.5" data-edit-line="${line.code}">${icons.pen} Edit</button>` : ''}
         </div>
       </div>`;
   }).join('');
 
-  return `
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Contributing breeders</h2>
-        <span class="spacer"></span>
-        <span class="caption" style="margin-right:var(--s3)">${lines.length} lines in program</span>
-        ${canManage ? `<button class="btn btn-primary btn-sm" id="new-line">${icons.plus} Add queen line</button>` : ''}
-      </div>
-      <div class="panel-body panel-body-flush" id="breeders-list">${rows}</div>
-    </div>`;
+  return card({
+    title: 'Contributing breeders',
+    flush: true,
+    right: `<span class="tw:text-sm tw:text-propolis-40 tw:max-sm:hidden">${lines.length} lines in program</span>
+      ${canManage ? `<button class="btn btn-primary btn-sm" id="new-line">${icons.plus} Add queen line</button>` : ''}`,
+    body: `<div id="breeders-list">${rows}</div>`,
+  });
 }
 
 /* Only members holding the "Breeder" role (js/store.js's
@@ -186,12 +203,12 @@ async function openQueenLineForm(line) {
         <label for="ql-name">Line name</label>
         <input id="ql-name" required value="${esc(line ? line.name : '')}" placeholder="e.g. Barrowfield 15">
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="tw:flex tw:items-start tw:gap-3">
+        <div class="field tw:min-w-0 tw:flex-1">
           <label for="ql-breeder">Breeder</label>
           <select id="ql-breeder">${breederMemberOptions(breederMembers, selectedId)}</select>
         </div>
-        <div class="field" style="flex:1">
+        <div class="field tw:min-w-0 tw:flex-1">
           <label for="ql-gen">Generation</label>
           <input id="ql-gen" type="number" min="1" value="${line ? line.gen : 1}">
         </div>
@@ -259,76 +276,53 @@ export function renderDashboard(data) {
   const focus = apiaries.find((a) => a.stage === 'assessment') || apiaries[0];
   const attention = allHives.filter((h) => h.status === 'poor' || h.status === 'critical').length;
 
+  const focusCard = focus ? card({
+    flush: true,
+    body: `
+      ${cardHead({
+        eyebrow: `${focus.code} · ${esc(focus.region)}`,
+        title: `${esc(focus.name)} — every hive`,
+        right: stageTag(focus.stage),
+      })}
+      <div class="tw:px-6 tw:py-5">
+        <p class="tw:mb-4 tw:text-sm tw:text-propolis-60">
+          ${focus.hiveRecords.length} hives. One cell per hive, coloured by colony status.
+        </p>
+        ${focus.hiveRecords.length ? renderComb(focus.hiveRecords, { id: 'dash-comb' }) : '<p class="tw:text-sm tw:text-propolis-60">No hives registered yet.</p>'}
+      </div>
+      ${focus.hiveRecords.length ? renderReadout(null) : ''}`,
+  }) : '';
+
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="crumb">
-          <a href="#/projects">Projects</a> ${icons.chevron}
-          <a href="#/projects/p0">Varroa Sensitive Hygiene Breeding Program</a> ${icons.chevron}
-          <span>Dashboard</span>
-        </div>
-        <div class="eyebrow">PRJ-00</div>
-        <h1>Research dashboard</h1>
-      </div>
-      <div class="topbar-actions">
-        <a class="btn btn-ghost btn-sm" href="#/apiaries">All apiaries ${icons.chevron}</a>
-      </div>
-    </div>
+    <div class="view">
+      ${pageHeader({
+        crumbs: [
+          { label: 'Projects', href: '#/projects' },
+          { label: 'Varroa Sensitive Hygiene Breeding Program', href: '#/projects/p0' },
+          { label: 'Dashboard' },
+        ],
+        eyebrow: 'PRJ-00',
+        title: 'Research dashboard',
+        actions: button({ href: '#/apiaries', label: 'All apiaries', variant: 'outline', size: 'sm' }),
+      })}
+      ${pageBody(`
+        <div class="tw:space-y-8">
+          ${headlineTiles([
+            { label: 'Hives under management', value: allHives.length, note: `across ${apiaries.length} research apiaries` },
+            { label: 'Treating', value: t.treating || 0, note: 'excluded from selection this cycle' },
+            { label: 'Needs attention', value: attention, note: attention ? 'above intervention threshold' : 'nothing above threshold' },
+          ])}
 
-    <div class="wrap view">
-      <dl class="tiles">
-        <div class="tile">
-          <dt>Hives under management</dt>
-          <dd>${allHives.length}</dd>
-          <div class="tile-trend">across ${apiaries.length} research apiaries</div>
-        </div>
-        <div class="tile">
-          <dt>Treating</dt>
-          <dd>${t.treating || 0}</dd>
-          <div class="tile-trend">excluded from selection this cycle</div>
-        </div>
-        <div class="tile">
-          <dt>Needs attention</dt>
-          <dd>${attention}</dd>
-          <div class="tile-trend">${attention ? 'above intervention threshold' : 'nothing above threshold'}</div>
-        </div>
-      </dl>
-
-      <div class="grid grid-3" style="margin-top:var(--s6)">
-        ${apiaries.map(apiaryCard).join('')}
-      </div>
-
-      ${focus ? `
-      <div class="grid grid-dash" style="margin-top:var(--s6)">
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-head">
-              <div style="min-width:0">
-                <div class="eyebrow">${focus.code} · ${esc(focus.region)}</div>
-                <h2 style="margin-top:2px">${esc(focus.name)} — every hive</h2>
-              </div>
-              <span class="spacer"></span>
-              ${stageTag(focus.stage)}
-            </div>
-            <div class="panel-body">
-              <p class="caption" style="margin-bottom:var(--s4)">
-                ${focus.hiveRecords.length} hives. One cell per hive, coloured by colony status.
-              </p>
-              ${focus.hiveRecords.length ? renderComb(focus.hiveRecords, { id: 'dash-comb' }) : '<p class="caption">No hives registered yet.</p>'}
-            </div>
-            ${focus.hiveRecords.length ? renderReadout(null) : ''}
+          <div class="tw:grid tw:gap-6 tw:sm:grid-cols-2 tw:lg:grid-cols-3">
+            ${apiaries.map(apiaryCard).join('')}
           </div>
-        </div>
 
-        <div class="stack">
-          ${colonyStatusPanel(allHives)}
-        </div>
-      </div>` : `
-      <div class="empty" style="margin-top:var(--s6)"><p class="caption">No research apiaries yet.</p></div>`}
+          ${focus
+            ? twoColumn({ main: focusCard, side: colonyStatusPanel(allHives) })
+            : emptyState({ title: 'No research apiaries yet' })}
 
-      <div style="margin-top:var(--s6)">
-        ${breedersPanel(queenLines, allHives)}
-      </div>
+          ${breedersPanel(queenLines, allHives)}
+        </div>`)}
     </div>`;
 
   /* Bind after paint. */

@@ -16,7 +16,29 @@ import {
   currentUser, loadRealMembers, loadMemberRoles, setMemberRoles, setMemberContact,
   deactivateMember, reactivateMember, inviteCollaborator,
 } from '../store.js';
-import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
+import { esc, icons, modal, closeModal, toast } from '../ui.js';
+import {
+  button, pageHeader, pageBody, twoColumn, card, countBadge, table, rowList, tag, personRow, emptyState,
+} from '../components.js';
+
+const MONO_LABEL = 'tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.12em] tw:text-propolis-40';
+const CAPTION = 'tw:text-[12.5px] tw:text-propolis-40';
+
+/* One role checkbox with its description, shared by the three role pickers
+   below (the modals keep the .field wrapper; the label look is reset here
+   because .field styles its first label as a small caps heading). */
+const roleCheckbox = (r, { cls, checked = false }) => `
+  <label class="tw:mb-2 tw:flex tw:items-start tw:gap-2 tw:text-[13px] tw:font-normal tw:normal-case tw:tracking-normal">
+    <input type="checkbox" value="${esc(r.name)}" class="${cls} tw:mt-[3px]" ${checked ? 'checked' : ''}>
+    <span>
+      <span class="tw:block">${esc(r.name)}</span>
+      <span class="tw:block ${CAPTION}">${esc(r.description)}</span>
+    </span>
+  </label>`;
+
+/* A tag that is a link (apiary access chips). */
+const amberTagLink = (href, text) => `
+  <a href="${href}" class="tw:inline-flex tw:items-center tw:gap-1.5 tw:whitespace-nowrap tw:rounded-full tw:bg-amber-wash tw:px-2.5 tw:py-1 tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.06em] tw:text-amber-deep tw:transition tw:hover:bg-amber/25">${esc(text)}</a>`;
 
 /* Members directory — every real member (js/store.js's loadMembersDirectory
    / loadMemberDetail), not the old seed/demo roster this used to fall back
@@ -27,85 +49,54 @@ import { esc, icons, avatar, modal, closeModal, toast } from '../ui.js';
    wa_contact_id). Either still leaves the member row otherwise completely
    ordinary; this column is purely informational, not a permission. */
 function signInStatus(m) {
-  if (m.wa) return { label: 'Signed in via Wild Apricot', tag: 'tag-green' };
-  if (m.hasSignedIn) return { label: 'Signed in directly', tag: 'tag-green' };
-  return { label: 'Not yet signed in', tag: 'tag' };
+  if (m.wa) return { label: 'Signed in via Wild Apricot', tone: 'green' };
+  if (m.hasSignedIn) return { label: 'Signed in directly', tone: 'green' };
+  return { label: 'Not yet signed in', tone: 'neutral' };
 }
 export function renderMembers(members) {
   const canManage = isWebAdmin(currentUser().id);
   if (!canManage) {
     return `
-      <div class="topbar">
-        <div style="width:100%">
-          <h1>Members</h1>
-        </div>
-      </div>
-      <div class="wrap view">
-        <div class="empty">
-          <h3>Web Admin only</h3>
-          <p>Only Web Admin can view the members directory.</p>
-        </div>
+      <div class="view">
+        ${pageHeader({ title: 'Members' })}
+        ${pageBody(emptyState({ title: 'Web Admin only', text: 'Only Web Admin can view the members directory.' }))}
       </div>`;
   }
 
   const rows = members.map((m) => {
     const sign = signInStatus(m);
     return `
-      <tr${m.deactivated ? ' style="opacity:0.6"' : ''}>
+      <tr${m.deactivated ? ' class="tw:opacity-60"' : ''}>
+        <td>${personRow({ initials: m.initials, name: m.name, sub: m.state || '—', href: `#/managers/${m.id}` })}</td>
         <td>
-          <a class="row" style="gap:var(--s3)" href="#/managers/${m.id}">
-            ${avatar(m)}
-            <div>
-              <div style="font-size:13.5px;font-weight:600">${esc(m.name)}</div>
-              <div class="caption">${esc(m.state || '—')}</div>
-            </div>
-          </a>
+          ${m.roles.length
+            ? `<div class="tw:flex tw:flex-wrap tw:gap-1.5">${m.roles.map((r) => tag(r, 'outline')).join('')}</div>`
+            : `<span class="${CAPTION}">No roles set.</span>`}
         </td>
-        <td>
-          ${m.roles.length ? m.roles.map((r) => `<span class="tag tag-outline" style="margin:2px 3px 2px 0">${esc(r)}</span>`).join('') : '<span class="caption">No roles set.</span>'}
-        </td>
-        <td>
-          ${m.deactivated
-            ? '<span class="tag tag-red">Deactivated</span>'
-            : `<span class="tag ${sign.tag}">${sign.label}</span>`}
-        </td>
-        <td>
-          ${m.phone && m.email ? '<span class="caption">On file</span>' : '<span class="tag tag-amber">Missing</span>'}
-        </td>
+        <td>${m.deactivated ? tag('Deactivated', 'red') : tag(sign.label, sign.tone)}</td>
+        <td>${m.phone && m.email ? `<span class="${CAPTION}">On file</span>` : tag('Missing', 'amber')}</td>
       </tr>`;
   }).join('');
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="eyebrow">${members.length} people with access</div>
-        <h1>Members</h1>
-      </div>
-      <div class="topbar-actions">
-        <button class="btn btn-ghost btn-sm" id="invite-collaborator">${icons.mail} Invite collaborator</button>
-        <button class="btn btn-primary btn-sm" id="manage-member-roles">${icons.pen} Manage roles</button>
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <div class="panel">
-        <div class="tbl-scroll">
-          <table class="tbl">
-            <thead>
-              <tr><th>Member</th><th>Roles</th><th>Sign-in</th><th>Contact</th></tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>
-      <p class="caption" style="margin-top:var(--s4)">
-        "Not yet signed in" means a Web Admin has added this member's record but they
-        haven't actually authenticated yet — the intended cross-check against drift
-        between the two systems (a lapsed member who still has a role here, or a current
-        member with none). "Signed in directly" is a collaborator who isn't a Wild
-        Apricot member at all — invited straight from this site instead, so they don't
-        need a Wild Apricot license seat.
-      </p>
+    <div class="view">
+      ${pageHeader({
+        eyebrow: `${members.length} people with access`,
+        title: 'Members',
+        actions: `
+          ${button({ id: 'invite-collaborator', label: 'Invite collaborator', icon: icons.mail, variant: 'outline', size: 'sm' })}
+          ${button({ id: 'manage-member-roles', label: 'Manage roles', icon: icons.pen, size: 'sm' })}`,
+      })}
+      ${pageBody(`
+        ${card({ flush: true, body: table({ head: ['Member', 'Roles', 'Sign-in', 'Contact'], body: rows }) })}
+        <p class="tw:mt-5 tw:max-w-3xl tw:text-sm tw:leading-relaxed tw:text-propolis-60">
+          "Not yet signed in" means a Web Admin has added this member's record but they
+          haven't actually authenticated yet — the intended cross-check against drift
+          between the two systems (a lapsed member who still has a role here, or a current
+          member with none). "Signed in directly" is a collaborator who isn't a Wild
+          Apricot member at all — invited straight from this site instead, so they don't
+          need a Wild Apricot license seat.
+        </p>`)}
     </div>`;
 
   setTimeout(() => {
@@ -158,14 +149,7 @@ function openManageMemberRolesModal() {
       toast(`Couldn't load roles: ${err.message}`);
       return;
     }
-    rolesChecks.innerHTML = roleOptions.map((r) => `
-      <label class="row" style="align-items:flex-start;gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:8px">
-        <input type="checkbox" value="${esc(r.name)}" class="mr-role" style="margin-top:3px" ${currentRoles.includes(r.name) ? 'checked' : ''}>
-        <span>
-          <span style="display:block">${esc(r.name)}</span>
-          <span class="caption" style="display:block">${esc(r.description)}</span>
-        </span>
-      </label>`).join('');
+    rolesChecks.innerHTML = roleOptions.map((r) => roleCheckbox(r, { cls: 'mr-role', checked: currentRoles.includes(r.name) })).join('');
     rolesField.hidden = false;
     saveBtn.disabled = false;
   }
@@ -221,17 +205,10 @@ function openInviteCollaboratorModal() {
     <div class="field">
       <label>Roles</label>
       <div>
-        ${roleOptions.map((r) => `
-          <label class="row" style="align-items:flex-start;gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:8px">
-            <input type="checkbox" value="${esc(r.name)}" class="ic-role" style="margin-top:3px">
-            <span>
-              <span style="display:block">${esc(r.name)}</span>
-              <span class="caption" style="display:block">${esc(r.description)}</span>
-            </span>
-          </label>`).join('')}
+        ${roleOptions.map((r) => roleCheckbox(r, { cls: 'ic-role' })).join('')}
       </div>
     </div>
-    <p class="caption">They'll get an email with a link to set their own password. No Wild
+    <p class="${CAPTION}">They'll get an email with a link to set their own password. No Wild
       Apricot account or license seat is needed.</p>`;
   const actions = `
     <button class="btn btn-ghost" data-close>Cancel</button>
@@ -286,124 +263,99 @@ export function renderManager(m) {
   const canEditContact = (m.id === currentUser().id || canManageRoles) && !m.deactivated;
   const canDeleteMember = canManageRoles && m.id !== currentUser().id;
 
+  const contactCard = card({
+    title: 'Contact',
+    body: complete ? `
+      <dl class="tw:grid tw:grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] tw:gap-6">
+        <div class="tw:min-w-0">
+          <dt class="${MONO_LABEL}">Phone</dt>
+          <dd class="tw:ml-0 tw:mt-1.5"><a href="tel:${esc(m.phone)}" class="tw:text-base tw:text-propolis tw:transition tw:hover:text-amber-deep tw:hover:underline">${esc(m.phone)}</a></dd>
+        </div>
+        <div class="tw:min-w-0">
+          <dt class="${MONO_LABEL}">Email</dt>
+          <dd class="tw:ml-0 tw:mt-1.5"><a href="mailto:${esc(m.email)}" class="tw:text-base tw:text-propolis tw:transition tw:[overflow-wrap:anywhere] tw:hover:text-amber-deep tw:hover:underline">${esc(m.email)}</a></dd>
+        </div>
+        ${m.address ? `
+        <div class="tw:min-w-0">
+          <dt class="${MONO_LABEL}">Address</dt>
+          <dd class="tw:ml-0 tw:mt-1.5 tw:text-[15px] tw:text-propolis">${esc(m.address)}</dd>
+        </div>` : ''}
+      </dl>` : emptyState({
+        title: 'No contact details on file',
+        text: canEditContact
+          ? `Phone and email are needed so other members and the coordinator can reach ${esc(m.name.split(' ')[0])} directly about the sites they manage.`
+          : m.deactivated
+            ? 'Contact details were removed when this member was deleted.'
+            : 'Contact details are restricted to the member themselves and Web Admin.',
+        action: canEditContact ? button({ id: 'empty-contact', label: 'Add contact details' }) : '',
+        bordered: false,
+      }),
+  });
+
+  const rolesCard = card({
+    title: 'Roles & apiary access',
+    right: canManageRoles && !m.deactivated
+      ? button({ id: 'edit-roles', label: 'Edit', icon: icons.pen, variant: 'outline', size: 'sm' }) : '',
+    body: `
+      <div class="${MONO_LABEL} tw:mb-2">Roles</div>
+      <div class="tw:mb-5 tw:flex tw:flex-wrap tw:gap-1.5">
+        ${m.roles.length ? m.roles.map((r) => tag(r, 'outline')).join('')
+          : `<span class="${CAPTION}">No roles set.</span>`}
+      </div>
+      <div class="${MONO_LABEL} tw:mb-2">Apiary access</div>
+      <div class="tw:flex tw:flex-wrap tw:gap-1.5">
+        ${manages.length ? manages.map((a) => amberTagLink(`#/apiaries/${a.id}`, `${a.code} · ${a.accessLevel === 'manage' ? 'Manage' : 'Operate'}`)).join('')
+          : `<span class="${CAPTION}">No sites granted.</span>`}
+      </div>
+      <p class="tw:mt-4 tw:text-sm tw:text-propolis-60">
+        ${m.deactivated ? 'This member is deactivated — reactivate them to grant roles or site access again.'
+          : 'Apiary access is granted per site, from that site\'s own page (Team panel) — not here.'}
+      </p>`,
+  });
+
+  const memberCard = card({
+    title: 'Member',
+    body: `
+      ${personRow({ initials: m.initials, name: m.name, sub: `${roleLabelText} · member since ${m.since ?? '—'}` })}
+      <div class="tw:mt-5 tw:space-y-2 tw:border-t tw:border-comb-shade/70 tw:pt-4 tw:text-sm tw:text-propolis">
+        <div class="tw:flex tw:items-baseline tw:justify-between tw:gap-4">
+          <span>State</span>
+          <span class="tw:font-mono">${esc(m.state || '—')}</span>
+        </div>
+        <div class="tw:flex tw:items-baseline tw:justify-between tw:gap-4">
+          <span>Wild Apricot ID</span>
+          <span class="tw:font-mono">${esc(m.wa || '—')}</span>
+        </div>
+      </div>`,
+  });
+
+  const managesCard = manages.length ? card({
+    title: 'Manages',
+    right: countBadge(manages.length),
+    flush: true,
+    body: rowList(manages.map((a) => `
+      <a class="tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-3.5 tw:text-propolis-40 tw:transition tw:hover:bg-comb/60" href="#/apiaries/${a.id}">
+        <span class="tw:min-w-0 tw:flex-1">
+          <strong class="tw:block tw:text-[15px] tw:font-semibold tw:text-propolis">${esc(a.name)}</strong>
+          <span class="tw:text-sm tw:text-propolis-60">${a.code} · ${a.accessLevel === 'manage' ? 'Manage' : 'Operate'}</span>
+        </span>
+        ${icons.chevron}
+      </a>`)),
+  }) : '';
+
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="crumb"><a href="#/members">Members</a> ${icons.chevron} <span>Member</span></div>
-        <div class="eyebrow">${esc(roleLabelText)} · ${esc(m.state || '—')} ${m.deactivated ? '· <span class="tag tag-red" style="vertical-align:middle">Deactivated</span>' : ''}</div>
-        <h1>${esc(m.name)}</h1>
-      </div>
-      <div class="topbar-actions">
-        ${canEditContact ? `<button class="btn btn-primary btn-sm" id="edit-contact">${icons.pen} ${complete ? 'Edit details' : 'Add contact details'}</button>` : ''}
-        ${canDeleteMember ? (m.deactivated
-          ? `<button class="btn btn-ghost btn-sm" id="reactivate-member">Reactivate member</button>`
-          : `<button class="btn btn-ghost btn-sm" id="delete-member">${icons.x} Delete member</button>`) : ''}
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <div class="grid grid-dash">
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-head"><h2>Contact</h2></div>
-            <div class="panel-body">
-              ${complete ? `
-                <dl class="readout-metrics" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
-                  <div>
-                    <dt>Phone</dt>
-                    <dd><a href="tel:${esc(m.phone)}" style="font-size:1rem">${esc(m.phone)}</a></dd>
-                  </div>
-                  <div>
-                    <dt>Email</dt>
-                    <dd><a href="mailto:${esc(m.email)}" style="font-size:1rem;overflow-wrap:anywhere">${esc(m.email)}</a></dd>
-                  </div>
-                  ${m.address ? `
-                  <div>
-                    <dt>Address</dt>
-                    <dd style="font-size:0.95rem;font-family:var(--ui)">${esc(m.address)}</dd>
-                  </div>` : ''}
-                </dl>
-              ` : `
-                <div class="empty" style="padding:var(--s6) 0">
-                  <h3>No contact details on file</h3>
-                  <p>${canEditContact
-                    ? `Phone and email are needed so other members and the coordinator can reach ${esc(m.name.split(' ')[0])} directly about the sites they manage.`
-                    : m.deactivated
-                      ? 'Contact details were removed when this member was deleted.'
-                      : 'Contact details are restricted to the member themselves and Web Admin.'}</p>
-                  ${canEditContact ? `<button class="btn btn-primary" id="empty-contact">Add contact details</button>` : ''}
-                </div>
-              `}
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Roles &amp; apiary access</h2>
-              <span class="spacer"></span>
-              ${canManageRoles && !m.deactivated ? `<button class="btn btn-ghost btn-sm" id="edit-roles">${icons.pen} Edit</button>` : ''}
-            </div>
-            <div class="panel-body">
-              <div class="eyebrow" style="margin-bottom:var(--s2)">Roles</div>
-              <div class="row row-wrap" style="gap:6px;margin-bottom:var(--s5)">
-                ${m.roles.length ? m.roles.map((r) => `<span class="tag tag-outline">${esc(r)}</span>`).join('')
-                  : '<span class="caption">No roles set.</span>'}
-              </div>
-              <div class="eyebrow" style="margin-bottom:var(--s2)">Apiary access</div>
-              <div class="row row-wrap" style="gap:6px">
-                ${manages.length ? manages.map((a) => `<a class="tag tag-amber" href="#/apiaries/${a.id}">${a.code} · ${a.accessLevel === 'manage' ? 'Manage' : 'Operate'}</a>`).join('')
-                  : '<span class="caption">No sites granted.</span>'}
-              </div>
-              <p class="caption" style="margin-top:var(--s4)">
-                ${m.deactivated ? 'This member is deactivated — reactivate them to grant roles or site access again.'
-                  : 'Apiary access is granted per site, from that site\'s own page (Team panel) — not here.'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-head"><h2>Member</h2></div>
-            <div class="panel-body">
-              <div class="row" style="gap:var(--s3)">
-                ${avatar(m)}
-                <div>
-                  <div style="font-size:13.5px;font-weight:600">${esc(m.name)}</div>
-                  <div class="caption">${esc(roleLabelText)} · member since ${esc(m.since ?? '—')}</div>
-                </div>
-              </div>
-              <div class="row" style="justify-content:space-between;margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--comb-shade)">
-                <span style="font-size:13px">State</span>
-                <span class="mono" style="font-size:13px">${esc(m.state || '—')}</span>
-              </div>
-              <div class="row" style="justify-content:space-between;margin-top:var(--s2)">
-                <span style="font-size:13px">Wild Apricot ID</span>
-                <span class="mono" style="font-size:13px">${esc(m.wa || '—')}</span>
-              </div>
-            </div>
-          </div>
-
-          ${manages.length ? `
-            <div class="panel">
-              <div class="panel-head">
-                <h2>Manages</h2>
-                <span class="spacer"></span>
-                <span class="caption mono">${manages.length}</span>
-              </div>
-              <div class="panel-body panel-body-flush">
-                ${manages.map((a) => `
-                  <a class="sub" href="#/apiaries/${a.id}">
-                    <div class="sub-title">
-                      <strong>${esc(a.name)}</strong>
-                      <span>${a.code} · ${a.accessLevel === 'manage' ? 'Manage' : 'Operate'}</span>
-                    </div>
-                    ${icons.chevron}
-                  </a>`).join('')}
-              </div>
-            </div>` : ''}
-        </div>
-      </div>
+    <div class="view">
+      ${pageHeader({
+        crumbs: [{ label: 'Members', href: '#/members' }, { label: 'Member' }],
+        eyebrow: `${esc(roleLabelText)} · ${esc(m.state || '—')} ${m.deactivated ? tag('Deactivated', 'red') : ''}`,
+        title: m.name,
+        actions: `
+          ${canEditContact ? button({ id: 'edit-contact', label: complete ? 'Edit details' : 'Add contact details', icon: icons.pen, size: 'sm' }) : ''}
+          ${canDeleteMember ? (m.deactivated
+            ? button({ id: 'reactivate-member', label: 'Reactivate member', variant: 'outline', size: 'sm' })
+            : button({ id: 'delete-member', label: 'Delete member', icon: icons.x, variant: 'outline', size: 'sm' })) : ''}`,
+      })}
+      ${pageBody(twoColumn({ main: contactCard + rolesCard, side: memberCard + managesCard }))}
     </div>`;
 
   setTimeout(() => {
@@ -424,11 +376,13 @@ export function renderManager(m) {
 
 function openDeleteMemberModal(m) {
   const body = `
-    <p>Delete ${esc(m.name)}? This revokes all of their roles and apiary access, and
-    deletes their contact details on file.</p>
-    <p>Anything they've already posted or written (forum posts, repository articles)
-    stays as-is and still shows their name. A Web Admin can reactivate this member
-    later, but roles, site access and contact details will need to be re-added.</p>`;
+    <div class="tw:space-y-3 tw:text-[14.5px] tw:leading-relaxed tw:text-propolis-60">
+      <p>Delete ${esc(m.name)}? This revokes all of their roles and apiary access, and
+      deletes their contact details on file.</p>
+      <p>Anything they've already posted or written (forum posts, repository articles)
+      stays as-is and still shows their name. A Web Admin can reactivate this member
+      later, but roles, site access and contact details will need to be re-added.</p>
+    </div>`;
   const actions = `
     <button class="btn btn-ghost" data-close>Cancel</button>
     <button class="btn btn-danger" id="confirm-delete-member">Delete member</button>`;
@@ -468,11 +422,11 @@ function openContactForm(m) {
   const body = `
     <form id="contact-form">
       <div class="field">
-        <label for="c-phone">Phone <span style="color:var(--amber-deep)">*</span></label>
+        <label for="c-phone">Phone <span class="tw:text-amber-deep">*</span></label>
         <input id="c-phone" type="tel" required value="${esc(m.phone)}" placeholder="04xx xxx xxx">
       </div>
       <div class="field">
-        <label for="c-email">Email <span style="color:var(--amber-deep)">*</span></label>
+        <label for="c-email">Email <span class="tw:text-amber-deep">*</span></label>
         <input id="c-email" type="email" required value="${esc(m.email)}" placeholder="name@example.com">
       </div>
       <div class="field">
@@ -528,14 +482,7 @@ function openContactForm(m) {
 function openRolesForm(m) {
   const currentRoles = m.roles;
 
-  const roleChecks = roleOptions.map((r) => `
-    <label class="row" style="align-items:flex-start;gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;margin-bottom:8px">
-      <input type="checkbox" value="${esc(r.name)}" class="r-role" style="margin-top:3px" ${currentRoles.includes(r.name) ? 'checked' : ''}>
-      <span>
-        <span style="display:block">${esc(r.name)}</span>
-        <span class="caption" style="display:block">${esc(r.description)}</span>
-      </span>
-    </label>`).join('');
+  const roleChecks = roleOptions.map((r) => roleCheckbox(r, { cls: 'r-role', checked: currentRoles.includes(r.name) })).join('');
 
   const body = `
     <div class="field">
