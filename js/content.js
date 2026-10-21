@@ -16,7 +16,9 @@ let manifest = {};
 
 export async function loadContent() {
   try {
-    const res = await fetch('content/repository/manifest.json');
+    /* no-cache: always revalidate, so a browser never serves an old index that
+       lists articles whose files have since been removed or moved. */
+    const res = await fetch('content/repository/manifest.json', { cache: 'no-cache' });
     if (res.ok) manifest = await res.json();
   } catch {
     /* No manifest (fresh checkout before any content, or file:// misuse):
