@@ -1,0 +1,136 @@
+/* ==========================================================================
+   Shared page primitives, authored with Tailwind.
+
+   These are the semantic class names the views already use (.topbar, .wrap,
+   .panel, .btn, .field, .tag, ...) given the same look as the Projects pages
+   (js/views/projects.js, js/components.js): a tinted header band over a
+   white page, rounded-2xl bordered cards, pill filters and tags, amber
+   buttons. They sit in the `components` layer, above css/main.css's `legacy`
+   layer, so they win without touching the views' markup; a `tw:` utility
+   on an element still beats them.
+
+   Built from the same tokens as everything else (colours and fonts come from
+   css/main.css's custom properties via the @theme block in input.css).
+   ========================================================================== */
+
+/* ---- Page chrome -------------------------------------------------------- */
+
+/* One content column for the whole site: 72rem wide, 1.5rem gutters, centred.
+   Bands (header, body) run full width; their padding keeps the content in
+   that column. */
+.main {
+  @apply tw:bg-white;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.topbar {
+  @apply tw:flex tw:flex-wrap tw:items-end tw:gap-x-6 tw:gap-y-4 tw:bg-comb-deep/55 tw:pt-10 tw:pb-9 tw:md:pt-14;
+  padding-inline: max(1.5rem, calc((100% - 72rem) / 2));
+  border-bottom: 0;
+}
+/* Titles share the line with the actions; the views' inline width:100% would
+   push the actions onto a row of their own. */
+.topbar > :first-child { width: auto !important; flex: 1 1 22rem; min-width: 0; }
+.topbar .eyebrow { @apply tw:mb-3 tw:text-xs tw:font-medium tw:tracking-[0.18em] tw:text-amber-deep; width: 100%; }
+.topbar h1 { @apply tw:font-display tw:text-4xl tw:font-semibold tw:tracking-tight tw:text-propolis tw:md:text-5xl; max-width: none !important; }
+.topbar-actions { @apply tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:gap-2; }
+
+.wrap {
+  @apply tw:py-12 tw:md:py-14;
+  padding-inline: max(1.5rem, calc((100% - 72rem) / 2));
+}
+.wrap-narrow { @apply tw:mx-auto; max-width: calc(780px + 3rem); }
+
+.crumb { @apply tw:mb-4 tw:flex tw:items-center tw:gap-1 tw:text-sm tw:text-propolis-60; }
+.crumb a { @apply tw:transition tw:hover:text-amber-deep tw:hover:underline; }
+.crumb svg { @apply tw:text-propolis-40; }
+
+.eyebrow { @apply tw:font-mono tw:text-[11px] tw:font-medium tw:uppercase tw:tracking-[0.16em] tw:text-propolis-40; }
+.lede { @apply tw:font-display tw:text-lg tw:leading-relaxed tw:text-propolis-60 tw:text-pretty; }
+
+/* ---- Cards -------------------------------------------------------------- */
+
+.panel { @apply tw:rounded-2xl tw:border tw:border-comb-shade tw:bg-white; }
+.panel-head { @apply tw:flex tw:items-center tw:gap-3 tw:border-b tw:border-comb-shade/70 tw:px-6 tw:py-4; }
+.panel-head h2, .panel-head h3 { @apply tw:font-display tw:text-xl tw:font-medium tw:text-propolis; }
+.panel-body { @apply tw:p-6; }
+.panel-body-flush { @apply tw:p-0; }
+
+.grid { gap: 1.5rem; }
+.grid-dash { grid-template-columns: minmax(0, 1fr) 21rem; gap: 2.5rem; }
+@media (max-width: 1120px) { .grid-dash { grid-template-columns: minmax(0, 1fr); } }
+.stack { gap: 1.5rem; }
+
+/* Headline figures */
+.tiles { @apply tw:gap-0 tw:overflow-hidden tw:rounded-2xl tw:border tw:border-comb-shade tw:bg-white; }
+.tile { @apply tw:border-r tw:border-b tw:border-comb-shade tw:bg-white tw:px-6 tw:py-5; margin: 0 -1px -1px 0; }
+.tile dd { @apply tw:font-display tw:font-semibold tw:tracking-tight; font-size: 2.25rem; }
+
+.empty { @apply tw:px-6 tw:py-12 tw:text-center; }
+.empty h3 { @apply tw:mb-2 tw:font-display tw:text-2xl tw:font-medium tw:text-propolis; }
+.empty p { @apply tw:text-propolis-60; font-size: 14.5px; }
+
+/* ---- Buttons ------------------------------------------------------------ */
+
+.btn {
+  @apply tw:inline-flex tw:items-center tw:justify-center tw:gap-2 tw:rounded-lg tw:px-5 tw:py-2.5 tw:text-sm tw:font-semibold tw:transition tw:duration-200 tw:hover:-translate-y-px tw:disabled:pointer-events-none tw:disabled:opacity-60;
+}
+.btn-primary { @apply tw:bg-amber-deep tw:text-white tw:hover:bg-propolis; }
+.btn-primary:active { transform: translateY(1px); }
+.btn-ghost { @apply tw:border tw:border-comb-shade tw:bg-white tw:text-propolis tw:hover:border-amber tw:hover:bg-comb; }
+.btn-danger { @apply tw:bg-[#8C2B21] tw:text-white tw:hover:bg-[#6E211A]; }
+.btn-block { @apply tw:w-full; }
+.btn-sm { @apply tw:gap-1.5 tw:px-3.5 tw:py-1.5 tw:text-[13px]; }
+
+/* ---- Forms -------------------------------------------------------------- */
+
+.field > label:first-child { @apply tw:mb-2 tw:block tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.12em] tw:text-propolis-60; }
+.field input, .field select, .field textarea {
+  @apply tw:w-full tw:rounded-lg tw:border tw:border-comb-shade tw:bg-white tw:px-3.5 tw:py-2.5 tw:text-[14.5px] tw:text-propolis tw:transition;
+}
+.field input[type="checkbox"], .field input[type="radio"] { @apply tw:w-auto tw:rounded tw:p-0; }
+.field input:focus, .field select:focus, .field textarea:focus {
+  @apply tw:border-amber tw:outline-none;
+  box-shadow: 0 0 0 3px var(--amber-wash);
+}
+
+/* ---- Filters, tags, small pieces --------------------------------------- */
+
+.chip { @apply tw:rounded-full tw:border tw:border-comb-shade tw:bg-white tw:px-4 tw:py-2 tw:text-sm tw:font-medium tw:text-propolis tw:transition tw:hover:border-amber tw:hover:text-amber-deep; }
+.chip.is-on { @apply tw:border-propolis tw:bg-propolis tw:text-white tw:hover:text-white; }
+.filters { @apply tw:mb-6 tw:flex tw:flex-wrap tw:gap-2; }
+
+.tag { @apply tw:inline-flex tw:items-center tw:gap-1.5 tw:whitespace-nowrap tw:rounded-full tw:px-2.5 tw:py-1 tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.06em]; }
+.tag-outline { @apply tw:border tw:border-comb-shade; }
+
+.sub-btn { @apply tw:inline-flex tw:shrink-0 tw:items-center tw:gap-1.5 tw:rounded-full tw:border tw:border-comb-shade tw:bg-white tw:px-3 tw:py-1.5 tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.08em] tw:text-propolis-60 tw:transition tw:hover:border-amber tw:hover:text-amber-deep; }
+.sub-btn.is-on { @apply tw:border-amber tw:bg-amber-wash tw:text-amber-deep; }
+.sub-btn svg { @apply tw:size-3; }
+.cell.is-picked { box-shadow: 0 0 0 2px var(--propolis); }
+
+/* ---- Tables and lists --------------------------------------------------- */
+
+.tbl th { @apply tw:px-5 tw:py-3.5; }
+.tbl td { @apply tw:px-5 tw:py-3.5; }
+.tbl tbody tr:hover { background: color-mix(in srgb, var(--comb) 70%, transparent); }
+
+.line, .sub, .thread, .breeder { @apply tw:px-6; }
+.line:hover, .sub:hover, .thread:hover { background: color-mix(in srgb, var(--comb) 70%, transparent); }
+.thread h3 { @apply tw:font-display tw:text-xl tw:font-medium; }
+
+/* ---- Cards with their own identity ------------------------------------- */
+
+.track { @apply tw:rounded-2xl tw:border-comb-shade; }
+.track-head h2 { @apply tw:font-display tw:text-2xl tw:font-medium; }
+.listing { @apply tw:rounded-2xl tw:border-2 tw:border-comb-shade/80 tw:transition tw:duration-300; }
+.listing:hover { @apply tw:-translate-y-1 tw:border-amber/60; box-shadow: 0 12px 30px color-mix(in srgb, var(--propolis) 10%, transparent); }
+.comb-field { @apply tw:rounded-xl; }
+.attach-chip, .attach-remove { @apply tw:rounded-lg; }
+.attach-manage { @apply tw:rounded-xl; }
+
+/* ---- Overlays ----------------------------------------------------------- */
+
+.modal { @apply tw:rounded-2xl; }
+.modal-x { @apply tw:rounded-lg; }
+.toast { @apply tw:rounded-xl; }

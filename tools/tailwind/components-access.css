@@ -1,0 +1,3 @@
+/* Page-specific styles for the access views, authored with Tailwind (@apply tw:...).
+   Only for what utilities in the markup cannot express (keyframes, state classes
+   set from JS, clip-paths, pseudo-element tricks). */

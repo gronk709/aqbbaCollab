@@ -10,6 +10,7 @@ import {
   loadApiaries, loadApiary, loadQueenLines, loadPublicStats, loadRetiredHives,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
+import { pageBody, emptyState, button } from './components.js';
 import { renderGate } from './views/gate.js';
 import { renderHome } from './views/home.js';
 import { renderSetPassword } from './views/setPassword.js';
@@ -99,39 +100,39 @@ function shellHTML(inner) {
   const canManageMembers = isWebAdmin(me.id);
   const hash = location.hash || '#/';
   const nav = NAV.filter((item) => !item.adminOnly || canManageMembers).map((item) => {
-    if (item.group) return `<div class="rail-group"><span>${item.group}</span></div>`;
+    if (item.group) return `<div class="tw:px-6 tw:pt-4 tw:pb-2"><span class="tw:font-mono tw:text-[9.5px] tw:font-medium tw:uppercase tw:tracking-[0.16em] tw:text-comb/35">${item.group}</span></div>`;
     const active = item.exact ? /^#\/?$/.test(hash) : hash.startsWith(item.path);
     const n = item.badge ? item.badge() : 0;
     return `
-      <a class="nav-item ${active ? 'is-on' : ''}" href="${item.path}">
-        ${icons[item.icon]}
+      <a class="nav-item ${active ? 'is-on' : ''} tw:relative tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-[9px] tw:text-[13.5px] tw:font-medium tw:transition ${active ? 'tw:bg-amber-bright/15 tw:text-comb tw:before:absolute tw:before:inset-y-1.5 tw:before:left-0 tw:before:w-0.5 tw:before:bg-amber-bright' : 'tw:hover:bg-comb/5 tw:hover:text-comb'}" href="${item.path}">
+        <span class="tw:opacity-80 tw:[&>svg]:size-4">${icons[item.icon]}</span>
         <span>${item.label}</span>
-        ${n ? `<span class="nav-count">${n}</span>` : ''}
+        ${n ? `<span class="${NAV_COUNT}">${n}</span>` : ''}
       </a>`;
   }).join('');
 
   return `
-    <button class="rail-toggle" data-rail aria-label="Open navigation">${icons.menu}</button>
-    <div class="rail-scrim" data-rail-close></div>
-    <div class="shell">
-      <aside class="rail">
-        <a class="rail-mark" href="#/">
+    <button class="rail-toggle tw:fixed tw:top-2.5 tw:left-2.5 tw:z-[60] tw:grid tw:size-10 tw:place-items-center tw:rounded-lg tw:bg-propolis tw:text-comb tw:min-[901px]:hidden" data-rail aria-label="Open navigation">${icons.menu}</button>
+    <div class="rail-scrim tw:fixed tw:inset-0 tw:z-[65] tw:hidden tw:bg-propolis/50 tw:[body.rail-open_&]:block tw:min-[901px]:hidden" data-rail-close></div>
+    <div class="shell tw:grid tw:min-h-dvh tw:min-[901px]:grid-cols-[var(--rail)_minmax(0,1fr)]">
+      <aside class="rail tw:fixed tw:top-0 tw:left-0 tw:z-[70] tw:flex tw:h-dvh tw:w-[260px] tw:-translate-x-full tw:flex-col tw:bg-propolis tw:py-6 tw:text-comb/70 tw:transition-transform tw:duration-300 tw:[body.rail-open_&]:translate-x-0 tw:min-[901px]:sticky tw:min-[901px]:z-auto tw:min-[901px]:w-auto tw:min-[901px]:translate-x-0">
+        <a class="rail-mark tw:flex tw:items-center tw:gap-3 tw:px-6 tw:pb-6" href="#/">
           ${brandMark(36)}
-          <b>AQBBA</b>
+          <b class="tw:font-mono tw:text-[11px] tw:font-semibold tw:tracking-[0.18em] tw:text-comb">AQBBA</b>
         </a>
-        <nav>${nav}</nav>
-        <div class="rail-foot">
-          <div class="rail-who">
+        <nav class="tw:flex-1 tw:overflow-y-auto">${nav}</nav>
+        <div class="tw:mt-4 tw:border-t tw:border-comb/10 tw:px-6 tw:pt-4">
+          <div class="tw:flex tw:items-center tw:gap-3">
             ${avatar(me)}
-            <div>
-              <strong><a href="#/settings">${esc(me.name)}</a></strong>
-              <span>${esc(roleLabel(me.id))}</span>
+            <div class="tw:min-w-0">
+              <strong class="tw:block tw:truncate tw:text-[13px] tw:font-semibold tw:text-comb"><a href="#/settings" class="tw:hover:underline tw:focus-visible:underline">${esc(me.name)}</a></strong>
+              <span class="tw:text-[11px] tw:text-comb/45">${esc(roleLabel(me.id))}</span>
             </div>
           </div>
-          <button class="rail-out" data-signout>Sign out</button>
+          <button class="rail-out tw:mt-3 tw:text-xs tw:text-comb/50 tw:transition tw:hover:text-amber-bright" data-signout>Sign out</button>
         </div>
       </aside>
-      <main class="main" id="main">${inner}</main>
+      <main class="main tw:min-w-0 tw:bg-white tw:pt-14 tw:min-[901px]:pt-0" id="main">${inner}</main>
     </div>`;
 }
 
@@ -155,31 +156,25 @@ const routeDataCache = new Map();
    while there's only a handful of async routes. */
 window.__aqbba_invalidateData = () => routeDataCache.clear();
 
+const NAV_COUNT = 'nav-count tw:ml-auto tw:rounded-full tw:bg-amber-bright tw:px-1.5 tw:py-px tw:font-mono tw:text-[10.5px] tw:font-semibold tw:text-propolis';
+
 function loadingPanel() {
-  return `<div class="wrap"><div class="panel"><div class="empty"><h3>Loading…</h3></div></div></div>`;
+  return pageBody(emptyState({ title: 'Loading…', bordered: false }));
 }
 
 function errorPanel(err) {
-  return `
-    <div class="wrap">
-      <div class="panel">
-        <div class="empty">
-          <h3>Couldn't load this page</h3>
-          <p>${esc(err && err.message ? err.message : 'Something went wrong.')}</p>
-          <button class="btn btn-primary" data-retry>Try again</button>
-        </div>
-      </div>
-    </div>`;
+  return pageBody(emptyState({
+    title: "Couldn't load this page",
+    text: esc(err && err.message ? err.message : 'Something went wrong.'),
+    action: button({ id: '', label: 'Try again', attrs: 'data-retry' }),
+  }));
 }
 
-const notFoundPanel = () => `
-  <div class="wrap">
-    <div class="empty">
-      <h3>That page isn't here</h3>
-      <p>The link may be out of date. Home is a good place to pick up from.</p>
-      <a class="btn btn-primary" href="#/">Go home</a>
-    </div>
-  </div>`;
+const notFoundPanel = () => pageBody(emptyState({
+  title: "That page isn't here",
+  text: 'The link may be out of date. Home is a good place to pick up from.',
+  action: button({ href: '#/', label: 'Go home' }),
+}));
 
 async function render() {
   const myGen = ++renderGen;
@@ -289,7 +284,7 @@ function refreshBadge() {
   if (!link) return;
   const existing = link.querySelector('.nav-count');
   if (n && existing) existing.textContent = n;
-  else if (n) link.insertAdjacentHTML('beforeend', `<span class="nav-count">${n}</span>`);
+  else if (n) link.insertAdjacentHTML('beforeend', `<span class="${NAV_COUNT}">${n}</span>`);
   else if (existing) existing.remove();
 }
 
