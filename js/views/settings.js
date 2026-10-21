@@ -22,47 +22,44 @@
 
 import { currentUser, setMemberContact, changeOwnEmail, changeOwnPassword, loadSignedInMember } from '../store.js';
 import { esc, toast } from '../ui.js';
+import { pageHeader, pageBody, card } from '../components.js';
 
 export function renderSettings() {
   const me = currentUser();
   const isWA = !!me.wa;
 
+  const NOTE = 'tw:text-sm tw:text-propolis-60';
+
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <h1>Account settings</h1>
-      </div>
-    </div>
+    <div class="view">
+      ${pageHeader({ title: 'Account settings' })}
+      ${pageBody(`
+        <div class="tw:max-w-xl tw:space-y-6">
+          ${card({
+            title: 'Contact details',
+            body: `
+              <form id="settings-contact" novalidate>
+                <div class="field">
+                  <label for="s-phone">Phone</label>
+                  <input id="s-phone" type="tel" value="${esc(me.phone)}" placeholder="04xx xxx xxx">
+                </div>
+                <div class="field">
+                  <label for="s-email">Email</label>
+                  <input id="s-email" type="email" required value="${esc(me.email)}" placeholder="name@example.com">
+                </div>
+                <p class="${NOTE} tw:mb-5">
+                  ${isWA
+                    ? 'This is just your contact address for notifications — your Wild Apricot sign-in is unaffected either way.'
+                    : 'Changing your email also updates how you sign in — you\'ll need to confirm it from a link sent to the new address before the change takes effect.'}
+                </p>
+                <button type="submit" class="btn btn-primary" id="save-contact-btn">Save contact details</button>
+              </form>`,
+          })}
 
-    <div class="wrap view">
-      <div class="stack" style="max-width:480px">
-        <div class="panel">
-          <div class="panel-head"><h2>Contact details</h2></div>
-          <div class="panel-body">
-            <form id="settings-contact" novalidate>
-              <div class="field">
-                <label for="s-phone">Phone</label>
-                <input id="s-phone" type="tel" value="${esc(me.phone)}" placeholder="04xx xxx xxx">
-              </div>
-              <div class="field">
-                <label for="s-email">Email</label>
-                <input id="s-email" type="email" required value="${esc(me.email)}" placeholder="name@example.com">
-              </div>
-              <p class="caption" style="margin-bottom:var(--s5)">
-                ${isWA
-                  ? 'This is just your contact address for notifications — your Wild Apricot sign-in is unaffected either way.'
-                  : 'Changing your email also updates how you sign in — you\'ll need to confirm it from a link sent to the new address before the change takes effect.'}
-              </p>
-              <button type="submit" class="btn btn-primary" id="save-contact-btn">Save contact details</button>
-            </form>
-          </div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head"><h2>Password</h2></div>
-          <div class="panel-body">
-            ${isWA ? `
-              <p class="caption">This account signs in through Wild Apricot, so its password is managed
+          ${card({
+            title: 'Password',
+            body: isWA ? `
+              <p class="${NOTE}">This account signs in through Wild Apricot, so its password is managed
               there — use Wild Apricot's own "Forgot password" link to change it.</p>
             ` : `
               <form id="settings-password" novalidate>
@@ -78,10 +75,9 @@ export function renderSettings() {
                 </div>
                 <button type="submit" class="btn btn-primary" id="save-password-btn">Update password</button>
               </form>
-            `}
-          </div>
-        </div>
-      </div>
+            `,
+          })}
+        </div>`)}
     </div>`;
 
   setTimeout(() => {
