@@ -84,7 +84,7 @@ function docLink(href, label, docs) {
 /* An image reference — `![alt](img:<storage path>)` — points at an object in
    a private Storage bucket, so it renders as an <img> with no src and the
    page calls hydrateImages() afterwards to swap in freshly signed URLs. */
-const MD_IMG = 'tw:my-2 tw:block tw:h-auto tw:max-w-full tw:min-h-24 tw:rounded-lg tw:border tw:border-comb-shade tw:bg-comb';
+const MD_IMG = 'tw:my-2 tw:block tw:h-auto tw:max-w-full tw:sm:max-w-sm tw:min-h-24 tw:cursor-zoom-in tw:rounded-lg tw:border tw:border-comb-shade tw:bg-comb';
 
 function inline(md, docs) {
   return esc(md)
@@ -110,7 +110,10 @@ export async function hydrateImages(root, sign) {
   try { urls = await sign(imgs.map((i) => i.dataset.imgPath)); } catch { /* fall through to alt text */ }
   imgs.forEach((img) => {
     const url = urls[img.dataset.imgPath];
-    if (url) img.src = url;
+    if (url) {
+      img.src = url;
+      img.addEventListener('click', () => window.open(url, '_blank', 'noopener'));
+    }
   });
 }
 

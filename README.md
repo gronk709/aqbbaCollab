@@ -396,7 +396,7 @@ association material.
 
 **Images.** Articles and forum posts can include pictures (JPEG or PNG only).
 `js/images.js` resizes every picked image in the browser before upload — longest
-side 1600px, re-encoded and shrunk toward ~500KB — so what is stored is always
+side 800px, re-encoded and shrunk toward ~200KB — so what is stored is always
 web-sized. In a repository article, "Add image" uploads it to the private
 `repository-documents` bucket under `<sub-topic>/images/` (the first path segment must be the sub-topic id: the storage policy checks access to it) and inserts
 `![description](img:<path>)` into the Markdown; the page swaps in short-lived

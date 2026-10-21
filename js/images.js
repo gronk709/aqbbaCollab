@@ -10,9 +10,9 @@
    ========================================================================== */
 
 export const IMAGE_ACCEPT = 'image/jpeg,image/png';
-export const IMAGE_MAX_EDGE = 1600;
-export const IMAGE_TARGET_BYTES = 500 * 1024;
-const IMAGE_FLOOR_EDGE = 640;
+export const IMAGE_MAX_EDGE = 800;
+export const IMAGE_TARGET_BYTES = 200 * 1024;
+const IMAGE_FLOOR_EDGE = 480;
 const IMAGE_INPUT_MAX_BYTES = 25 * 1024 * 1024;
 
 export const isImageMime = (mime) => mime === 'image/jpeg' || mime === 'image/png';

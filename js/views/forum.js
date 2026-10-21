@@ -403,7 +403,7 @@ export function renderThread(data) {
   const me = currentUser();
   const admin = isWebAdmin(me.id);
 
-  const allPosts = [{ id: 'op', author: t.author, created_at: t.created_at, body: t.body }, ...posts];
+  const allPosts = [{ id: 'op', author: t.author, created_at: t.created_at, edited_at: t.edited_at, body: t.body }, ...posts];
 
   const attachmentsById = Object.fromEntries(attachments.map((a) => [a.id, a]));
   const postsById = Object.fromEntries(allPosts.map((p) => [p.id, p]));
@@ -438,7 +438,7 @@ export function renderThread(data) {
   const imageTile = (a) => `
     <figure class="tw:relative tw:m-0">
       <button type="button" class="tw:block tw:cursor-zoom-in" data-open-attachment="${a.id}" aria-label="Open ${esc(a.filename)} full size">
-        <img data-forum-img="${esc(a.storage_path)}" alt="${esc(a.filename)}" loading="lazy" class="tw:block tw:h-auto tw:max-h-[28rem] tw:max-w-full tw:min-h-24 tw:min-w-24 tw:rounded-lg tw:border tw:border-comb-shade tw:bg-comb">
+        <img data-forum-img="${esc(a.storage_path)}" alt="${esc(a.filename)}" loading="lazy" class="tw:block tw:h-auto tw:max-h-56 tw:max-w-full tw:min-h-24 tw:min-w-24 tw:rounded-lg tw:border tw:border-comb-shade tw:bg-comb">
       </button>
       ${a.author_id === me.id || admin ? `<button type="button" class="${IMG_BUTTON}" data-delete-attachment="${a.id}" aria-label="Remove image">${icons.x}</button>` : ''}
     </figure>`;
@@ -460,7 +460,7 @@ export function renderThread(data) {
           <div class="tw:mb-2 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-0.5">
             <strong class="tw:text-[15px] tw:font-semibold tw:text-propolis">${esc(p.author.name)}</strong>
             <span class="tw:text-sm tw:text-propolis-40">${esc(roleLabelFrom(p.author.roles))}</span>
-            <span class="tw:ml-auto tw:font-mono tw:text-xs tw:text-propolis-40">${relDays(daysAgo(p.created_at))}</span>
+            <span class="tw:ml-auto tw:font-mono tw:text-xs tw:text-propolis-40">${relDays(daysAgo(p.created_at))}${p.edited_at ? ` · <span title="Edited ${esc(relDays(daysAgo(p.edited_at)))}" class="tw:italic">edited</span>` : ''}</span>
             ${canEditHere ? `<button type="button" class="tw:grid tw:size-6 tw:shrink-0 tw:place-items-center tw:rounded-md tw:text-propolis-40 tw:transition tw:hover:bg-comb tw:hover:text-propolis tw:[&_svg]:size-3" data-edit-post="${p.id}" aria-label="${p.id === 'op' ? 'Edit topic' : 'Edit reply'}">${icons.pen}</button>` : ''}
             ${canDeleteHere ? `<button type="button" class="tw:grid tw:size-6 tw:shrink-0 tw:place-items-center tw:rounded-md tw:text-propolis-40 tw:transition tw:hover:bg-mark-red/10 tw:hover:text-mark-red tw:[&_svg]:size-3" data-delete-reply="${p.id}" aria-label="Delete reply">${icons.x}</button>` : ''}
           </div>

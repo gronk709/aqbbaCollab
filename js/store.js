@@ -513,14 +513,14 @@ export async function loadThread(id) {
 
   const { data: thread, error: threadErr } = await supabase
     .from('forum_threads')
-    .select(`id, title, body, pinned, created_at, category:forum_categories(id, name), author:members(${MEMBER_DISPLAY_FIELDS})`)
+    .select(`id, title, body, pinned, created_at, edited_at, category:forum_categories(id, name), author:members(${MEMBER_DISPLAY_FIELDS})`)
     .eq('id', id)
     .single();
   if (threadErr) throw threadErr;
 
   const { data: posts, error: postsErr } = await supabase
     .from('forum_posts')
-    .select(`id, body, created_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
+    .select(`id, body, created_at, edited_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
     .eq('thread_id', id)
     .order('created_at', { ascending: true });
   if (postsErr) throw postsErr;
@@ -589,7 +589,7 @@ export async function updateForumThread(thread, { title, body }) {
   const me = requireRealMember();
   if (thread.author.id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only edit your own topic.');
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from('forum_threads').update({ title, body }).eq('id', thread.id).select('id');
+  const { data, error } = await supabase.from('forum_threads').update({ title, body, edited_at: new Date().toISOString() }).eq('id', thread.id).select('id');
   if (error) throw error;
   if (!data.length) throw new Error('You can only edit your own topic.');
 }
@@ -598,7 +598,7 @@ export async function updateForumPost(post, body) {
   const me = requireRealMember();
   if (post.author.id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only edit your own replies.');
   const supabase = await getSupabase();
-  const { data, error } = await supabase.from('forum_posts').update({ body }).eq('id', post.id).select('id');
+  const { data, error } = await supabase.from('forum_posts').update({ body, edited_at: new Date().toISOString() }).eq('id', post.id).select('id');
   if (error) throw error;
   if (!data.length) throw new Error('You can only edit your own replies.');
 }
