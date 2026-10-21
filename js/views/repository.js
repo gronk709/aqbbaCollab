@@ -30,10 +30,11 @@ import {
   addRepositoryArticle, updateRepositoryArticle, deleteRepositoryArticle,
   addRepositoryDocument, addRepositoryLink, deleteRepositoryDocument, openRepositoryDocument,
   setRepositoryTeamMember, removeRepositoryTeamMember, loadRealMembers, loadSubTopicDocuments,
-  isSubscribed,
+  isSubscribed, uploadRepositoryImage, signRepositoryImages,
   REPOSITORY_DOC_MAX_BYTES, REPOSITORY_DOC_ACCEPT,
 } from '../store.js';
-import { contentFor, articleFor, fetchArticleBody, mdToHtml, slugify } from '../content.js';
+import { contentFor, articleFor, fetchArticleBody, mdToHtml, hydrateImages, slugify } from '../content.js';
+import { IMAGE_ACCEPT, prepareImage, altFromFilename } from '../images.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
 import { members } from '../data.js';
 import {
@@ -225,7 +226,7 @@ function openContribute(eligibleSubs, preselect) {
       <div class="field">
         <label for="c-body">Content</label>
         <textarea id="c-body" placeholder="Write for a member who knows the previous track but not this one."></textarea>
-        <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Markdown — headings, **bold**, *italic*, lists, links.</p>
+        <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Markdown — headings, **bold**, *italic*, lists, links, images.</p>
       </div>
       <div class="field">
         <label for="c-doc-picker">Add document or link</label>
@@ -233,6 +234,11 @@ function openContribute(eligibleSubs, preselect) {
           <option value="">Choose one to insert into the content above…</option>
         </select>
         <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Inserts a link that jumps to that item in the Documents list once published — add the document or link itself first if it isn't in the list yet.</p>
+      </div>
+      <div class="field">
+        <label for="c-img-picker">Add image</label>
+        <input type="file" id="c-img-picker" accept="${IMAGE_ACCEPT}">
+        <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">JPEG or PNG. Resized and compressed for the web automatically, then inserted into the content above — edit the text in [brackets] to change its description.</p>
       </div>
     </div>
     <div id="c-document-fields" hidden>
@@ -271,6 +277,7 @@ function openContribute(eligibleSubs, preselect) {
 
   const subSelect = scrim.querySelector('#c-sub');
   bindDocPicker(scrim, 'c-doc-picker', 'c-body', () => subSelect.value, subSelect);
+  bindImagePicker(scrim, 'c-img-picker', 'c-body', () => subSelect.value);
 
   const btn = scrim.querySelector('#pub-contrib');
   btn.addEventListener('click', async () => {
@@ -343,7 +350,7 @@ function openEditArticleModal(article, subId, onSaved) {
     <div class="field">
       <label for="e-body">Content</label>
       <textarea id="e-body">${esc(article.body)}</textarea>
-      <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Markdown — headings, **bold**, *italic*, lists, links.</p>
+      <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Markdown — headings, **bold**, *italic*, lists, links, images.</p>
     </div>
     <div class="field">
       <label for="e-doc-picker">Add document or link</label>
@@ -351,6 +358,11 @@ function openEditArticleModal(article, subId, onSaved) {
         <option value="">Choose one to insert into the content above…</option>
       </select>
       <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">Inserts a link that jumps to that item in the Documents list once published — add the document or link itself first if it isn't in the list yet.</p>
+    </div>
+    <div class="field">
+      <label for="e-img-picker">Add image</label>
+      <input type="file" id="e-img-picker" accept="${IMAGE_ACCEPT}">
+      <p class="tw:mt-1.5 tw:text-xs tw:text-propolis-40">JPEG or PNG. Resized and compressed for the web automatically, then inserted into the content above — edit the text in [brackets] to change its description.</p>
     </div>`;
   const actions = `
     <button class="btn btn-ghost" data-close>Cancel</button>
@@ -358,6 +370,7 @@ function openEditArticleModal(article, subId, onSaved) {
   const scrim = modal({ title: 'Edit article', body, actions });
 
   bindDocPicker(scrim, 'e-doc-picker', 'e-body', () => subId);
+  bindImagePicker(scrim, 'e-img-picker', 'e-body', () => subId);
 
   scrim.querySelector('#save-article').addEventListener('click', async (e) => {
     const title = scrim.querySelector('#e-title').value.trim();
@@ -551,6 +564,33 @@ function bindDocPicker(scrim, pickerId, bodyFieldId, subIdOf, watchEl) {
   });
 }
 
+/* Wires an "Add image" file input: the chosen JPEG/PNG is resized and
+   compressed in the browser (js/images.js), uploaded, and inserted into the
+   article textarea as `![description](img:path)` at the cursor. */
+function bindImagePicker(scrim, inputId, bodyFieldId, subIdOf) {
+  const input = scrim.querySelector(`#${inputId}`);
+  const bodyField = scrim.querySelector(`#${bodyFieldId}`);
+  input.addEventListener('change', async () => {
+    const file = input.files[0];
+    if (!file) return;
+    input.disabled = true;
+    try {
+      const prepared = await prepareImage(file);
+      const path = await uploadRepositoryImage(subIdOf(), prepared);
+      const snippet = `![${altFromFilename(file.name)}](img:${path})`;
+      const start = bodyField.selectionStart ?? bodyField.value.length;
+      const end = bodyField.selectionEnd ?? bodyField.value.length;
+      bodyField.setRangeText(`${start > 0 ? '\n\n' : ''}${snippet}\n\n`, start, end, 'end');
+      bodyField.focus();
+    } catch (err) {
+      toast(`Couldn't add that image: ${err.message}`);
+    } finally {
+      input.value = '';
+      input.disabled = false;
+    }
+  });
+}
+
 function attachmentsPanel(docs, canContribute, canManage) {
   if (!docs.length) return '';
   const ROW = 'doc-row tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-3.5 tw:transition tw:hover:bg-comb/60';
@@ -605,6 +645,7 @@ function hydrateFileArticle(article, docs) {
     try {
       const md = await fetchArticleBody(article);
       el.innerHTML = mdToHtml(md, docs);
+      hydrateImages(el, signRepositoryImages);
     } catch {
       el.innerHTML = '<p class="tw:text-sm tw:text-propolis-40">This article could not be loaded. Check that the content files were pushed alongside the manifest.</p>';
     }
@@ -728,7 +769,7 @@ export function renderSubTopic(data) {
     if (newest.source === 'file') hydrateFileArticle(newest.raw, docs);
     else setTimeout(() => {
       const el = document.getElementById('md-body');
-      if (el) el.innerHTML = mdToHtml(newest.raw.body, docs);
+      if (el) { el.innerHTML = mdToHtml(newest.raw.body, docs); hydrateImages(el, signRepositoryImages); }
     }, 0);
   }
 
@@ -821,7 +862,7 @@ export function renderArticle(data, subId, slug) {
   if (dbArticle) {
     setTimeout(() => {
       const el = document.getElementById('md-body');
-      if (el) el.innerHTML = mdToHtml(dbArticle.body, docs);
+      if (el) { el.innerHTML = mdToHtml(dbArticle.body, docs); hydrateImages(el, signRepositoryImages); }
     }, 0);
   } else {
     hydrateFileArticle(fileArticle, docs);

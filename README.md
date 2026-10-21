@@ -394,6 +394,17 @@ in Supabase) — it's a second, parallel source rather than a replacement for th
 files-and-push path above, which stays exactly as it was for real, permanent
 association material.
 
+**Images.** Articles and forum posts can include pictures (JPEG or PNG only).
+`js/images.js` resizes every picked image in the browser before upload — longest
+side 1600px, re-encoded and shrunk toward ~500KB — so what is stored is always
+web-sized. In a repository article, "Add image" uploads it to the private
+`repository-documents` bucket under `images/<sub-topic>/` and inserts
+`![description](img:<path>)` into the Markdown; the page swaps in short-lived
+signed URLs when it renders, and removing an image from the text (or deleting
+the article) deletes the stored file. In the forum, the "Images" field on a new
+topic, reply or "Add attachment" stores them as ordinary `forum_attachments`
+files and shows them inline under the post.
+
 **Copyright note:** this repo is public. Only commit documents you have the right to
 redistribute — your own material and openly-licensed references (e.g. the COLOSS
 standard-methods series). Publisher PDFs should stay out unless the repo goes private.
