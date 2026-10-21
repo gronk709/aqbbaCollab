@@ -1,15 +1,6 @@
 {
  "rs-graft": {
-  "articles": [
-   {
-    "slug": "where-to-start-with-queen-rearing",
-    "file": "content/repository/rs-graft/where-to-start-with-queen-rearing.md",
-    "title": "Introduction to Queen Rearing",
-    "author": "m1",
-    "date": "2026-08-05",
-    "summary": "Some introductory articles and links about queen rearing"
-   }
-  ],
+  "articles": [],
   "attachments": [
    {
     "file": "content/repository/rs-graft/drone-mother-colonies-numbers-positioning-rhodes.pdf",
@@ -50,16 +41,7 @@
   ]
  },
  "rs-ii": {
-  "articles": [
-   {
-    "slug": "ii-standard-methods",
-    "file": "content/repository/rs-ii/ii-standard-methods.md",
-    "title": "Instrumental insemination — the standard methods reference",
-    "author": "m1",
-    "date": "2026-08-05",
-    "summary": "The reference text for II technique, equipment and semen handling."
-   }
-  ],
+  "articles": [],
   "attachments": [
    {
     "file": "content/repository/rs-ii/instrumental-insemination-standard-methods.pdf",
@@ -70,16 +52,7 @@
   ]
  },
  "rs-labour": {
-  "articles": [
-   {
-    "slug": "using-the-queen-rearing-calendar",
-    "file": "content/repository/rs-labour/using-the-queen-rearing-calendar.md",
-    "title": "Using the queen rearing calendar",
-    "author": "m1",
-    "date": "2026-08-05",
-    "summary": "The planning spreadsheet that works a season backwards from delivery dates to graft dates."
-   }
-  ],
+  "articles": [],
   "attachments": [
    {
     "file": "content/repository/rs-labour/queen-rearing-calendar.xlsx",
@@ -90,16 +63,7 @@
   ]
  },
  "rs-lines": {
-  "articles": [
-   {
-    "slug": "plan-bee-and-program-design",
-    "file": "content/repository/rs-lines/plan-bee-and-program-design.md",
-    "title": "Plan Bee and designing a line-breeding program",
-    "author": "m1",
-    "date": "2026-08-05",
-    "summary": "The national genetic improvement manual and the COLOSS implementation guide, and how AQBBA's program sits relative to both."
-   }
-  ],
+  "articles": [],
   "attachments": [
    {
     "file": "content/repository/rs-lines/initiation-implementation-breeding-programs-coloss.pdf",
@@ -116,16 +80,7 @@
   ]
  },
  "rs-select": {
-  "articles": [
-   {
-    "slug": "breeding-program-theory",
-    "file": "content/repository/rs-select/breeding-program-theory.md",
-    "title": "The theory behind a breeding program",
-    "author": "m1",
-    "date": "2026-08-05",
-    "summary": "The foundational papers on how breeding programs work — objectives, performance testing, and fertility as a selectable trait."
-   }
-  ],
+  "articles": [],
   "attachments": [
    {
     "file": "content/repository/rs-select/basic-concept-of-breeding-programs-coloss.pdf",
@@ -142,16 +97,7 @@
   ]
  },
  "rs-yard": {
-  "articles": [
-   {
-    "slug": "mating-control-reading",
-    "file": "content/repository/rs-yard/mating-control-reading.md",
-    "title": "Mating control — the why and the how",
-    "author": "m1",
-    "date": "2026-08-05",
-    "summary": "Why controlled mating is what makes selection actually work, and the practical options at member scale."
-   }
-  ],
+  "articles": [],
   "attachments": [
    {
     "file": "content/repository/rs-yard/drone-mother-colonies-number-position.pdf",

@@ -341,6 +341,12 @@ in-app "Contribute"/"Add item" composer instead — see "Repository" above and t
 "Roles & apiary access" section for how that access is granted. Both sources are read
 side by side on the same sub-topic page.
 
+Note: the association's original reading-list articles (one per sub-topic) have been
+moved into the database, so they can be edited and deleted in the app like any other
+article; today the file-based path holds the downloadable documents (PDFs, spreadsheets)
+that those articles link to. Articles can still be added as files if you ever want a
+permanent, code-reviewed one.
+
 To add or change a file-based item:
 
 1. Put files in `content/repository/<sub-topic-id>/` (the ids are in `js/data.js`:
