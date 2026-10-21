@@ -3,6 +3,11 @@
    ========================================================================== */
 
 /* Escape anything that came from a member. */
+/* "21 Oct 2026, 3:45 pm" in the viewer's own locale and time zone. */
+export const fmtDateTime = (iso) => new Date(iso).toLocaleString(undefined, {
+  day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit',
+});
+
 export function esc(s = '') {
   return String(s).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
