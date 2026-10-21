@@ -905,7 +905,7 @@ export async function deleteRepositoryArticle(id) {
 export async function uploadRepositoryImage(subTopicId, file) {
   requireRealMember();
   const supabase = await getSupabase();
-  const path = `images/${subTopicId}/${crypto.randomUUID()}-${safeStorageSegment(file.name)}`;
+  const path = `${subTopicId}/images/${crypto.randomUUID()}-${safeStorageSegment(file.name)}`;
   const { error } = await supabase.storage.from(REPOSITORY_DOCUMENTS_BUCKET).upload(path, file, { contentType: file.type });
   if (error) throw error;
   return path;
