@@ -19,34 +19,34 @@ import { hexPoints, projectStoryCard } from '../projectArt.js';
 
 const ICONS = {
   assess: `<svg viewBox="0 0 80 80" class="tw:size-full" aria-hidden="true">
-    <path d="M31 13l17 9.8v19.6L31 52.2 14 42.4V22.8z" style="fill:var(--amber)"/>
-    <path d="M31 22.5l8.6 5v10L31 42.5l-8.6-5v-10z" style="fill:var(--amber-wash)"/>
-    <circle cx="44" cy="38" r="16" fill="none" style="stroke:var(--propolis)" stroke-width="5"/>
-    <path d="M56 50l12 12" style="stroke:var(--propolis)" stroke-width="7" stroke-linecap="round"/>
+    <path d="M31 13l17 9.8v19.6L31 52.2 14 42.4V22.8z" class="tw:fill-amber"/>
+    <path d="M31 22.5l8.6 5v10L31 42.5l-8.6-5v-10z" class="tw:fill-amber-wash"/>
+    <circle cx="44" cy="38" r="16" fill="none" class="tw:stroke-propolis" stroke-width="5"/>
+    <path d="M56 50l12 12" class="tw:stroke-propolis" stroke-width="7" stroke-linecap="round"/>
   </svg>`,
   record: `<svg viewBox="0 0 80 80" class="tw:size-full" aria-hidden="true">
-    <rect x="17" y="13" width="46" height="58" rx="6" style="fill:var(--propolis)"/>
+    <rect x="17" y="13" width="46" height="58" rx="6" class="tw:fill-propolis"/>
     <rect x="23" y="22" width="34" height="43" rx="2" fill="#fff"/>
-    <rect x="30" y="8" width="20" height="11" rx="3" style="fill:var(--amber)"/>
-    <path d="M28 33l3.5 3.5 6-7M28 46l3.5 3.5 6-7" fill="none" style="stroke:var(--amber)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M42 33h10M42 46h10M28 58h24" style="stroke:var(--propolis-40)" stroke-width="3" stroke-linecap="round"/>
+    <rect x="30" y="8" width="20" height="11" rx="3" class="tw:fill-amber"/>
+    <path d="M28 33l3.5 3.5 6-7M28 46l3.5 3.5 6-7" fill="none" class="tw:stroke-amber" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M42 33h10M42 46h10M28 58h24" class="tw:stroke-propolis-40" stroke-width="3" stroke-linecap="round"/>
   </svg>`,
   contribute: `<svg viewBox="0 0 80 80" class="tw:size-full" aria-hidden="true">
-    <path d="M40 30l19 11v22L40 74 21 63V41z" style="fill:var(--propolis)"/>
-    <path d="M40 41l9.5 5.5v11L40 63l-9.5-5.5v-11z" style="fill:var(--amber)"/>
-    <path d="M22 26l5-17 8 9 5-11 5 11 8-9 5 17z" style="fill:var(--amber)"/>
-    <circle cx="27" cy="9" r="3" style="fill:var(--amber)"/><circle cx="40" cy="6" r="3" style="fill:var(--amber)"/><circle cx="53" cy="9" r="3" style="fill:var(--amber)"/>
+    <path d="M40 30l19 11v22L40 74 21 63V41z" class="tw:fill-propolis"/>
+    <path d="M40 41l9.5 5.5v11L40 63l-9.5-5.5v-11z" class="tw:fill-amber"/>
+    <path d="M22 26l5-17 8 9 5-11 5 11 8-9 5 17z" class="tw:fill-amber"/>
+    <circle cx="27" cy="9" r="3" class="tw:fill-amber"/><circle cx="40" cy="6" r="3" class="tw:fill-amber"/><circle cx="53" cy="9" r="3" class="tw:fill-amber"/>
   </svg>`,
   learn: `<svg viewBox="0 0 80 80" class="tw:size-full" aria-hidden="true">
-    <path d="M8 20c11-4 22-2 32 5v44c-10-7-21-9-32-5z" style="fill:var(--propolis)"/>
-    <path d="M72 20c-11-4-22-2-32 5v44c10-7 21-9 32-5z" style="fill:var(--amber)"/>
-    <path d="M15 32c6-1.5 12-1 17 2M15 42c6-1.5 12-1 17 2M15 52c6-1.5 12-1 17 2" fill="none" style="stroke:var(--propolis-40)" stroke-width="2.6" stroke-linecap="round"/>
-    <path d="M56 33l7 4v8l-7 4-7-4v-8z" style="fill:var(--amber-wash)"/>
+    <path d="M8 20c11-4 22-2 32 5v44c-10-7-21-9-32-5z" class="tw:fill-propolis"/>
+    <path d="M72 20c-11-4-22-2-32 5v44c10-7 21-9 32-5z" class="tw:fill-amber"/>
+    <path d="M15 32c6-1.5 12-1 17 2M15 42c6-1.5 12-1 17 2M15 52c6-1.5 12-1 17 2" fill="none" class="tw:stroke-propolis-40" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M56 33l7 4v8l-7 4-7-4v-8z" class="tw:fill-amber-wash"/>
   </svg>`,
   connect: `<svg viewBox="0 0 80 80" class="tw:size-full" aria-hidden="true">
-    <path d="M12 10h32a7 7 0 017 7v17a7 7 0 01-7 7H26l-11 9v-9h-3a7 7 0 01-7-7V17a7 7 0 017-7z" fill="#fff" style="stroke:var(--propolis)" stroke-width="4" stroke-linejoin="round"/>
-    <path d="M28 18.5l7 4v8l-7 4-7-4v-8z" style="fill:var(--amber)"/>
-    <path d="M68 34H40a7 7 0 00-7 7v15a7 7 0 007 7h15l11 9v-9h2a7 7 0 007-7V41a7 7 0 00-7-7z" style="fill:var(--amber);stroke:var(--amber-deep)" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M12 10h32a7 7 0 017 7v17a7 7 0 01-7 7H26l-11 9v-9h-3a7 7 0 01-7-7V17a7 7 0 017-7z" fill="#fff" class="tw:stroke-propolis" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M28 18.5l7 4v8l-7 4-7-4v-8z" class="tw:fill-amber"/>
+    <path d="M68 34H40a7 7 0 00-7 7v15a7 7 0 007 7h15l11 9v-9h2a7 7 0 007-7V41a7 7 0 00-7-7z" class="tw:fill-amber tw:stroke-amber-deep" stroke-width="4" stroke-linejoin="round"/>
     <path d="M53 41.5l7 4v8l-7 4-7-4v-8z" fill="#fff"/>
   </svg>`,
 };
@@ -104,6 +104,18 @@ function projectStories(projects) {
   });
 }
 
+/* Hive status -> fill, written out in full so the compiler finds each class. */
+const HEX_FILL = {
+  new: 'tw:fill-[var(--st-new)]',
+  thriving: 'tw:fill-[var(--st-thriving)]',
+  good: 'tw:fill-[var(--st-good)]',
+  average: 'tw:fill-[var(--st-average)]',
+  poor: 'tw:fill-[var(--st-poor)]',
+  critical: 'tw:fill-[var(--st-critical)]',
+  treating: 'tw:fill-[var(--st-treating)]',
+  retired: 'tw:fill-[var(--st-retired)]',
+};
+
 /* The featured hive's place among every hive at its apiary — this page's
    answer to iNaturalist's observation map. */
 function miniComb(hives, highlightId) {
@@ -122,9 +134,9 @@ function miniComb(hives, highlightId) {
     const cy = padTop + r + row * pitchY;
     const on = h.id === highlightId;
     cells += `<polygon points="${hexPoints(cx, cy, w * 0.9)}"
-      style="fill:${on ? 'var(--amber)' : `var(--st-${h.status})`};fill-opacity:${on ? 1 : 0.42};stroke:${on ? 'var(--propolis)' : 'none'};stroke-width:2"><title>${esc(h.id)}</title></polygon>`;
+      class="${on ? 'tw:fill-amber tw:stroke-propolis' : `${HEX_FILL[h.status] || ''} tw:[fill-opacity:0.42] tw:stroke-none`} tw:[stroke-width:2]"><title>${esc(h.id)}</title></polygon>`;
     if (on) {
-      pin = `<path d="M${cx} ${cy - 4}c0 0-11-10-11-17.5a11 11 0 0122 0C${cx + 11} ${cy - 14} ${cx} ${cy - 4} ${cx} ${cy - 4}z" style="fill:var(--amber-deep);stroke:#fff" stroke-width="2"/>
+      pin = `<path d="M${cx} ${cy - 4}c0 0-11-10-11-17.5a11 11 0 0122 0C${cx + 11} ${cy - 14} ${cx} ${cy - 4} ${cx} ${cy - 4}z" class="tw:fill-amber-deep tw:stroke-white" stroke-width="2"/>
              <circle cx="${cx}" cy="${cy - 21.5}" r="4" fill="#fff"/>`;
     }
   });
