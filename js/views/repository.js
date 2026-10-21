@@ -35,7 +35,7 @@ import {
 } from '../store.js';
 import { contentFor, articleFor, fetchArticleBody, mdToHtml, hydrateImages, slugify } from '../content.js';
 import { IMAGE_ACCEPT, prepareImage, altFromFilename } from '../images.js';
-import { esc, icons, avatar, subButton, modal, closeModal, toast } from '../ui.js';
+import { esc, icons, avatar, subButton, modal, closeModal, toast, fmtDateTime } from '../ui.js';
 import { members } from '../data.js';
 import {
   button, pageHeader, pageBody, twoColumn, card, CARD, countBadge, rowList, personRow, emptyState,
@@ -97,7 +97,7 @@ function mergedArticles(subId, c, dbArticles) {
   const db = dbArticles.map((a) => ({
     key: `db:${a.id}`, source: 'db', id: a.id,
     title: a.title, authorName: a.author?.name || 'Member', authorId: a.author?.id,
-    dateLabel: `${(a.updated_at || a.created_at).slice(0, 10)}${isEdited(a) ? ' · edited' : ''}`, dateSort: new Date(a.created_at).getTime(),
+    dateLabel: `${a.created_at.slice(0, 10)}${isEdited(a) ? ` - latest edit ${fmtDateTime(a.updated_at)}` : ''}`, dateSort: new Date(a.created_at).getTime(),
     raw: a,
   }));
   return [...file, ...db].sort((x, y) => y.dateSort - x.dateSort);
@@ -832,7 +832,9 @@ export function renderArticle(data, subId, slug) {
 
   const title = dbArticle ? dbArticle.title : fileArticle.title;
   const who = dbArticle ? { name: dbArticle.author?.name || 'Member', sub: 'Contributor' } : authorDisplay(fileArticle.author);
-  const dateLabel = dbArticle ? (dbArticle.updated_at || dbArticle.created_at).slice(0, 10) : fileArticle.date;
+  const dateLabel = dbArticle
+    ? `${dbArticle.created_at.slice(0, 10)}${isEdited(dbArticle) ? ` - latest edit ${fmtDateTime(dbArticle.updated_at)}` : ''}`
+    : fileArticle.date;
   const canEdit = dbArticle && canContribute && (data.isAdmin || dbArticle.author?.id === currentUser().id);
   const canDelete = dbArticle && canManage;
 
