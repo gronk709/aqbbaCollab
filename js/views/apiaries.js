@@ -26,7 +26,11 @@ import {
   setApiaryTeamMember, removeApiaryTeamMember, loadRealMembers, loadQueenLines, reinstateHive,
 } from '../store.js';
 import { esc, icons, avatar, subButton, modal, closeModal, toast, formatKg } from '../ui.js';
-import { renderComb, renderReadout, bindComb } from './comb.js';
+import {
+  button, pageHeader, pageBody, twoColumn, card, countBadge, personRow, emptyState,
+  table, rowList, tag, ICON_BUTTON_DANGER,
+} from '../components.js';
+import { renderComb, renderReadout, bindComb, statusPip } from './comb.js';
 import { parseCsv, buildCsvText, downloadCsvFile } from '../csv.js';
 
 /* Projects are real Supabase rows now (Phase 6) — `sites` is a plain
@@ -34,7 +38,39 @@ import { parseCsv, buildCsvText, downloadCsvFile } from '../csv.js';
 const projectsForApiary = (projects, apiaryId) =>
   projects.filter((p) => (p.sites || []).includes(apiaryId));
 
-const stageVariant = { establishing: 'tag-amber', assessment: 'tag-blue', maintenance: 'tag-green', requeening: 'tag-red' };
+/* Tag tones (see TAG_TONES in js/components.js) per program stage and per
+   project status. */
+const STAGE_TONES = { establishing: 'amber', assessment: 'blue', maintenance: 'green', requeening: 'red' };
+const PROJECT_TONES = { recruiting: 'amber', active: 'green', concluding: 'blue' };
+
+/* Small mono uppercase label, as on the Projects pages. */
+const LABEL = 'tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.12em] tw:text-propolis-40';
+
+/* Helper line under a field or paragraph inside a pop-up form. */
+const HINT = 'tw:text-[12.5px] tw:text-propolis-40';
+const ERR = 'tw:text-[12.5px] tw:text-mark-red';
+
+/* Pop-up form rows: fields sit side by side from the `sm` breakpoint up and
+   stack on a phone. (The .field wrapper itself comes from the shared styles.) */
+const FORM_ROW_2 = 'tw:grid tw:gap-x-3 tw:sm:grid-cols-2';
+const FORM_ROW_3 = 'tw:grid tw:gap-x-3 tw:sm:grid-cols-3';
+const FORM_ROW_2_END = 'tw:grid tw:gap-x-3 tw:sm:grid-cols-2 tw:sm:items-end';
+
+/* A card header that wraps, for cards whose actions are more than one
+   button (card()'s own header doesn't wrap on a phone). Use inside a
+   `flush` card. */
+const cardHeader = (title, actions = '') => `
+  <div class="tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-3 tw:border-b tw:border-comb-shade/70 tw:px-6 tw:py-4">
+    <h2 class="tw:font-display tw:text-xl tw:font-medium tw:text-propolis">${esc(title)}</h2>
+    ${actions ? `<div class="tw:ml-auto tw:flex tw:flex-wrap tw:items-center tw:gap-2">${actions}</div>` : ''}
+  </div>`;
+
+/* The small "Manage" text button in a card header (as on a project page). */
+const manageButton = () =>
+  `<button type="button" id="manage-team" class="tw:inline-flex tw:items-center tw:gap-1.5 tw:rounded-lg tw:px-2.5 tw:py-1 tw:text-sm tw:font-medium tw:text-amber-deep tw:transition tw:hover:bg-amber-wash">${icons.pen} Manage</button>`;
+
+/* A plain select outside a .field (the reinstate-status picker). */
+const SELECT = 'tw:rounded-lg tw:border tw:border-comb-shade tw:bg-white tw:py-1.5 tw:pr-2 tw:pl-3 tw:text-sm tw:text-propolis tw:transition tw:hover:border-amber tw:focus:border-amber tw:focus:outline-none tw:focus-visible:ring-3 tw:focus-visible:ring-amber-wash';
 
 /* A stand-in "Hygiene" reading for display — there's no single hygiene
    field on an inspection any more (removed in favour of the four
@@ -76,27 +112,38 @@ function inspectionChips(i) {
   ].filter(Boolean);
 }
 
+/* One inspection: date block, what/who, a pill per recorded measure, the
+   note, and (optionally) `meta` — trusted markup shown at the right on wide
+   screens and under the text on a phone. `sub` is trusted markup too (the
+   caller has already escaped anything user-supplied in it). */
+function inspectionItem(i, { sub, chips, meta = '', pad = 'tw:px-6 tw:py-5' }) {
+  return `
+    <div class="${pad} tw:grid tw:grid-cols-[3.25rem_minmax(0,1fr)] tw:gap-x-4 tw:gap-y-2 tw:sm:grid-cols-[3.25rem_minmax(0,1fr)_auto]">
+      <div>
+        <b class="tw:block tw:font-display tw:text-2xl tw:leading-none tw:font-semibold tw:text-propolis">${i.date.getDate()}</b>
+        <span class="tw:mt-1 tw:block tw:font-mono tw:text-[10px] tw:uppercase tw:tracking-wider tw:text-propolis-40">${i.date.toLocaleDateString('en-AU', { month: 'short' })} ${i.date.getFullYear()}</span>
+      </div>
+      <div class="tw:min-w-0">
+        <strong class="tw:block tw:font-semibold tw:text-propolis">${esc(i.kind)}</strong>
+        <span class="tw:block tw:text-sm tw:text-propolis-60">${sub}</span>
+        ${chips.length ? `<div class="tw:mt-2 tw:flex tw:flex-wrap tw:gap-1.5">${chips.map((c) => `<span class="tw:rounded-full tw:bg-comb tw:px-2.5 tw:py-1 tw:font-mono tw:text-[11px] tw:text-propolis-60">${esc(c)}</span>`).join('')}</div>` : ''}
+        ${i.note ? `<p class="tw:mt-2 tw:text-sm tw:leading-relaxed tw:text-propolis-60">${esc(i.note)}</p>` : ''}
+      </div>
+      ${meta}
+    </div>`;
+}
+
 function retiredHistory(h) {
   const n = h.inspections.length;
-  if (!n) return `<span class="caption">No inspections were ever logged for ${esc(h.id)}.</span>`;
+  if (!n) return `<span class="tw:text-sm tw:text-propolis-40">No inspections were ever logged for ${esc(h.id)}.</span>`;
   return `
     <details data-history="${esc(h.id)}">
-      <summary style="cursor:pointer;font-size:13px;font-weight:600">Inspection history · ${n} ${n === 1 ? 'inspection' : 'inspections'}</summary>
-      <ul class="list" style="margin-top:var(--s3)">${h.inspections.map((i) => {
-        const chips = inspectionChips(i);
-        return `
-        <li>
-          <div class="line" style="cursor:default;align-items:flex-start">
-            <div class="line-date"><b>${i.date.getDate()}</b>${i.date.toLocaleDateString('en-AU', { month: 'short' })} ${i.date.getFullYear()}</div>
-            <div class="line-body">
-              <strong>${esc(i.kind)}</strong>
-              <span>Conducted by ${i.by ? esc(i.by.name) : 'Unknown'}${i.status ? ` · → ${statusLabels[i.status]}` : ''}${i.done ? '' : ' · Scheduled'}</span>
-              ${chips.length ? `<div class="row row-wrap" style="gap:10px;margin-top:4px">${chips.map((c) => `<span class="caption mono" style="font-size:11px">${esc(c)}</span>`).join('')}</div>` : ''}
-              ${i.note ? `<p class="caption" style="margin-top:3px">${esc(i.note)}</p>` : ''}
-            </div>
-          </div>
-        </li>`;
-      }).join('')}</ul>
+      <summary class="tw:cursor-pointer tw:text-[13px] tw:font-semibold tw:text-propolis tw:transition tw:hover:text-amber-deep">Inspection history · ${n} ${n === 1 ? 'inspection' : 'inspections'}</summary>
+      ${rowList(h.inspections.map((i) => inspectionItem(i, {
+        pad: 'tw:px-4 tw:py-4',
+        sub: `Conducted by ${i.by ? esc(i.by.name) : 'Unknown'}${i.status ? ` · → ${statusLabels[i.status]}` : ''}${i.done ? '' : ' · Scheduled'}`,
+        chips: inspectionChips(i),
+      })), { cls: 'tw:mt-3 tw:overflow-hidden tw:rounded-xl tw:border tw:border-comb-shade/70 tw:bg-white' })}
     </details>`;
 }
 
@@ -108,67 +155,55 @@ export function renderApiaries(data) {
     return `
       <tr>
         <td>
-          <a href="#/apiaries/${ap.id}" style="font-weight:600">${esc(ap.name)}</a>
-          <div class="caption mono" style="font-size:11px">${ap.code}</div>
+          <a href="#/apiaries/${ap.id}" class="tw:font-semibold tw:text-propolis tw:transition tw:hover:text-amber-deep tw:hover:underline">${esc(ap.name)}</a>
+          <div class="tw:font-mono tw:text-[11px] tw:text-propolis-40">${ap.code}</div>
         </td>
         <td>${esc(ap.region)}</td>
-        <td><span class="tag ${stageVariant[ap.stage]}">${stageLabels[ap.stage]}</span></td>
-        <td class="mono">${ap.hives}</td>
-        <td class="mono">${vshAverage(ap.hiveRecords)}%</td>
-        <td class="mono">${t.treating || 0}</td>
-        <td class="mono">${t.critical || 0}</td>
+        <td>${tag(stageLabels[ap.stage], STAGE_TONES[ap.stage])}</td>
+        <td class="tw:font-mono">${ap.hives}</td>
+        <td class="tw:font-mono">${vshAverage(ap.hiveRecords)}%</td>
+        <td class="tw:font-mono">${t.treating || 0}</td>
+        <td class="tw:font-mono">${t.critical || 0}</td>
         <td>${ap.dateEstablished ? new Date(ap.dateEstablished).getFullYear() : '—'}</td>
       </tr>`;
   }).join('');
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="eyebrow">Program sites</div>
-        <h1>Research apiaries</h1>
-      </div>
-      <div class="topbar-actions">
-        <a class="btn btn-ghost btn-sm" href="#/reports/retired-hives">Retired hives</a>
-        ${subButton('apiary:new', isSubscribed('apiary:new'), 'Notify me of new sites', 'new research apiaries')}
-        ${isWebAdmin() ? `<button class="btn btn-primary btn-sm" id="new-apiary">${icons.plus} Add apiary</button>` : ''}
-      </div>
-    </div>
+    <div class="view">
+      ${pageHeader({
+        eyebrow: 'Program sites',
+        title: 'Research apiaries',
+        actions: `
+          ${button({ href: '#/reports/retired-hives', label: 'Retired hives', variant: 'outline', size: 'sm' })}
+          ${subButton('apiary:new', isSubscribed('apiary:new'), 'Notify me of new sites', 'new research apiaries')}
+          ${isWebAdmin() ? button({ id: 'new-apiary', label: 'Add apiary', icon: icons.plus }) : ''}`,
+      })}
+      ${pageBody(`
+        <div class="tw:space-y-8">
+          ${card({
+            flush: true,
+            body: `<div class="tw:[&_table]:border-collapse">${table({
+              head: ['Apiary', 'Region', 'Stage', 'Hives', 'Mean VSH', 'Treating', 'Critical', 'Est.'],
+              body: rows,
+            })}</div>`,
+          })}
 
-    <div class="wrap view">
-      <div class="panel">
-        <div class="tbl-scroll">
-          <table class="tbl">
-            <thead>
-              <tr>
-                <th>Apiary</th><th>Region</th><th>Stage</th>
-                <th>Hives</th><th>Mean VSH</th><th>Treating</th><th>Critical</th><th>Est.</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="grid grid-3" style="margin-top:var(--s6)">
-        ${apiaries.map((ap) => `
-          <div class="panel">
-            <div class="panel-head">
-              <h3>${esc(ap.name)}</h3>
-              <span class="spacer"></span>
-              <span class="tag ${stageVariant[ap.stage]}">${stageLabels[ap.stage]}</span>
-            </div>
-            <div class="panel-body">
-              <p class="lede" style="font-size:14px">${esc(ap.brief)}</p>
-              <div style="margin-top:var(--s4)">
-                <div class="eyebrow">Dominant flora</div>
-                <p style="font-size:13px;margin-top:3px">${esc(ap.flora)}</p>
-              </div>
-              <a class="btn btn-ghost btn-sm" style="margin-top:var(--s4)" href="#/apiaries/${ap.id}">
-                Open record ${icons.chevron}
-              </a>
-            </div>
-          </div>`).join('')}
-      </div>
+          <div class="tw:grid tw:gap-6 tw:sm:grid-cols-2 tw:lg:grid-cols-3">
+            ${apiaries.map((ap) => card({
+              title: ap.name,
+              right: tag(stageLabels[ap.stage], STAGE_TONES[ap.stage]),
+              body: `
+                <p class="tw:font-display tw:text-[15px] tw:leading-relaxed tw:text-propolis-60">${esc(ap.brief)}</p>
+                <div class="tw:mt-4">
+                  <div class="${LABEL}">Dominant flora</div>
+                  <p class="tw:mt-1 tw:text-sm tw:text-propolis">${esc(ap.flora)}</p>
+                </div>
+                <a href="#/apiaries/${ap.id}" class="tw:mt-5 tw:inline-flex tw:items-center tw:gap-1 tw:text-sm tw:font-medium tw:text-amber-deep tw:transition tw:hover:underline">
+                  Open record ${icons.chevron}
+                </a>`,
+            })).join('')}
+          </div>
+        </div>`)}
     </div>`;
 
   setTimeout(() => {
@@ -189,57 +224,54 @@ export function renderRetiredHives(data) {
   const { hives } = data;
   const reinstateStatuses = Object.entries(statusLabels).filter(([k]) => k !== 'retired');
   const when = (iso) => (iso ? new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Never');
+  const dash = '<span class="tw:text-propolis-40">—</span>';
 
+  /* Each hive is two rows: its record, then (full width, no rule between)
+     its expandable inspection history. */
   const rows = hives.map((h) => `
     <tr data-retired-hive="${esc(h.id)}">
-      <td class="mono" style="font-weight:600">${esc(h.id)}</td>
-      <td><a href="#/apiaries/${esc(h.apiaryInfo.id)}">${esc(h.apiaryInfo.name)}</a>
-          <div class="caption mono" style="font-size:11px">${esc(h.apiaryInfo.code)}</div></td>
+      <td class="tw:font-mono tw:font-semibold tw:whitespace-nowrap">${esc(h.id)}</td>
+      <td><a href="#/apiaries/${esc(h.apiaryInfo.id)}" class="tw:font-medium tw:text-propolis tw:transition tw:hover:text-amber-deep tw:hover:underline">${esc(h.apiaryInfo.name)}</a>
+          <div class="tw:font-mono tw:text-[11px] tw:text-propolis-40">${esc(h.apiaryInfo.code)}</div></td>
       <td>${h.lineInfo ? esc(h.lineInfo.name) : '—'}</td>
-      <td class="mono">${h.queenId ? esc(h.queenId) : '—'}</td>
-      <td>${h.queenColour ? `<span class="row" style="gap:6px"><span class="pip" style="background:var(--mark-${h.queenColour});box-shadow:0 0 0 1px var(--comb-shade)"></span>${esc(h.queenColour)}${h.queenYear ? ` · ${h.queenYear}` : ''}</span>` : '—'}</td>
-      <td>${when(h.lastInspectedAt)}</td>
-      <td style="max-width:240px">${h.comment ? esc(h.comment) : '<span class="caption">—</span>'}</td>
-      <td style="white-space:nowrap">${h.canManage ? `
-        <span class="row" style="gap:6px">
-          <select data-reinstate-status="${esc(h.id)}" aria-label="Status for ${esc(h.id)} when reinstated" style="width:auto">
+      <td class="tw:font-mono tw:whitespace-nowrap">${h.queenId ? esc(h.queenId) : '—'}</td>
+      <td class="tw:whitespace-nowrap">${h.queenColour ? `<span class="tw:inline-flex tw:items-center tw:gap-1.5"><span class="tw:size-2 tw:shrink-0 tw:rounded-full tw:ring-1 tw:ring-comb-shade" style="background:var(--mark-${h.queenColour})"></span>${esc(h.queenColour)}${h.queenYear ? ` · ${h.queenYear}` : ''}</span>` : '—'}</td>
+      <td class="tw:whitespace-nowrap">${when(h.lastInspectedAt)}</td>
+      <td class="tw:max-w-60 tw:min-w-40">${h.comment ? esc(h.comment) : dash}</td>
+      <td class="tw:whitespace-nowrap">${h.canManage ? `
+        <span class="tw:inline-flex tw:items-center tw:gap-1.5">
+          <select data-reinstate-status="${esc(h.id)}" aria-label="Status for ${esc(h.id)} when reinstated" class="${SELECT}">
             ${reinstateStatuses.map(([v, label]) => `<option value="${v}" ${v === 'average' ? 'selected' : ''}>${label}</option>`).join('')}
           </select>
-          <button type="button" class="btn btn-ghost btn-sm" data-reinstate="${esc(h.id)}">Reinstate</button>
-        </span>` : '<span class="caption">—</span>'}</td>
+          ${button({ label: 'Reinstate', variant: 'outline', size: 'sm', attrs: `data-reinstate="${esc(h.id)}"` })}
+        </span>` : dash}</td>
     </tr>
-    <tr data-retired-history-row="${esc(h.id)}">
-      <td></td>
-      <td colspan="7" style="padding-top:0">${retiredHistory(h)}</td>
+    <tr data-retired-history-row="${esc(h.id)}" class="tw:border-t-0! tw:hover:bg-transparent!">
+      <td colspan="8" class="tw:p-0!">
+        <div class="tw:sticky tw:left-0 tw:box-border tw:w-[min(100%,calc(100vw-3rem-2px))] tw:px-5 tw:pb-4">${retiredHistory(h)}</div>
+      </td>
     </tr>`).join('');
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="crumb"><a href="#/apiaries">Apiaries</a> ${icons.chevron} <span>Retired hives</span></div>
-        <div class="eyebrow">Report</div>
-        <h1>Retired hives</h1>
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <p class="lede" style="max-width:66ch;margin-bottom:var(--s5)">
-        <span class="pip pip-retired" style="margin-right:6px"></span>${esc(statusNote.retired)}. Retired hives
-        don't appear on their apiary's page or in its counts; their records and full inspection history are kept here.
-        ${hives.length ? `<strong>${hives.length} retired ${hives.length === 1 ? 'hive' : 'hives'}.</strong>` : ''}
-      </p>
-      <div class="panel">
-        ${hives.length ? `
-        <div class="tbl-scroll">
-          <table class="tbl">
-            <thead><tr>
-              <th>Hive</th><th>Apiary</th><th>Queen line</th><th>Queen ID</th><th>Queen marked</th><th>Last inspected</th><th>Comments</th><th></th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>` : `
-        <div class="empty"><h3>No retired hives</h3><p>A hive appears here once its status is set to Retired.</p></div>`}
-      </div>
+    <div class="view">
+      ${pageHeader({
+        crumbs: [{ label: 'Apiaries', href: '#/apiaries' }, { label: 'Retired hives' }],
+        eyebrow: 'Report',
+        title: 'Retired hives',
+        lede: `${statusPip('retired')}
+          ${esc(statusNote.retired)}. Retired hives
+          don't appear on their apiary's page or in its counts; their records and full inspection history are kept here.
+          ${hives.length ? `<strong class="tw:font-semibold tw:text-propolis">${hives.length} retired ${hives.length === 1 ? 'hive' : 'hives'}.</strong>` : ''}`,
+      })}
+      ${pageBody(hives.length
+        ? card({
+          flush: true,
+          body: `<div class="tw:[&_table]:border-collapse">${table({
+            head: ['Hive', 'Apiary', 'Queen line', 'Queen ID', 'Queen marked', 'Last inspected', 'Comments', ''],
+            body: rows,
+          })}</div>`,
+        })
+        : emptyState({ title: 'No retired hives', text: 'A hive appears here once its status is set to Retired.' }))}
     </div>`;
 
   setTimeout(() => {
@@ -275,12 +307,12 @@ function openApiaryForm() {
         <label for="a-name">Site name</label>
         <input id="a-name" required placeholder="e.g. Ironbark Ridge">
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_2}">
+        <div class="field">
           <label for="a-region">Region</label>
           <input id="a-region" required placeholder="e.g. Southern Highlands, NSW">
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="a-established">Date established</label>
           <input id="a-established" type="date" value="${new Date().toISOString().slice(0, 10)}">
         </div>
@@ -297,7 +329,7 @@ function openApiaryForm() {
         <label for="a-brief">Brief</label>
         <textarea id="a-brief" required placeholder="What is this site for? Why was it established?"></textarea>
       </div>
-      <p class="caption">A Web Admin assigns who can manage or operate at this site afterward, from its own page.</p>
+      <p class="${HINT}">A Web Admin assigns who can manage or operate at this site afterward, from its own page.</p>
     </form>`;
 
   const actions = `
@@ -345,7 +377,6 @@ export function renderApiary(data, id) {
 
   const insp = inspections.slice().sort((a, b) => b.date - a.date);
   const siteProjects = projectsForApiary(projects, ap.id);
-  const projStatusVariant = { recruiting: 'tag-amber', active: 'tag-green', concluding: 'tag-blue' };
 
   /* The 5 colonies with the LOWEST mite count, taken from the most recent
      inspection ROUND at this site — not each hive's individually-lowest
@@ -400,16 +431,17 @@ export function renderApiary(data, id) {
      the old site-wide schedule — a row doesn't need to repeat it. */
   function renderHiveInspections(hive) {
     if (!hive) {
-      return `<div class="empty" style="padding:var(--s6) 0"><p class="caption">Select a hive above to see its inspection reports.</p></div>`;
+      return `<p class="tw:px-6 tw:py-10 tw:text-center tw:text-sm tw:text-propolis-60">Select a hive above to see its inspection reports.</p>`;
     }
     const rows = insp.filter((i) => i.hiveId === hive.id);
     if (!rows.length) {
-      return `<div class="empty" style="padding:var(--s6) 0">
-        <h3>No inspections logged for ${esc(hive.id)}</h3>
-        <p>${canOperate ? 'Log one once an assessment has run on this hive.' : `Only ${esc(ap.name)}'s assigned managers/operators, or Web Admin, can log inspections here.`}</p>
-      </div>`;
+      return emptyState({
+        title: `No inspections logged for ${hive.id}`,
+        text: canOperate ? 'Log one once an assessment has run on this hive.' : `Only ${esc(ap.name)}'s assigned managers/operators, or Web Admin, can log inspections here.`,
+        bordered: false,
+      });
     }
-    return `<ul class="list">${rows.map((i) => {
+    return rowList(rows.map((i) => {
       const byName = i.by ? esc(i.by.name) : 'Unknown';
       const hygiene = hygieneAvg(i);
       const chips = [
@@ -422,162 +454,116 @@ export function renderApiary(data, id) {
         i.weightKg != null ? `Colony weight ${formatKg(i.weightKg)}` : null,
         i.weather ? `Weather: ${i.weather}` : null,
       ].filter(Boolean);
-      return `
-        <li>
-          <div class="line" style="cursor:default;align-items:flex-start">
-            <div class="line-date">
-              <b>${i.date.getDate()}</b>
-              ${i.date.toLocaleDateString('en-AU', { month: 'short' })} ${i.date.getFullYear()}
-            </div>
-            <div class="line-body">
-              <strong>${esc(i.kind)}</strong>
-              <span>Conducted by ${byName}${i.status ? ` · → ${statusLabels[i.status]}` : ''}</span>
-              ${chips.length ? `<div class="row row-wrap" style="gap:10px;margin-top:4px">${chips.map((c) => `<span class="caption mono" style="font-size:11px">${esc(c)}</span>`).join('')}</div>` : ''}
-              ${i.note ? `<p class="caption" style="margin-top:3px">${esc(i.note)}</p>` : ''}
-            </div>
-            <div class="line-meta">
-              <div class="caption mono">${relDays(Math.round((i.date - new Date()) / 86400000))}</div>
-              <span class="tag ${i.done ? 'tag-green' : 'tag-outline'}" style="margin-top:3px">
-                ${i.done ? 'Complete' : 'Scheduled'}
-              </span>
-            </div>
-          </div>
-        </li>`;
-    }).join('')}</ul>`;
+      return inspectionItem(i, {
+        sub: `Conducted by ${byName}${i.status ? ` · → ${statusLabels[i.status]}` : ''}`,
+        chips,
+        meta: `
+          <div class="tw:col-start-2 tw:flex tw:items-center tw:gap-3 tw:sm:col-start-3 tw:sm:row-start-1 tw:sm:flex-col tw:sm:items-end tw:sm:gap-1.5">
+            <span class="tw:font-mono tw:text-xs tw:text-propolis-40">${relDays(Math.round((i.date - new Date()) / 86400000))}</span>
+            ${tag(i.done ? 'Complete' : 'Scheduled', i.done ? 'green' : 'outline')}
+          </div>`,
+      });
+    }));
   }
 
-  const teamRows = team.map((t2) => `
-    <a class="row" style="gap:var(--s3)" href="#/managers/${t2.member.id}">
-      ${avatar(t2.member)}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13.5px;font-weight:600">${esc(t2.member.name)}</div>
-        <div class="caption">${t2.access_level === 'manage' ? 'Manage' : 'Operate'}</div>
+  const hiveStatusCard = card({
+    flush: true,
+    body: `
+      ${cardHeader(`Hive status — all ${hives.length}`, canManage ? `
+        ${button({ id: 'bulk-hives', label: 'Bulk upload (.csv)', variant: 'outline', size: 'sm' })}
+        ${button({ id: 'new-hive', label: 'Add hive', icon: icons.plus, variant: 'outline', size: 'sm' })}` : '')}
+      <div class="tw:px-6 tw:py-6">
+        ${hives.length ? renderComb(hives, { id: 'ap-comb' }) : emptyState({
+          title: 'No hives registered yet',
+          text: canManage
+            ? 'Add the first hive at this site once nucs or colonies are in place.'
+            : `Only ${esc(ap.name)}'s assigned managers, or Web Admin, can add hives here.`,
+          action: canManage ? button({ id: 'empty-hive', label: 'Add hive' }) : '',
+          bordered: false,
+        })}
       </div>
-    </a>`).join('');
+      ${hives.length ? renderReadout(null) : ''}`,
+  });
+
+  const inspectionsCard = card({
+    flush: true,
+    body: `
+      ${cardHeader('Inspection reports', canOperate ? `
+        ${button({ id: 'bulk-inspections', label: 'Bulk upload (.csv)', variant: 'outline', size: 'sm' })}
+        ${button({ id: 'new-inspection', label: 'Log inspection', icon: icons.plus, variant: 'outline', size: 'sm' })}` : '')}
+      <div id="hive-inspections">${renderHiveInspections(null)}</div>`,
+  });
+
+  const siteCard = card({
+    title: 'Site',
+    body: `
+      <p class="tw:font-display tw:text-[15px] tw:leading-relaxed tw:text-propolis-60">${esc(ap.brief)}</p>
+      <div class="tw:mt-5">
+        <div class="${LABEL}">Location</div>
+        <p class="tw:mt-1 tw:text-[14.5px] tw:text-propolis">${esc(ap.region)}</p>
+      </div>
+      <div class="tw:mt-4">
+        <div class="${LABEL}">Dominant flora</div>
+        <p class="tw:mt-1 tw:text-[14.5px] tw:text-propolis">${esc(ap.flora)}</p>
+      </div>`,
+  });
+
+  const teamCard = card({
+    title: 'Team',
+    right: isAdmin ? manageButton() : '',
+    body: team.length
+      ? `<ul class="tw:space-y-3">${team.map((t2) => `<li>${personRow({
+        ...t2.member, sub: t2.access_level === 'manage' ? 'Manage' : 'Operate', href: `#/managers/${t2.member.id}`,
+      })}</li>`).join('')}</ul>`
+      : '<p class="tw:text-sm tw:text-propolis-60">No one assigned yet — a Web Admin assigns managers and operators here.</p>',
+  });
+
+  const runningCard = siteProjects.length ? card({
+    title: 'Running here',
+    right: countBadge(siteProjects.length),
+    flush: true,
+    body: rowList(siteProjects.map((p) => `
+      <a href="#/projects/${p.id}" class="tw:flex tw:items-center tw:gap-3 tw:px-6 tw:py-4 tw:transition tw:hover:bg-comb/60">
+        <div class="tw:min-w-0 tw:flex-1">
+          <strong class="tw:block tw:text-[15px] tw:leading-snug tw:font-semibold tw:text-propolis">${esc(p.title)}</strong>
+          <span class="tw:font-mono tw:text-[11px] tw:text-propolis-40">${p.code}</span>
+        </div>
+        ${tag(projectStatusLabels[p.status], PROJECT_TONES[p.status])}
+      </a>`)),
+  }) : '';
+
+  const miteCard = card({
+    title: 'Lowest mite counts',
+    body: lowestMiteCounts.length
+      ? `<ol class="tw:divide-y tw:divide-comb-shade/70">${lowestMiteCounts.map((r, idx) => `
+          <li class="tw:flex tw:items-center tw:justify-between tw:gap-3 tw:py-2.5 tw:first:pt-0 tw:last:pb-0">
+            <span class="tw:flex tw:items-center tw:gap-3">
+              <span class="tw:w-4 tw:font-mono tw:text-xs tw:text-propolis-40">${idx + 1}</span>
+              <span class="tw:text-sm tw:font-semibold tw:text-propolis">${esc(r.hiveId)}</span>
+            </span>
+            <span class="tw:flex tw:items-center tw:gap-3">
+              <span class="tw:font-mono tw:text-[11px] tw:text-propolis-40">${r.date.getDate()} ${r.date.toLocaleDateString('en-AU', { month: 'short' })}</span>
+              <span class="tw:font-mono tw:text-sm tw:font-semibold tw:text-propolis">${r.miteCount}</span>
+            </span>
+          </li>`).join('')}</ol>`
+      : '<p class="tw:text-sm tw:text-propolis-60">No mite counts recorded yet.</p>',
+  });
 
   const html = `
-    <div class="topbar">
-      <div style="width:100%">
-        <div class="crumb">
-          <a href="#/apiaries">Apiaries</a> ${icons.chevron} <span>${esc(ap.name)}</span>
-        </div>
-        <div class="eyebrow">${ap.code}${ap.dateEstablished ? ` · established ${new Date(ap.dateEstablished).getFullYear()}` : ''}</div>
-        <h1>${esc(ap.name)}</h1>
-      </div>
-      <div class="topbar-actions">
-        <span class="tag ${stageVariant[ap.stage]}">${stageLabels[ap.stage]}</span>
-        <a class="btn btn-ghost btn-sm" href="#/reports/retired-hives">Retired hives</a>
-        ${canManage ? `<button class="btn btn-ghost btn-sm" id="edit-apiary">${icons.pen} Edit apiary</button>` : ''}
-      </div>
-    </div>
-
-    <div class="wrap view">
-      <div class="grid grid-dash">
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Hive status — all ${hives.length}</h2>
-              <span class="spacer"></span>
-              ${canManage ? `
-                <button class="btn btn-ghost btn-sm" id="bulk-hives">Bulk upload (.csv)</button>
-                <button class="btn btn-ghost btn-sm" id="new-hive">${icons.plus} Add hive</button>
-              ` : ''}
-            </div>
-            <div class="panel-body">
-              ${hives.length ? renderComb(hives, { id: 'ap-comb' }) : `
-                <div class="empty" style="padding:var(--s6) 0">
-                  <h3>No hives registered yet</h3>
-                  ${canManage ? `
-                    <p>Add the first hive at this site once nucs or colonies are in place.</p>
-                    <button class="btn btn-primary" id="empty-hive">Add hive</button>
-                  ` : `
-                    <p>Only ${esc(ap.name)}'s assigned managers, or Web Admin, can add hives here.</p>
-                  `}
-                </div>`}
-            </div>
-            ${hives.length ? renderReadout(null) : ''}
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Inspection reports</h2>
-              <span class="spacer"></span>
-              ${canOperate ? `
-                <button class="btn btn-ghost btn-sm" id="bulk-inspections">Bulk upload (.csv)</button>
-                <button class="btn btn-ghost btn-sm" id="new-inspection">${icons.plus} Log inspection</button>
-              ` : ''}
-            </div>
-            <div id="hive-inspections">${renderHiveInspections(null)}</div>
-          </div>
-        </div>
-
-        <div class="stack">
-          <div class="panel">
-            <div class="panel-head"><h2>Site</h2></div>
-            <div class="panel-body">
-              <p class="lede" style="font-size:14.5px">${esc(ap.brief)}</p>
-
-              <div style="margin-top:var(--s5)">
-                <div class="eyebrow">Location</div>
-                <p style="font-size:13.5px;margin-top:3px">${esc(ap.region)}</p>
-              </div>
-
-              <div style="margin-top:var(--s4)">
-                <div class="eyebrow">Dominant flora</div>
-                <p style="font-size:13.5px;margin-top:3px">${esc(ap.flora)}</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Team</h2>
-              <span class="spacer"></span>
-              ${isAdmin ? `<button class="btn btn-ghost btn-sm" id="manage-team">${icons.pen} Manage</button>` : ''}
-            </div>
-            <div class="panel-body panel-body-flush">
-              ${team.length ? teamRows : `
-                <div class="empty" style="padding:var(--s5)"><p class="caption">No one assigned yet — a Web Admin assigns managers and operators here.</p></div>`}
-            </div>
-          </div>
-
-          ${siteProjects.length ? `
-            <div class="panel">
-              <div class="panel-head">
-                <h2>Running here</h2>
-                <span class="spacer"></span>
-                <span class="caption mono">${siteProjects.length}</span>
-              </div>
-              <div class="panel-body panel-body-flush">
-                ${siteProjects.map((p) => `
-                  <a class="sub" href="#/projects/${p.id}">
-                    <div class="sub-title">
-                      <strong>${esc(p.title)}</strong>
-                      <span>${p.code}</span>
-                    </div>
-                    <span class="tag ${projStatusVariant[p.status]}">${projectStatusLabels[p.status]}</span>
-                  </a>`).join('')}
-              </div>
-            </div>` : ''}
-
-          <div class="panel">
-            <div class="panel-head"><h2>Lowest mite counts</h2></div>
-            <div class="panel-body">
-              ${lowestMiteCounts.length ? lowestMiteCounts.map((r, idx) => `
-                <div class="row" style="justify-content:space-between;padding:5px 0">
-                  <span class="row" style="gap:var(--s3)">
-                    <span class="caption mono" style="width:14px">${idx + 1}</span>
-                    <span style="font-size:13px;font-weight:600">${esc(r.hiveId)}</span>
-                  </span>
-                  <span class="row" style="gap:var(--s3)">
-                    <span class="caption mono" style="font-size:11px">${r.date.getDate()} ${r.date.toLocaleDateString('en-AU', { month: 'short' })}</span>
-                    <span class="mono" style="font-size:13px;font-weight:600">${r.miteCount}</span>
-                  </span>
-                </div>`).join('') : `<p class="caption">No mite counts recorded yet.</p>`}
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="view">
+      ${pageHeader({
+        crumbs: [{ label: 'Apiaries', href: '#/apiaries' }, { label: ap.name }],
+        eyebrow: `${esc(ap.code)}${ap.dateEstablished ? ` · established ${new Date(ap.dateEstablished).getFullYear()}` : ''}`,
+        title: ap.name,
+        badge: tag(stageLabels[ap.stage], STAGE_TONES[ap.stage]),
+        actions: `
+          ${button({ href: '#/reports/retired-hives', label: 'Retired hives', variant: 'outline', size: 'sm' })}
+          ${canManage ? button({ id: 'edit-apiary', label: 'Edit apiary', icon: icons.pen, variant: 'outline', size: 'sm' }) : ''}`,
+      })}
+      ${pageBody(twoColumn({
+        main: `${hiveStatusCard}${inspectionsCard}`,
+        side: `${siteCard}${teamCard}${runningCard}${miteCard}`,
+      }))}
     </div>`;
 
   setTimeout(() => {
@@ -626,16 +612,16 @@ async function openManageApiaryTeamModal(apiaryId, team) {
   const eligible = realMembers.filter((m) => !already.has(m.id));
 
   const body = `
-    <div style="border:1px solid var(--comb-shade);border-radius:4px;margin-bottom:var(--s5)">
-      ${team.length ? team.map((t) => `
-        <div class="breeder">
+    <div class="tw:mb-6 tw:overflow-hidden tw:rounded-xl tw:border tw:border-comb-shade">
+      ${team.length ? rowList(team.map((t) => `
+        <div class="tw:flex tw:items-center tw:gap-3 tw:px-4 tw:py-3">
           ${avatar(t.member)}
-          <div style="flex:1;min-width:0">
-            <strong style="font-size:13.5px;font-weight:600;display:block">${esc(t.member.name)}</strong>
-            <span class="caption">${t.access_level === 'manage' ? 'Manage' : 'Operate'}</span>
+          <div class="tw:min-w-0 tw:flex-1">
+            <strong class="tw:block tw:text-[14px] tw:font-semibold tw:text-propolis">${esc(t.member.name)}</strong>
+            <span class="${HINT}">${t.access_level === 'manage' ? 'Manage' : 'Operate'}</span>
           </div>
-          <button type="button" class="attach-remove" data-remove-team="${t.member_id}" aria-label="Remove">${icons.x}</button>
-        </div>`).join('') : `<div class="empty" style="padding:var(--s4)"><p class="caption">No one assigned yet.</p></div>`}
+          <button type="button" class="${ICON_BUTTON_DANGER}" data-remove-team="${t.member_id}" aria-label="Remove">${icons.x}</button>
+        </div>`)) : `<p class="tw:px-4 tw:py-4 ${HINT}">No one assigned yet.</p>`}
     </div>
     ${eligible.length ? `
       <div class="field">
@@ -650,7 +636,7 @@ async function openManageApiaryTeamModal(apiaryId, team) {
           <option value="manage">Manage — create/edit/delete hives, edit the apiary, log inspections</option>
           <option value="operate">Operate — update hives, log inspections; can't create/delete hives or edit the apiary</option>
         </select>
-      </div>` : '<p class="caption">Every member is already on this site\'s team.</p>'}`;
+      </div>` : `<p class="${HINT}">Every member is already on this site's team.</p>`}`;
 
   const actions = eligible.length ? `
     <button class="btn btn-ghost" data-close>Close</button>
@@ -703,12 +689,12 @@ function openApiaryEditForm(ap) {
         <label for="ae-name">Site name</label>
         <input id="ae-name" required value="${esc(ap.name)}">
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_2}">
+        <div class="field">
           <label for="ae-region">Region</label>
           <input id="ae-region" required value="${esc(ap.region)}">
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="ae-established">Date established</label>
           <input id="ae-established" type="date" value="${esc(ap.dateEstablished || '')}">
         </div>
@@ -781,36 +767,36 @@ async function openHiveEditForm(hive) {
     `<option value="${v}" ${v === hive.status ? 'selected' : ''}>${label}</option>`).join('');
 
   const body = `
-    <p class="caption" style="margin-bottom:var(--s5)">
-      Hive ID <strong class="mono">${esc(hive.id)}</strong> is fixed once registered.
+    <p class="${HINT} tw:mb-6">
+      Hive ID <strong class="tw:font-mono tw:text-propolis">${esc(hive.id)}</strong> is fixed once registered.
     </p>
     <form id="hive-edit-form">
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_2}">
+        <div class="field">
           <label for="he-status">Status</label>
           <select id="he-status">${statusOptions}</select>
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="he-line">Queen Line</label>
           <select id="he-line">${lineOptions}</select>
         </div>
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_2}">
+        <div class="field">
           <label for="he-queen-id">Queen ID</label>
           <input id="he-queen-id" type="text" placeholder="optional" value="${esc(hive.queenId || '')}">
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="he-colour">Queen marked</label>
           <select id="he-colour">${colourOptions}</select>
         </div>
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_2}">
+        <div class="field">
           <label for="he-year">Queen year</label>
           <input id="he-year" type="number" value="${hive.queenYear}">
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="he-frames">Hive Configuration</label>
           <input id="he-frames" type="text" placeholder="optional" value="${esc(hive.broodFrames || '')}">
         </div>
@@ -881,7 +867,7 @@ async function openBulkUploadForm({ title, templateFilename, templateHeaders, te
   const body = `
     <form id="bulk-form">
       <div class="field">
-        <p class="caption">${requiredNote}</p>
+        <p class="${HINT} tw:mb-3">${requiredNote}</p>
         <button type="button" class="btn btn-ghost btn-sm" id="bulk-template">Download CSV template</button>
       </div>
       <div class="field">
@@ -915,7 +901,7 @@ async function openBulkUploadForm({ title, templateFilename, templateHeaders, te
     try {
       text = await file.text();
     } catch (err) {
-      preview.innerHTML = `<p class="caption" style="color:var(--mark-red)">Couldn't read that file: ${esc(err.message)}</p>`;
+      preview.innerHTML = `<p class="${ERR}">Couldn't read that file: ${esc(err.message)}</p>`;
       return;
     }
     /* A cell containing the literal text "not assessed" (any case — same
@@ -930,16 +916,16 @@ async function openBulkUploadForm({ title, templateFilename, templateHeaders, te
       return out;
     });
     if (!rows.length) {
-      preview.innerHTML = `<p class="caption">No data rows found in that file.</p>`;
+      preview.innerHTML = `<p class="${HINT}">No data rows found in that file.</p>`;
       return;
     }
 
-    preview.innerHTML = `<p class="caption">Checking ${rows.length} row${rows.length > 1 ? 's' : ''}…</p>`;
+    preview.innerHTML = `<p class="${HINT}">Checking ${rows.length} row${rows.length > 1 ? 's' : ''}…</p>`;
     let context;
     try {
       context = prepareContext ? await prepareContext(rows) : undefined;
     } catch (err) {
-      preview.innerHTML = `<p class="caption" style="color:var(--mark-red)">Couldn't validate that file: ${esc(err.message)}</p>`;
+      preview.innerHTML = `<p class="${ERR}">Couldn't validate that file: ${esc(err.message)}</p>`;
       return;
     }
 
@@ -952,12 +938,12 @@ async function openBulkUploadForm({ title, templateFilename, templateHeaders, te
     });
 
     const errorList = errors.length
-      ? `<ul class="list" style="max-height:180px;overflow-y:auto;margin-top:var(--s3)">
-          ${errors.map((e2) => `<li><span class="caption" style="color:var(--mark-red)">Row ${e2.line}: ${esc(e2.message)}</span></li>`).join('')}
+      ? `<ul class="tw:mt-3 tw:max-h-44 tw:divide-y tw:divide-comb-shade/70 tw:overflow-y-auto">
+          ${errors.map((e2) => `<li class="tw:py-1.5"><span class="${ERR}">Row ${e2.line}: ${esc(e2.message)}</span></li>`).join('')}
         </ul>`
       : '';
     preview.innerHTML = `
-      <p class="caption" style="margin-top:var(--s3)">
+      <p class="${HINT} tw:mt-3">
         ${rows.length} row${rows.length > 1 ? 's' : ''} found — <strong>${validRows.length} ready to upload</strong>${errors.length ? `, ${errors.length} with problems` : ''}.
       </p>
       ${errorList}`;
@@ -1001,32 +987,32 @@ async function openHiveForm(ap) {
 
   const body = `
     <form id="hive-form">
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_2}">
+        <div class="field">
           <label for="h-id">Hive ID</label>
           <input id="h-id" type="text" placeholder="e.g. ${ap.code}-105">
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="h-status">Status</label>
           <select id="h-status">${statusOptions}</select>
         </div>
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_2}">
+        <div class="field">
           <label for="h-line">Queen Line</label>
           <select id="h-line">${lineOptions}</select>
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="h-queen-id">Queen ID</label>
           <input id="h-queen-id" type="text" placeholder="optional">
         </div>
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_2}">
+        <div class="field">
           <label for="h-colour">Queen marked</label>
           <select id="h-colour">${colourOptions}</select>
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="h-year">Queen year</label>
           <input id="h-year" type="number" value="${new Date().getFullYear()}">
         </div>
@@ -1178,20 +1164,20 @@ async function openInspectionForm(ap, hives) {
   const statusOptions = `<option value="">No change</option>` +
     Object.entries(statusLabels).map(([v, label]) => `<option value="${v}">${label}</option>`).join('');
   const scoreOptions = (label, fieldId, max = 5) => `
-    <div class="field" style="flex:1">
-      <label for="${fieldId}">${label} <span class="caption">(1-${max}, optional)</span></label>
+    <div class="field">
+      <label for="${fieldId}">${label} <span class="${HINT}">(1-${max}, optional)</span></label>
       <select id="${fieldId}">
         <option value="">—</option>
         ${Array.from({ length: max }, (_, i) => i + 1).map((n) => `<option value="${n}">${n}</option>`).join('')}
       </select>
     </div>`;
   const numberField = (label, fieldId, { max, step } = {}) => `
-    <div class="field" style="flex:1">
-      <label for="${fieldId}">${label} <span class="caption">(optional)</span></label>
+    <div class="field">
+      <label for="${fieldId}">${label} <span class="${HINT}">(optional)</span></label>
       <input id="${fieldId}" type="number" min="0" ${max ? `max="${max}"` : ''} ${step ? `step="${step}"` : ''} placeholder="optional">
     </div>`;
   const yesNoOptions = (label, fieldId) => `
-    <div class="field" style="flex:1">
+    <div class="field">
       <label for="${fieldId}">${label}</label>
       <select id="${fieldId}">
         <option value="">Not assessed</option>
@@ -1219,16 +1205,16 @@ async function openInspectionForm(ap, hives) {
 
   const body = `
     <form id="insp-form">
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_3}">
+        <div class="field">
           <label for="i-hive">Hive</label>
           <select id="i-hive">${hiveOptions}</select>
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="i-kind">Inspection type</label>
           <select id="i-kind">${kindOptions}</select>
         </div>
-        <div class="field" style="flex:1">
+        <div class="field">
           <label for="i-date">Date</label>
           <input id="i-date" type="date" value="${todayStr()}">
         </div>
@@ -1237,39 +1223,39 @@ async function openInspectionForm(ap, hives) {
         <label for="i-status">Resulting status (optional)</label>
         <select id="i-status">${statusOptions}</select>
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
+      <div class="${FORM_ROW_2}">
         ${scoreOptions('Productivity', 'i-productivity')}
         ${scoreOptions('Temperament', 'i-temperament')}
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
+      <div class="${FORM_ROW_2}">
         ${scoreOptions('Vigour', 'i-vigour')}
         ${scoreOptions('Brood Pattern', 'i-brood-pattern')}
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
+      <div class="${FORM_ROW_3}">
         ${numberField('Mite Count', 'i-mite-count')}
         ${numberField('UBeeO Score', 'i-ubeeo-pct', { max: 100 })}
         ${numberField('PKD Score', 'i-pkd-pct', { max: 100 })}
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
+      <div class="${FORM_ROW_2}">
         ${scoreOptions('Chalkbrood', 'i-chalkbrood')}
         ${scoreOptions('Sacbrood', 'i-sacbrood')}
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
+      <div class="${FORM_ROW_2}">
         ${scoreOptions('European Foulbrood (EFB)', 'i-efb')}
         ${scoreOptions('Small Hive Beetle (SHB)', 'i-shb')}
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-end">
+      <div class="${FORM_ROW_2_END}">
         ${scoreOptions('Harbo Assay', 'i-harbo-assay', 4)}
-        <div class="field" style="flex:1">
-          <label for="i-weight-kg">Colony weight (kg) <span class="caption">(optional)</span></label>
+        <div class="field">
+          <label for="i-weight-kg">Colony weight (kg) <span class="${HINT}">(optional)</span></label>
           <input id="i-weight-kg" type="number" inputmode="decimal" min="0.1" max="500" step="0.1" placeholder="e.g. 38.5">
         </div>
       </div>
       <div class="field">
-        <label for="i-weather">Weather <span class="caption">(optional, up to ${WEATHER_MAX} characters)</span></label>
+        <label for="i-weather">Weather <span class="${HINT}">(optional, up to ${WEATHER_MAX} characters)</span></label>
         <input id="i-weather" type="text" maxlength="${WEATHER_MAX}" placeholder="e.g. Sunny, 22C, light wind">
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
+      <div class="${FORM_ROW_2}">
         ${yesNoOptions('Nosema present', 'i-nosema')}
         ${yesNoOptions('Wax moth present', 'i-wax-moth')}
       </div>
@@ -1277,14 +1263,14 @@ async function openInspectionForm(ap, hives) {
         <label for="i-viruses">Viruses</label>
         <input id="i-viruses" type="text" placeholder="e.g. DWV, CBPV (optional)">
       </div>
-      <div class="row" style="gap:var(--s3);align-items:flex-start">
-        <div class="field" style="flex:1">
+      <div class="${FORM_ROW_2}">
+        <div class="field">
           <label for="i-by">Conducted by</label>
           <select id="i-by">${memberOptions}</select>
         </div>
-        <div class="field" style="flex:1">
-          <label style="display:block;margin-bottom:8px">Completion</label>
-          <label class="row" style="gap:8px;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0">
+        <div class="field">
+          <label>Completion</label>
+          <label class="tw:flex tw:items-center tw:gap-2 tw:text-[13px] tw:text-propolis">
             <input type="checkbox" id="i-done" checked> Already completed
           </label>
         </div>
