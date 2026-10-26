@@ -52,6 +52,14 @@ const NAV = [
   { path: '#/members',     label: 'Members',      icon: 'user', adminOnly: true },
 ];
 
+const LEGACY_APIARY_IDS = {
+  'ap-oradale': 'carwoola',
+  'ap-tambo': 'merriville',
+  'ap-barrow': 'newcastle',
+  'ap-1790166442859': 'numeralla',
+  'ap-1790768901390': 'victor-harbor',
+};
+
 const ROUTES = [
   { test: /^#\/?$/,                    view: renderHome,
     load: () => Promise.all([loadApiaries(), loadProjects(), loadQueenLines(), loadPublicStats()])
@@ -190,6 +198,14 @@ async function render() {
     if (myGen !== renderGen) return;
     app.innerHTML = renderGate(stats);
     bindGlobal();
+    return;
+  }
+
+  /* Apiary ids used to be generated (ap-barrow, ap-1790…) and are now named
+     for the site (newcastle). Old bookmarks and emailed links still work. */
+  const legacyApiary = location.hash.match(/^#\/apiaries\/(ap-[^/?]+)/);
+  if (legacyApiary && LEGACY_APIARY_IDS[legacyApiary[1]]) {
+    location.replace(`#/apiaries/${LEGACY_APIARY_IDS[legacyApiary[1]]}`);
     return;
   }
 
