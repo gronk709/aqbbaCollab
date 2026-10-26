@@ -1598,8 +1598,15 @@ export async function addApiary({ name, region, stage, dateEstablished, flora, b
   const supabase = await getSupabase();
 
   const initials = (name.match(/[A-Za-z]+/) || ['NEW'])[0].slice(0, 3).toUpperCase() || 'NEW';
-  const { data: existing, error: existingErr } = await supabase.from('apiaries').select('code');
+  const { data: existing, error: existingErr } = await supabase.from('apiaries').select('id, code');
   if (existingErr) throw existingErr;
+  /* The id is the apiary's URL (#/apiaries/newcastle): its name, lower-cased
+     and hyphenated, with -2, -3… if another apiary already has that one. */
+  const baseId = name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'apiary';
+  const takenIds = new Set(existing.map((a) => a.id));
+  let apiaryId = baseId;
+  for (let n = 2; takenIds.has(apiaryId); n++) apiaryId = `${baseId}-${n}`;
+
   const taken = new Set(existing.map((a) => a.code));
   let code = initials;
   for (let n = 2; taken.has(code); n++) code = `${initials}${n}`;
@@ -1608,7 +1615,7 @@ export async function addApiary({ name, region, stage, dateEstablished, flora, b
   const { data, error } = await supabase
     .from('apiaries')
     .insert({
-      id: `ap-${Date.now()}`, code, name, region, stage: stage || 'establishing',
+      id: apiaryId, code, name, region, stage: stage || 'establishing',
       date_established: dateEstablished || null, flora: flora || null, brief: brief || null,
     })
     .select('*')
