@@ -17,7 +17,7 @@
 import {
   stageLabels, statusLabels, statusNote,
   tally, vshAverage, relDays,
-  projectStatusLabels, inspectionKinds, queenColours,
+  projectStatusLabels, inspectionKinds, queenColours, queenMarkFill,
 } from '../data.js';
 import {
   isWebAdmin, isSubscribed, currentUser,
@@ -235,7 +235,7 @@ export function renderRetiredHives(data) {
           <div class="tw:font-mono tw:text-[11px] tw:text-propolis-40">${esc(h.apiaryInfo.code)}</div></td>
       <td>${h.lineInfo ? esc(h.lineInfo.name) : '—'}</td>
       <td class="tw:font-mono tw:whitespace-nowrap">${h.queenId ? esc(h.queenId) : '—'}</td>
-      <td class="tw:whitespace-nowrap">${h.queenColour ? `<span class="tw:inline-flex tw:items-center tw:gap-1.5"><span class="tw:size-2 tw:shrink-0 tw:rounded-full tw:ring-1 tw:ring-comb-shade" style="background:var(--mark-${h.queenColour})"></span>${esc(h.queenColour)}${h.queenYear ? ` · ${h.queenYear}` : ''}</span>` : '—'}</td>
+      <td class="tw:whitespace-nowrap">${h.queenColour ? `<span class="tw:inline-flex tw:items-center tw:gap-1.5"><span class="tw:size-2 tw:shrink-0 tw:rounded-full tw:ring-1 tw:ring-comb-shade" style="background:${queenMarkFill(h.queenColour)}"></span>${esc(h.queenColour)}${h.queenYear ? ` · ${h.queenYear}` : ''}</span>` : '—'}</td>
       <td class="tw:whitespace-nowrap">${when(h.lastInspectedAt)}</td>
       <td class="tw:max-w-60 tw:min-w-40">${h.comment ? esc(h.comment) : dash}</td>
       <td class="tw:whitespace-nowrap">${h.canManage ? `

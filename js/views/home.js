@@ -9,7 +9,7 @@
    with the projects pages.
    ========================================================================== */
 
-import { statusLabels, relDays } from '../data.js';
+import { statusLabels, relDays, queenMarkFill } from '../data.js';
 import { currentUser } from '../store.js';
 import { esc, formatKg } from '../ui.js';
 import { band, button, featureItem, statBlock } from '../components.js';
@@ -184,7 +184,7 @@ function inspectionStory(apiaries, inspections) {
 
   const line = hive && hive.lineInfo;
   const queen = hive && hive.queenColour
-    ? `<span class="tw:inline-block tw:size-3 tw:rounded-full tw:ring-1 tw:ring-propolis/25" style="background:var(--mark-${hive.queenColour})"></span>
+    ? `<span class="tw:inline-block tw:size-3 tw:rounded-full tw:ring-1 tw:ring-propolis/25" style="background:${queenMarkFill(hive.queenColour)}"></span>
        <span class="tw:text-xs tw:italic tw:text-propolis-60">Queen marked ${esc(hive.queenColour)}${hive.queenYear ? ` · ${hive.queenYear}` : ''}</span>`
     : '';
 

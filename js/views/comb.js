@@ -9,7 +9,7 @@
    plain Tailwind utilities.
    ========================================================================== */
 
-import { statusLabels, statusNote, relDays } from '../data.js';
+import { statusLabels, statusNote, relDays, queenMarkFill } from '../data.js';
 import { esc, icons, formatKg } from '../ui.js';
 import { button } from '../components.js';
 
@@ -131,8 +131,8 @@ export function renderReadout(hive, { editable = false } = {}) {
         ${detail('Contributed by', `<div class="tw:mt-1 tw:text-[13px] tw:text-propolis">${line ? esc(line.breeder.name) : '—'}</div>`)}
         ${detail('Queen marked', `
           <div class="tw:mt-1 tw:flex tw:items-center tw:gap-1.5 tw:text-[13px] tw:text-propolis">
-            <span class="tw:size-2 tw:shrink-0 tw:rounded-full tw:ring-1 tw:ring-comb-shade" style="background:var(--mark-${hive.queenColour})"></span>
-            ${hive.queenColour} · ${hive.queenYear}
+            <span class="tw:size-2 tw:shrink-0 tw:rounded-full tw:ring-1 tw:ring-comb-shade" style="background:${queenMarkFill(hive.queenColour)}"></span>
+            ${hive.queenColour}${hive.queenYear ? ` · ${hive.queenYear}` : ''}
           </div>`)}
       </div>
 
