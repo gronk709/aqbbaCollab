@@ -111,12 +111,12 @@ export const statusNote = {
   retired:  'Withdrawn from assessment',
 };
 
-export const queenColours = ['white', 'yellow', 'red', 'green', 'blue', 'Not Marked'];
+export const queenColours = ['white', 'yellow', 'red', 'green', 'blue', 'not marked'];
 
-/* Swatch fill for a queen's mark. "Not Marked" (queenless, or a colony that
+/* Swatch fill for a queen's mark. "not marked" (queenless, or a colony that
    raised its own queen after a failed requeen) has no paint colour, so it
    shows as an empty ring. */
-export const queenMarkFill = (colour) => (colour === 'Not Marked' ? 'transparent' : `var(--mark-${colour})`);
+export const queenMarkFill = (colour) => (colour === 'not marked' ? 'transparent' : `var(--mark-${colour})`);
 
 /* Pure aggregation over whatever hive array is passed in. */
 export function tally(hives) {
