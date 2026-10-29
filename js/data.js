@@ -55,11 +55,12 @@ export const roleOptions = [
   { name: 'Apiary Manager', description: 'Complete CRUD privileges for the apiary they manage.' },
   { name: 'Operator', description: 'Assists the Apiary Manager in the conduct of inspections and data updates. Has change and update privileges but cannot create or delete.' },
   { name: 'Breeder', description: 'Has change and update privileges only.' },
-  { name: 'Member', description: 'Read-only access to apiary data and the information repository. Full forum access — publish, subscribe, and notifications — and can add Marketplace listings.' },
+  { name: 'Member', description: 'Read-only access to apiary data and the information repository. Full forum access — publish, subscribe, and notifications — and can add Marketplace listings. Automatically assigned to a real Wild Apricot sign-in.' },
   { name: 'Creator', description: 'Add and update content (articles, documents) on repository sub-topics they\'ve been assigned to support. Cannot delete content, and cannot create a track/sub-topic or manage one they haven\'t been assigned to.' },
   { name: 'Project Manager', description: 'Update and delete content (background, aims, questions, timeline, participation, participants) on research projects they\'ve been assigned to manage. Cannot create or delete a project itself, or manage a project they haven\'t been assigned to.' },
   { name: 'Contributor', description: 'Add and update content on research projects they\'ve been assigned to support. Cannot delete project content, and cannot create, delete, or manage a project.' },
   { name: 'Repository Manager', description: 'Add, edit and delete content on repository sub-topics they\'ve been assigned to manage. Cannot create a new track/sub-topic, or manage one they haven\'t been assigned to.' },
+  { name: 'Guest', description: 'Same access as Member. Automatically assigned to a direct (non–Wild Apricot) collaborator account.' },
 ];
 
 /* [SEED — Phase 1] currentUser/memberById go away with the members array

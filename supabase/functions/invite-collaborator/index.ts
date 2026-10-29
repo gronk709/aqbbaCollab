@@ -7,12 +7,21 @@
    lets a Web Admin provision a `members` row directly and have Supabase
    email that person a real "set your password" invite, entirely independent
    of Wild Apricot. Once accepted, that member is completely ordinary from
-   every other table's point of view (RLS, roles, everything keys off
+   every other table's point of view (RLS, everything keys off
    `current_member_id()`/`auth_user_id`, never `wa_contact_id`) — the only
    difference is `wa_contact_id` stays null forever for this row.
 
-   Called by inviteCollaborator({ name, email, roles }) in js/store.js, with
-   the caller's own Supabase access token in the Authorization header (their
+   Always grants GUEST_ROLE below, not whatever the caller asks for — the
+   same "automatic, not chosen" shape wildapricot-auth's own DEFAULT_ROLES
+   uses for a real Wild Apricot sign-in. "Member" is meant to mean exactly
+   that (a real Wild Apricot member); "Guest" (see its own role_options row,
+   20261029092417_guest_role.sql) carries identical permissions but keeps
+   that label accurate for a direct account. A Web Admin can still grant
+   any further role afterward via the ordinary roles editor — this only
+   fixes what happens automatically at invite time.
+
+   Called by inviteCollaborator({ name, email }) in js/store.js, with the
+   caller's own Supabase access token in the Authorization header (their
    normal signed-in session — NOT the anon key, unlike wildapricot-auth,
    which is unauthenticated by design since Wild Apricot itself is the proof
    of identity there). This function's own job is to independently verify,
@@ -43,6 +52,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { ALLOWED_ORIGINS, corsHeadersFor } from '../_shared/cors.ts';
 
+const GUEST_ROLE = 'Guest';
+
 function initialsOf(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 3) || '?';
 }
@@ -59,7 +70,7 @@ Deno.serve(async (req) => {
   const callerJwt = authHeader.replace(/^Bearer\s+/i, '');
   if (!callerJwt) return json({ error: 'Missing Authorization header.' }, 401);
 
-  let payload: { name?: string; email?: string; roles?: string[] };
+  let payload: { name?: string; email?: string };
   try {
     payload = await req.json();
   } catch {
@@ -68,11 +79,9 @@ Deno.serve(async (req) => {
 
   const name = (payload.name || '').trim();
   const email = (payload.email || '').trim();
-  const roles = Array.isArray(payload.roles) ? [...new Set(payload.roles)] : [];
 
   if (!name) return json({ error: 'Name is required.' }, 400);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'A valid email is required.' }, 400);
-  if (!roles.length) return json({ error: 'At least one role is required.' }, 400);
 
   const supabaseAdmin = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -105,16 +114,7 @@ Deno.serve(async (req) => {
     if (callerRole.error) throw callerRole.error;
     if (!callerRole.data) return json({ error: 'Only Web Admin can invite collaborators.' }, 403);
 
-    // 2. Validate the requested roles are real ones (defence in depth — the
-    // member_roles FK would also reject an unknown role, but this gives a
-    // clearer error).
-    const roleCheck = await supabaseAdmin.from('role_options').select('name').in('name', roles);
-    if (roleCheck.error) throw roleCheck.error;
-    const validRoles = new Set((roleCheck.data || []).map((r) => r.name));
-    const unknownRoles = roles.filter((r) => !validRoles.has(r));
-    if (unknownRoles.length) return json({ error: `Unknown role(s): ${unknownRoles.join(', ')}` }, 400);
-
-    // 3. Resolve-or-create the members row for this email, same pattern as
+    // 2. Resolve-or-create the members row for this email, same pattern as
     // wildapricot-auth's own find-or-provision logic.
     let member: { id: string; auth_user_id: string | null } | null = null;
 
@@ -154,15 +154,15 @@ Deno.serve(async (req) => {
       if (contactInsert.error) throw contactInsert.error;
     }
 
-    const roleInserts = await supabaseAdmin
+    const roleInsert = await supabaseAdmin
       .from('member_roles')
       .upsert(
-        roles.map((role_name) => ({ member_id: member!.id, role_name, granted_by: callerMember.data.id })),
+        { member_id: member!.id, role_name: GUEST_ROLE, granted_by: callerMember.data.id },
         { onConflict: 'member_id,role_name' },
       );
-    if (roleInserts.error) throw roleInserts.error;
+    if (roleInsert.error) throw roleInsert.error;
 
-    // 4. Create the auth user and email them the invite. redirectTo must be
+    // 3. Create the auth user and email them the invite. redirectTo must be
     // one of this project's known origins — never an arbitrary client-
     // supplied URL, that would be an open redirect.
     const origin = req.headers.get('origin');

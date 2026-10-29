@@ -2002,8 +2002,11 @@ export async function reactivateMember(memberId) {
    just this project's first one that isn't public (contrast
    completeWildApricotLogin in js/waAuth.js, which calls wildapricot-auth
    with only the anon key because Wild Apricot itself is the identity proof
-   there). */
-export async function inviteCollaborator({ name, email, roles }) {
+   there). No roles param — the Edge Function always grants Guest
+   automatically, the same way a real Wild Apricot sign-in always gets
+   Member; a Web Admin adds anything further afterward via the roles
+   editor. */
+export async function inviteCollaborator({ name, email }) {
   const me = requireRealMember();
   if (!isWebAdmin(me.id)) throw new Error('Only a Web Admin can invite collaborators.');
 
@@ -2020,7 +2023,7 @@ export async function inviteCollaborator({ name, email, roles }) {
       Authorization: `Bearer ${accessToken}`,
       apikey: SUPABASE_CONFIG.anonKey,
     },
-    body: JSON.stringify({ name, email, roles }),
+    body: JSON.stringify({ name, email }),
   });
 
   const body = await res.json().catch(() => ({}));

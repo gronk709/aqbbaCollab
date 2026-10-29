@@ -191,7 +191,11 @@ function openManageMemberRolesModal() {
    inviteCollaborator (js/store.js) calls a Web-Admin-only Edge Function
    that provisions the members/member_contact_details/member_roles rows and
    has Supabase email them a "set your password" link; see js/inviteAuth.js
-   and js/views/setPassword.js for what happens when they click it. */
+   and js/views/setPassword.js for what happens when they click it. No role
+   picker here — the Edge Function always grants Guest automatically, the
+   same way a real Wild Apricot sign-in always gets Member; a Web Admin
+   adds anything further afterward via "Manage roles" or the member's own
+   page. */
 function openInviteCollaboratorModal() {
   const body = `
     <div class="field">
@@ -202,14 +206,8 @@ function openInviteCollaboratorModal() {
       <label for="ic-email">Email</label>
       <input id="ic-email" type="email" required placeholder="name@example.com">
     </div>
-    <div class="field">
-      <label>Roles</label>
-      <div>
-        ${roleOptions.map((r) => roleCheckbox(r, { cls: 'ic-role' })).join('')}
-      </div>
-    </div>
-    <p class="${CAPTION}">They'll get an email with a link to set their own password. No Wild
-      Apricot account or license seat is needed.</p>`;
+    <p class="${CAPTION}">They'll get the Guest role (same access as Member) and an email with a
+      link to set their own password. No Wild Apricot account or license seat is needed.</p>`;
   const actions = `
     <button class="btn btn-ghost" data-close>Cancel</button>
     <button class="btn btn-primary" id="send-invite">Send invite</button>`;
@@ -219,21 +217,16 @@ function openInviteCollaboratorModal() {
   saveBtn.addEventListener('click', async () => {
     const name = scrim.querySelector('#ic-name').value.trim();
     const email = scrim.querySelector('#ic-email').value.trim();
-    const roles = [...scrim.querySelectorAll('.ic-role:checked')].map((c) => c.value);
 
     if (!name || !email) {
       toast('Name and email are required.');
-      return;
-    }
-    if (!roles.length) {
-      toast('Pick at least one role.');
       return;
     }
 
     saveBtn.disabled = true;
     saveBtn.textContent = 'Sending…';
     try {
-      await inviteCollaborator({ name, email, roles });
+      await inviteCollaborator({ name, email });
     } catch (err) {
       toast(`Couldn't send the invite: ${err.message}`);
       saveBtn.disabled = false;
