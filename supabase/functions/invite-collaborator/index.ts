@@ -15,7 +15,7 @@
    same "automatic, not chosen" shape wildapricot-auth's own DEFAULT_ROLES
    uses for a real Wild Apricot sign-in. "Member" is meant to mean exactly
    that (a real Wild Apricot member); "Guest" (see its own role_options row,
-   20261029092417_guest_role.sql) carries identical permissions but keeps
+   20261029094956_guest_role.sql) carries identical permissions but keeps
    that label accurate for a direct account. A Web Admin can still grant
    any further role afterward via the ordinary roles editor — this only
    fixes what happens automatically at invite time.
