@@ -106,7 +106,7 @@ export const statusNote = {
   good:     'Slightly below thriving benchmarks but stable.',
   average:  'Within normal range. No action required.',
   poor:     'Multiple metrics below threshold. Re-check at next inspection.',
-  critical: 'Colony is near failure',
+  critical: 'Colony is queen-less or failing',
   treating: 'Under active treatment. Excluded from selection data this cycle.',
   retired:  'Withdrawn from assessment',
 };
