@@ -36,6 +36,23 @@ const roleCheckbox = (r, { cls, checked = false }) => `
     </span>
   </label>`;
 
+/* Committee requires Member — 20261103075134_committee_forum.sql's
+   committee_requires_member() trigger is the real boundary (it holds even
+   against a direct API call); this just keeps the checkbox honest live,
+   rather than only failing with an error after Save. Shared by both role
+   pickers below (the Members-directory modal and a member's own page). */
+function bindCommitteeRequiresMember(container, cls) {
+  const memberBox = container.querySelector(`.${cls}[value="Member"]`);
+  const committeeBox = container.querySelector(`.${cls}[value="Committee"]`);
+  if (!memberBox || !committeeBox) return;
+  const sync = () => {
+    committeeBox.disabled = !memberBox.checked;
+    if (!memberBox.checked) committeeBox.checked = false;
+  };
+  sync();
+  memberBox.addEventListener('change', sync);
+}
+
 /* A tag that is a link (apiary access chips). */
 const amberTagLink = (href, text) => `
   <a href="${href}" class="tw:inline-flex tw:items-center tw:gap-1.5 tw:whitespace-nowrap tw:rounded-full tw:bg-amber-wash tw:px-2.5 tw:py-1 tw:font-mono tw:text-[10.5px] tw:font-medium tw:uppercase tw:tracking-[0.06em] tw:text-amber-deep tw:transition tw:hover:bg-amber/25">${esc(text)}</a>`;
@@ -150,6 +167,7 @@ function openManageMemberRolesModal() {
       return;
     }
     rolesChecks.innerHTML = roleOptions.map((r) => roleCheckbox(r, { cls: 'mr-role', checked: currentRoles.includes(r.name) })).join('');
+    bindCommitteeRequiresMember(rolesChecks, 'mr-role');
     rolesField.hidden = false;
     saveBtn.disabled = false;
   }
@@ -488,6 +506,7 @@ function openRolesForm(m) {
     <button class="btn btn-primary" id="save-roles">Save</button>`;
 
   const scrim = modal({ title: `Roles — ${m.name}`, body, actions });
+  bindCommitteeRequiresMember(scrim, 'r-role');
   const saveBtn = scrim.querySelector('#save-roles');
 
   saveBtn.addEventListener('click', async () => {

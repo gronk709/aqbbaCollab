@@ -734,6 +734,232 @@ export async function openForumAttachment(a) {
   else window.open(data.signedUrl, '_blank', 'noopener');
 }
 
+/* --- committee forum -----------------------------------------------------
+   Same shape as the public forum just above, deliberately kept as its own
+   parallel set of functions rather than threading an `isCommittee` branch
+   through every forum function above — see 20261103075134_committee_
+   forum.sql's header comment for why confidentiality is better served by
+   tables/RLS that have no code path into the public forum at all. No
+   categories (see that same migration), so no category argument anywhere
+   below, and "subscribe to new topics" is the single fixed 'cforum':'new'
+   channel (same shape addApiary's 'apiary':'new' notification uses) rather
+   than a per-category one.
+
+   isCommitteeMember() is defined up in the "permissions" section, next to
+   isWebAdmin — every write below checks `isCommitteeMember(me.id) ||
+   isWebAdmin(me.id)` the same way every public-forum write below implicitly
+   allows it (RLS is the real boundary either way; this is for a clear
+   error instead of a raw Postgres one). */
+
+const COMMITTEE_ATTACHMENTS_BUCKET = 'committee-attachments';
+
+export async function loadCommitteeThreads() {
+  requireRealMember();
+  const supabase = await getSupabase();
+
+  const [, { data: threads, error: threadErr }] = await Promise.all([
+    loadMySubscriptions(),
+    supabase.from('committee_threads')
+      .select(`id, title, body, pinned, created_at, author:members(${MEMBER_DISPLAY_FIELDS}), committee_posts(count)`)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false }),
+  ]);
+  if (threadErr) throw threadErr;
+
+  const counts = await subscriberCounts('cthread', threads.map((t) => t.id));
+  return {
+    threads: threads.map((t) => ({
+      ...t,
+      author: withRoles(t.author),
+      replyCount: t.committee_posts[0]?.count ?? 0,
+      watchers: counts[t.id] ?? 0,
+    })),
+  };
+}
+
+export async function loadCommitteeThread(id) {
+  requireRealMember();
+  const supabase = await getSupabase();
+  await loadMySubscriptions();
+
+  const { data: thread, error: threadErr } = await supabase
+    .from('committee_threads')
+    .select(`id, title, body, pinned, created_at, edited_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
+    .eq('id', id)
+    .single();
+  if (threadErr) throw threadErr;
+
+  const { data: posts, error: postsErr } = await supabase
+    .from('committee_posts')
+    .select(`id, body, created_at, edited_at, author:members(${MEMBER_DISPLAY_FIELDS})`)
+    .eq('thread_id', id)
+    .order('created_at', { ascending: true });
+  if (postsErr) throw postsErr;
+
+  const { data: attachments, error: attErr } = await supabase
+    .from('committee_attachments')
+    .select('id, post_id, author_id, kind, url, storage_path, filename, mime_type, size_bytes, created_at')
+    .eq('thread_id', id)
+    .order('created_at', { ascending: true });
+  if (attErr) throw attErr;
+
+  const watchers = (await subscriberCounts('cthread', [id]))[id] ?? 0;
+
+  return {
+    thread: { ...thread, author: withRoles(thread.author) },
+    posts: posts.map((p) => ({ ...p, author: withRoles(p.author) })),
+    attachments,
+    watchers,
+  };
+}
+
+export async function addCommitteeThread({ title, body, links = [], files = [] }) {
+  const me = requireRealMember();
+  if (!isCommitteeMember(me.id) && !isWebAdmin(me.id)) throw new Error('Only Committee members can post in the Committee Forum.');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('committee_threads')
+    .insert({ author_id: me.id, title, body })
+    .select('id')
+    .single();
+  if (error) throw error;
+  await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'cthread', subscribable_id: data.id });
+  await saveCommitteeAttachments(data.id, null, me.id, links, files);
+  notifySubscribers({
+    type: 'cforum', id: 'new', contextName: 'Committee Forum', itemKind: 'cthread',
+    itemTitle: title, path: `#/committee-forum/${data.id}`, excludeMemberId: me.id,
+  });
+  return data;
+}
+
+export async function addCommitteePost(threadId, body, links = [], files = []) {
+  const me = requireRealMember();
+  if (!isCommitteeMember(me.id) && !isWebAdmin(me.id)) throw new Error('Only Committee members can post in the Committee Forum.');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase
+    .from('committee_posts')
+    .insert({ thread_id: threadId, author_id: me.id, body })
+    .select('id, thread:committee_threads(title)')
+    .single();
+  if (error) throw error;
+  notifySubscribers({
+    type: 'cthread', id: threadId, contextName: data.thread?.title || 'a Committee Forum topic', itemKind: 'creply',
+    itemTitle: body.length > 140 ? `${body.slice(0, 140)}…` : body,
+    path: `#/committee-forum/${threadId}`, excludeMemberId: me.id,
+  });
+  await saveCommitteeAttachments(threadId, data.id, me.id, links, files);
+  if (!isSubscribed(`cthread:${threadId}`)) {
+    await supabase.from('subscriptions').insert({ member_id: me.id, subscribable_type: 'cthread', subscribable_id: threadId });
+    state.subs.push(`cthread:${threadId}`);
+    commit();
+  }
+}
+
+export async function updateCommitteeThread(thread, { title, body }) {
+  const me = requireRealMember();
+  if (thread.author.id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only edit your own topic.');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('committee_threads').update({ title, body, edited_at: new Date().toISOString() }).eq('id', thread.id).select('id');
+  if (error) throw error;
+  if (!data.length) throw new Error('You can only edit your own topic.');
+}
+
+export async function updateCommitteePost(post, body) {
+  const me = requireRealMember();
+  if (post.author.id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only edit your own replies.');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.from('committee_posts').update({ body, edited_at: new Date().toISOString() }).eq('id', post.id).select('id');
+  if (error) throw error;
+  if (!data.length) throw new Error('You can only edit your own replies.');
+}
+
+export async function deleteCommitteePost(post) {
+  const me = requireRealMember();
+  if (post.author.id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only delete your own replies.');
+  const supabase = await getSupabase();
+
+  const { data: files, error: filesErr } = await supabase
+    .from('committee_attachments')
+    .select('storage_path')
+    .eq('post_id', post.id)
+    .eq('kind', 'file');
+  if (filesErr) throw filesErr;
+  if (files.length) {
+    await supabase.storage.from(COMMITTEE_ATTACHMENTS_BUCKET).remove(files.map((f) => f.storage_path));
+  }
+
+  const { error } = await supabase.from('committee_posts').delete().eq('id', post.id);
+  if (error) throw error;
+}
+
+async function saveCommitteeAttachments(threadId, postId, authorId, links, files) {
+  if (!links.length && !files.length) return;
+  await addCommitteeAttachments(threadId, postId, authorId, links, files);
+}
+
+export async function addCommitteeAttachments(threadId, postId, authorId, links, files) {
+  const supabase = await getSupabase();
+  const rows = links.map((l) => ({
+    thread_id: threadId, post_id: postId, author_id: authorId,
+    kind: 'url', url: l.url, filename: l.title || l.url,
+  }));
+
+  for (const file of files) {
+    const path = `${threadId}/${postId ?? 'op'}/${crypto.randomUUID()}-${safeStorageSegment(file.name)}`;
+    const { error: upErr } = await supabase.storage.from(COMMITTEE_ATTACHMENTS_BUCKET).upload(path, file);
+    if (upErr) throw upErr;
+    rows.push({
+      thread_id: threadId, post_id: postId, author_id: authorId,
+      kind: 'file', storage_path: path, filename: file.name,
+      mime_type: file.type || null, size_bytes: file.size,
+    });
+  }
+
+  if (!rows.length) return;
+  const { error } = await supabase.from('committee_attachments').insert(rows);
+  if (error) throw error;
+}
+
+export async function updateCommitteeAttachment(a, { url, title }) {
+  const me = requireRealMember();
+  if (a.author_id !== me.id) throw new Error('You can only edit attachments you added.');
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from('committee_attachments')
+    .update({ url, filename: title || url })
+    .eq('id', a.id);
+  if (error) throw error;
+}
+
+export async function deleteCommitteeAttachment(a) {
+  const me = requireRealMember();
+  if (a.author_id !== me.id && !isWebAdmin(me.id)) throw new Error('You can only remove attachments you added.');
+  const supabase = await getSupabase();
+  const { error } = await supabase.from('committee_attachments').delete().eq('id', a.id);
+  if (error) throw error;
+  if (a.kind === 'file') {
+    await supabase.storage.from(COMMITTEE_ATTACHMENTS_BUCKET).remove([a.storage_path]);
+  }
+}
+
+export async function openCommitteeAttachment(a) {
+  if (a.kind === 'url') {
+    window.open(a.url, '_blank', 'noopener');
+    return;
+  }
+  const tab = window.open('', '_blank');
+  const supabase = await getSupabase();
+  const { data, error } = await supabase.storage.from(COMMITTEE_ATTACHMENTS_BUCKET).createSignedUrl(a.storage_path, 3600);
+  if (error) {
+    tab?.close();
+    throw error;
+  }
+  if (tab) tab.location.href = data.signedUrl;
+  else window.open(data.signedUrl, '_blank', 'noopener');
+}
+
+export const signCommitteeImages = (paths) => signPaths(COMMITTEE_ATTACHMENTS_BUCKET, paths);
+
 /* --- repository --------------------------------------------------------
    Track/sub-topic structure is Phase 3 (seeded, not purged — see that
    migration's header comment: real Markdown content on disk already
@@ -2039,6 +2265,15 @@ export async function inviteCollaborator({ name, email }) {
    member. */
 
 export const isWebAdmin = (memberId = currentUser().id) => rolesFor(memberId).includes('Web Admin');
+
+/* Gates the Committee Forum (js/views/committeeForum.js) client-side — RLS
+   (committee_threads/committee_posts/committee_attachments/subscriptions,
+   see 20261103075134_committee_forum.sql) is the real boundary, this is
+   just for a clear UI (hide the nav item, show a friendly error instead of
+   a raw Postgres one). Web Admin always passes the committee gate
+   everywhere it's checked even without this returning true for them — see
+   each call site's own `isCommitteeMember(...) || isWebAdmin(...)`. */
+export const isCommitteeMember = (memberId = currentUser().id) => rolesFor(memberId).includes('Committee');
 
 /* --- session ------------------------------------------------------------- */
 
