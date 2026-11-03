@@ -13,17 +13,31 @@
 
    Called with:
      {
-       type: 'repo' | 'thread' | 'cat' | 'apiary',   // matches subscriptions.subscribable_type
-       id: string,                        // subscribable_id ('new' for type 'apiary' -- see
-                                           // 20260925000000_apiary_subscriptions.sql's header comment)
-       contextName: string,               // sub-topic / thread / category / apiary-channel name
-       itemKind: 'article' | 'document' | 'link' | 'thread' | 'reply' | 'apiary',
+       type: 'repo' | 'thread' | 'cat' | 'apiary' | 'cforum' | 'cthread',   // matches subscriptions.subscribable_type
+       id: string,                        // subscribable_id ('new' for type 'apiary'/'cforum' -- see
+                                           // 20260925000000_apiary_subscriptions.sql's /
+                                           // 20261103080309_committee_forum.sql's header comments)
+       contextName: string,               // sub-topic / thread / category / apiary-channel / "Committee Forum" name
+       itemKind: 'article' | 'document' | 'link' | 'thread' | 'reply' | 'apiary' | 'cthread' | 'creply',
        itemTitle: string,                 // article title, filename, link name, reply preview, or apiary name
        actorName: string,                 // who published it
        actorId: string,                   // members.id of whoever published it
        path: string,                      // in-app hash route, e.g. '#/repository/rs-graft'
        excludeMemberId?: string,          // don't notify the person who just published
      }
+
+   'cforum'/'cthread' (Committee Forum) carry the exact same trust shape as
+   every other type here — this function does NOT re-check that the caller,
+   or the subscribers it's about to notify, actually hold the Committee
+   role. That's enforced one layer earlier instead: committee_threads/
+   committee_posts' own RLS already means only a committee member (or Web
+   Admin) could have authored the content this call is reporting on, and
+   `subscriptions`' own RLS (see 20261103080309_committee_forum.sql) already
+   means only a committee member (or Web Admin) could hold a 'cforum'/
+   'cthread' subscription row in the first place — so by the time this
+   function queries `subscriptions` for who to notify, that list is already
+   committee-only. Don't widen SUBSCRIBABLE_TYPES to a new confidential
+   channel without the same guarantee at the subscriptions-RLS layer.
 
    The emailed link is built from this request's Origin header + `path`
    (falling back to the production URL if there's no Origin, e.g. a direct
@@ -59,16 +73,22 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeadersFor } from '../_shared/cors.ts';
 
-const SUBSCRIBABLE_TYPES = new Set(['repo', 'thread', 'cat', 'apiary']);
+const SUBSCRIBABLE_TYPES = new Set(['repo', 'thread', 'cat', 'apiary', 'cforum', 'cthread']);
 const ITEM_KINDS: Record<string, string> = {
   article: 'article', document: 'document', link: 'link', thread: 'topic', reply: 'reply',
-  apiary: 'research apiary',
+  apiary: 'research apiary', cthread: 'topic', creply: 'reply',
 };
 /* notifications.kind is a narrower set than itemKind — an article, document
-   or link are all just "repo" activity to the in-app feed. */
+   or link are all just "repo" activity to the in-app feed. cthread/creply
+   get their own distinct kind values ('cforum'/'creply', not reusing
+   'thread'/'reply') purely so the Notifications page can render Committee
+   Forum activity with its own look (js/views/notifications.js's kindMeta) —
+   confidentiality itself doesn't depend on this, since a notification row
+   only ever reaches an actual committee member or Web Admin either way
+   (see this file's own header comment). */
 const NOTIFICATION_KIND: Record<string, string> = {
   reply: 'reply', thread: 'thread', article: 'repo', document: 'repo', link: 'repo',
-  apiary: 'apiary',
+  apiary: 'apiary', cthread: 'cforum', creply: 'creply',
 };
 const DEFAULT_APP_ORIGIN = 'https://aqbba-collab.vercel.app';
 const RESEND_BATCH_URL = 'https://api.resend.com/emails/batch';
@@ -112,7 +132,7 @@ Deno.serve(async (req) => {
   }
 
   const { type, id, contextName, itemKind, itemTitle, actorName, actorId, path, excludeMemberId } = payload;
-  if (!type || !SUBSCRIBABLE_TYPES.has(type)) return json({ error: 'type must be one of repo, thread, cat.' }, 400);
+  if (!type || !SUBSCRIBABLE_TYPES.has(type)) return json({ error: `type must be one of ${[...SUBSCRIBABLE_TYPES].join(', ')}.` }, 400);
   if (!id || !contextName || !itemTitle || !actorName || !path) {
     return json({ error: 'Missing one of: id, contextName, itemTitle, actorName, path.' }, 400);
   }

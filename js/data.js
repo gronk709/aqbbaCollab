@@ -61,6 +61,7 @@ export const roleOptions = [
   { name: 'Contributor', description: 'Add and update content on research projects they\'ve been assigned to support. Cannot delete project content, and cannot create, delete, or manage a project.' },
   { name: 'Repository Manager', description: 'Add, edit and delete content on repository sub-topics they\'ve been assigned to manage. Cannot create a new track/sub-topic, or manage one they haven\'t been assigned to.' },
   { name: 'Guest', description: 'Same access as Member. Automatically assigned to a direct (non–Wild Apricot) collaborator account.' },
+  { name: 'Committee', description: 'Full access to the confidential Committee Forum — publish, subscribe, and notifications. Can only be granted to a member who also holds the Member role.' },
 ];
 
 /* [SEED — Phase 1] currentUser/memberById go away with the members array

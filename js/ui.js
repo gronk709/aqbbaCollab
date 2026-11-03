@@ -56,6 +56,7 @@ export const icons = {
   flag:     svg('<path d="M5 3v18"/><path d="M5 4h11l-2.5 4L16 12H5"/>'),
   link:     svg('<path d="M9 15l6-6"/><path d="M13.5 5.5l1-1a3.5 3.5 0 015 5l-1 1"/><path d="M10.5 18.5l-1 1a3.5 3.5 0 01-5-5l1-1"/>'),
   attach:   svg('<path d="M8 12l6-6a3 3 0 114 4l-8 8a5 5 0 01-7-7l8-8"/>'),
+  lock:     svg('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/>'),
 };
 
 /* The association's own crest (assets/logo.png), background removed so it

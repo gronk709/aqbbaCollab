@@ -5,9 +5,10 @@
 import {
   state, signOut, unreadCount, recruitingCount, onChange, toggleSub,
   roleLabel, currentUser, loadSignedInMember, loadNotifications,
-  isWebAdmin, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
+  isWebAdmin, isCommitteeMember, loadListings, loadForumThreads, loadThread, loadRepository, loadSubTopic,
   loadProjects, loadProject, loadMembersDirectory, loadMemberDetail,
   loadApiaries, loadApiary, loadQueenLines, loadPublicStats, loadRetiredHives,
+  loadCommitteeThreads, loadCommitteeThread,
 } from './store.js';
 import { icons, brandMark, avatar, toast, esc } from './ui.js';
 import { pageBody, emptyState, button } from './components.js';
@@ -19,6 +20,7 @@ import { renderApiaries, renderApiary, renderRetiredHives } from './views/apiari
 import { renderManager, renderMembers } from './views/managers.js';
 import { renderProjects, renderProject } from './views/projects.js';
 import { renderForum, renderThread } from './views/forum.js';
+import { renderCommitteeForum, renderCommitteeThread } from './views/committeeForum.js';
 import { renderRepository, renderSubTopic, renderArticle } from './views/repository.js';
 import { renderMarketplace } from './views/marketplace.js';
 import { renderNotifications } from './views/notifications.js';
@@ -47,6 +49,7 @@ const NAV = [
   { path: '#/forum',       label: 'Forum',        icon: 'forum' },
   { path: '#/repository',  label: 'Repository',   icon: 'book' },
   { path: '#/marketplace', label: 'Marketplace',  icon: 'tag' },
+  { path: '#/committee-forum', label: 'Committee Forum', icon: 'lock', committeeOnly: true },
   { group: 'You' },
   { path: '#/notifications', label: 'Notifications', icon: 'bell', badge: unreadCount },
   { path: '#/members',     label: 'Members',      icon: 'user', adminOnly: true },
@@ -91,6 +94,8 @@ const ROUTES = [
      around this work. */
   { test: /^#\/forum\/?$/,             view: renderForum,    load: loadForumThreads },
   { test: /^#\/forum\/(.+)$/,          view: renderThread,   load: (id) => loadThread(id) },
+  { test: /^#\/committee-forum\/?$/,   view: renderCommitteeForum, load: loadCommitteeThreads },
+  { test: /^#\/committee-forum\/(.+)$/, view: renderCommitteeThread, load: (id) => loadCommitteeThread(id) },
   { test: /^#\/repository\/?$/,        view: renderRepository, load: loadRepository },
   /* Article reader before the sub-topic route, which would otherwise swallow
      "rs-graft/some-article" whole as a sub-topic id. */
@@ -106,8 +111,12 @@ const ROUTES = [
 function shellHTML(inner) {
   const me = currentUser();
   const canManageMembers = isWebAdmin(me.id);
+  /* Web Admin always sees the Committee Forum too, same as every other
+     access gate in this app Web Admin bypasses — see isCommitteeMember's
+     own comment in js/store.js. */
+  const canSeeCommittee = isCommitteeMember(me.id) || canManageMembers;
   const hash = location.hash || '#/';
-  const nav = NAV.filter((item) => !item.adminOnly || canManageMembers).map((item) => {
+  const nav = NAV.filter((item) => (!item.adminOnly || canManageMembers) && (!item.committeeOnly || canSeeCommittee)).map((item) => {
     if (item.group) return `<div class="tw:px-6 tw:pt-4 tw:pb-2"><span class="tw:font-mono tw:text-[9.5px] tw:font-medium tw:uppercase tw:tracking-[0.16em] tw:text-comb/35">${item.group}</span></div>`;
     const active = item.exact ? /^#\/?$/.test(hash) : hash.startsWith(item.path);
     const n = item.badge ? item.badge() : 0;
