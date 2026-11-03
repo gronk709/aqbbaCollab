@@ -16,7 +16,7 @@
        type: 'repo' | 'thread' | 'cat' | 'apiary' | 'cforum' | 'cthread',   // matches subscriptions.subscribable_type
        id: string,                        // subscribable_id ('new' for type 'apiary'/'cforum' -- see
                                            // 20260925000000_apiary_subscriptions.sql's /
-                                           // 20261103075134_committee_forum.sql's header comments)
+                                           // 20261103080309_committee_forum.sql's header comments)
        contextName: string,               // sub-topic / thread / category / apiary-channel / "Committee Forum" name
        itemKind: 'article' | 'document' | 'link' | 'thread' | 'reply' | 'apiary' | 'cthread' | 'creply',
        itemTitle: string,                 // article title, filename, link name, reply preview, or apiary name
@@ -32,7 +32,7 @@
    role. That's enforced one layer earlier instead: committee_threads/
    committee_posts' own RLS already means only a committee member (or Web
    Admin) could have authored the content this call is reporting on, and
-   `subscriptions`' own RLS (see 20261103075134_committee_forum.sql) already
+   `subscriptions`' own RLS (see 20261103080309_committee_forum.sql) already
    means only a committee member (or Web Admin) could hold a 'cforum'/
    'cthread' subscription row in the first place — so by the time this
    function queries `subscriptions` for who to notify, that list is already

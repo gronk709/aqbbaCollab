@@ -36,7 +36,7 @@ const roleCheckbox = (r, { cls, checked = false }) => `
     </span>
   </label>`;
 
-/* Committee requires Member — 20261103075134_committee_forum.sql's
+/* Committee requires Member — 20261103080309_committee_forum.sql's
    committee_requires_member() trigger is the real boundary (it holds even
    against a direct API call); this just keeps the checkbox honest live,
    rather than only failing with an error after Save. Shared by both role

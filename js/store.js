@@ -737,7 +737,7 @@ export async function openForumAttachment(a) {
 /* --- committee forum -----------------------------------------------------
    Same shape as the public forum just above, deliberately kept as its own
    parallel set of functions rather than threading an `isCommittee` branch
-   through every forum function above — see 20261103075134_committee_
+   through every forum function above — see 20261103080309_committee_
    forum.sql's header comment for why confidentiality is better served by
    tables/RLS that have no code path into the public forum at all. No
    categories (see that same migration), so no category argument anywhere
@@ -2268,7 +2268,7 @@ export const isWebAdmin = (memberId = currentUser().id) => rolesFor(memberId).in
 
 /* Gates the Committee Forum (js/views/committeeForum.js) client-side — RLS
    (committee_threads/committee_posts/committee_attachments/subscriptions,
-   see 20261103075134_committee_forum.sql) is the real boundary, this is
+   see 20261103080309_committee_forum.sql) is the real boundary, this is
    just for a clear UI (hide the nav item, show a friendly error instead of
    a raw Postgres one). Web Admin always passes the committee gate
    everywhere it's checked even without this returning true for them — see

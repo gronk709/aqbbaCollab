@@ -3,7 +3,7 @@
    members create topics, subscribe, and are notified by email — but
    visible only to members holding the Committee role (plus Web Admin, who
    bypasses most other access gates in this app too). See js/store.js's
-   "committee forum" section and 20261103075134_committee_forum.sql for why
+   "committee forum" section and 20261103080309_committee_forum.sql for why
    this is a deliberately separate set of tables/functions rather than a
    flag on the public forum's own. No categories: see that migration's
    header comment for why a single flat list is enough here.
