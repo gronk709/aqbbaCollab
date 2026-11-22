@@ -68,6 +68,9 @@ export function renderGate(stats) {
 
       <section class="tw:flex tw:flex-col tw:justify-center tw:px-[clamp(1.5rem,6vw,6rem)] tw:py-16 tw:max-[860px]:px-6 tw:max-[860px]:py-12">
         <div class="tw:mx-auto tw:w-full tw:max-w-[360px]">
+          <a href="https://aqbba.org.au" class="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1.5 tw:font-mono tw:text-[11px] tw:font-semibold tw:tracking-[0.1em] tw:uppercase tw:text-propolis-40 tw:transition tw:hover:text-amber-deep">
+            <span class="tw:[&>svg]:size-3">${icons.back}</span> Back to AQBBA
+          </a>
           <h2 class="tw:mb-2 tw:font-display tw:text-[1.75rem] tw:text-propolis">Member sign in</h2>
           <p class="tw:mb-8 ${CAPTION}">
             Membership, renewals and billing are managed in Wild Apricot. Sign in with the

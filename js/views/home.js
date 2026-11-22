@@ -11,7 +11,7 @@
 
 import { statusLabels, relDays, queenMarkFill } from '../data.js';
 import { currentUser } from '../store.js';
-import { esc, formatKg } from '../ui.js';
+import { esc, formatKg, icons } from '../ui.js';
 import { band, button, featureItem, statBlock } from '../components.js';
 import { hexPoints, projectStoryCard } from '../projectArt.js';
 
@@ -64,6 +64,9 @@ function hero(me) {
       <div class="tw:absolute tw:inset-0 tw:-z-10 tw:bg-propolis/60"></div>
       <div class="tw:absolute tw:inset-0 tw:-z-10 tw:bg-[radial-gradient(75%_65%_at_50%_45%,rgb(43_31_14/0.45),transparent_75%)]"></div>
       <div class="tw:mx-auto tw:max-w-4xl tw:text-center tw:[text-shadow:0_1px_14px_rgb(0_0_0/0.45)]">
+        <a href="https://aqbba.org.au" class="tw:mb-5 tw:inline-flex tw:items-center tw:gap-1.5 tw:font-mono tw:text-xs tw:font-medium tw:uppercase tw:tracking-[0.14em] tw:text-white/70 tw:transition tw:hover:text-amber-bright">
+          <span class="tw:[&>svg]:size-3">${icons.back}</span> Back to AQBBA
+        </a>
         ${firstName ? `<p class="tw:font-mono tw:text-xs tw:font-medium tw:uppercase tw:tracking-[0.18em] tw:text-amber-bright">Welcome back, ${esc(firstName)}</p>` : ''}
         <h1 class="tw:mt-5 tw:font-display tw:text-4xl tw:font-semibold tw:leading-[1.08] tw:tracking-tight tw:text-balance tw:sm:text-5xl tw:md:text-6xl">
           At the Heart of Every Thriving Colony Is a Great Queen Bee.
