@@ -305,7 +305,7 @@ export const repository = [
         summary: 'Outcrossing strategy, backcross recovery, and keeping trait gains through the introduction.' },
       { id: 'rs-ii',      name: 'Instrumental insemination',        items: 14, updated: -12, subscribed: false, by: 'm6',
         summary: 'Equipment, technique, semen storage, and when II earns its considerable cost.' },
-      { id: 'rs-vsh',     name: 'VSH: the trait and its measurement', items: 19, updated: -3, subscribed: true, by: 'm9',
+      { id: 'rs-vsh',     name: 'Breeding Methods',                      items: 19, updated: -3, subscribed: true, by: 'm9',
         summary: 'What varroa sensitive hygiene is, how it is inherited, and how to measure it defensibly.' },
     ],
   },
