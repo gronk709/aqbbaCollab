@@ -322,6 +322,8 @@ window.addEventListener('hashchange', () => {
      other members changed meanwhile. */
   routeDataCache.clear();
   render();
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'page_view', page_path: location.hash || '#/' });
   const main = document.getElementById('main');
   if (main) main.scrollIntoView({ block: 'start' });
   window.scrollTo(0, 0);
