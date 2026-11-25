@@ -297,7 +297,7 @@ export const repository = [
     subs: [
       { id: 'rs-assess',  name: 'Assessment methods',               items: 21, updated: 0,   subscribed: true,  by: 'm9',
         summary: 'Freeze-killed brood, recapping counts, alcohol wash, and what each measure is actually good for.' },
-      { id: 'rs-select',  name: 'Selection and breeding value',     items: 18, updated: -2,  subscribed: true,  by: 'm2',
+      { id: 'rs-select',  name: 'Breeding Concepts',                  items: 18, updated: -2,  subscribed: true,  by: 'm2',
         summary: 'Ranking colonies, weighting traits, and avoiding selection on noise.' },
       { id: 'rs-lines',   name: 'Establishing and maintaining lines', items: 15, updated: -5, subscribed: true,  by: 'm5',
         summary: 'Founding a line, generation records, and monitoring for inbreeding depression.' },
