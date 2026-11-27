@@ -2,7 +2,7 @@
 
 A running list of confirmed bugs not yet fixed — noted here rather than fixed
 immediately, usually because a fix is better done alongside related work already
-planned (see `/root/.claude/plans/zazzy-swinging-scone.md` for the backend
+planned (see `.claude/plans/zazzy-swinging-scone.md` for the backend
 migration phases) or because it's low-impact enough to batch with something else.
 
 ## Open
@@ -21,9 +21,17 @@ migration phases) or because it's low-impact enough to batch with something else
   body and link, sent from the association's real address. Small trusted
   membership makes this moderate rather than severe, but it's a real
   phishing/impersonation vector open to one compromised or malicious member
-  account. Fix: derive the actor from the verified JWT instead of trusting
-  the payload, and validate that the referenced content actually exists
-  before notifying.
+  account.
+  Worse than "attacker-controlled link" suggests: the emailed link is built
+  as `${Origin header}/${path}` with no allowlist check (the CORS allowlist
+  in `supabase/functions/_shared/cors.ts` only shapes the *response*
+  headers, it doesn't reject requests). A non-browser caller can send any
+  `Origin`, so the link can point to an entirely different domain, not just
+  a different path on the real site.
+  Fix: derive the actor from the verified JWT instead of trusting the
+  payload, validate that the referenced content actually exists before
+  notifying, and build the link from a fixed, trusted origin (or reject
+  `Origin` values not in `ALLOWED_ORIGINS`).
 
 - **`forum_attachments` doesn't cross-validate `storage_path`/`post_id`.**
   (`supabase/migrations/20260830000000_forum_attachments.sql`) No check that
